@@ -25,7 +25,6 @@ export const products = sqliteTable(
     color: text("color").notNull(),
     content: text("content").notNull(),
     status: text("status").notNull().default("draft"),
-    whopUrl: text("whop_url"),
     commerce: text("commerce").notNull().default("{}"),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),

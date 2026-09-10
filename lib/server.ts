@@ -61,7 +61,6 @@ export function productFromRow(r: Record<string, unknown>): Product {
     color: r.color as Product["color"],
     content: JSON.parse(String(r.content)),
     status: r.status as Product["status"],
-    whopUrl: null,
     commerce: readCommerce(r.commerce),
     createdAt: Number(r.created_at),
     updatedAt: Number(r.updated_at),

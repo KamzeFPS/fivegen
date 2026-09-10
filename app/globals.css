@@ -1250,7 +1250,7 @@ a {
 }
 .integration-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 720px);
   gap: 25px;
 }
 .integration-card {
@@ -1264,14 +1264,6 @@ a {
   font-weight: 800;
   letter-spacing: -1.5px;
   margin-bottom: 28px;
-}
-.whop-word {
-  display: block;
-  color: #c0c0ca;
-  font-size: 31px;
-  letter-spacing: -1px;
-  font-weight: 750;
-  margin-bottom: 29px;
 }
 .integration-status {
   position: absolute;

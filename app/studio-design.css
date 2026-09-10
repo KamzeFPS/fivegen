@@ -243,7 +243,6 @@ input::placeholder, textarea::placeholder { color: #878796; }
 .color-option.blue { background: #3862cc; }
 .color-option.pink { background: #b57c9e; }
 .stripe-word { color: #a797ff; }
-.whop-word { color: #ffab79; }
 .integration-status.ready { color: #c4e6ae; background: #c4e6ae0b; border-color: #6b8b4d; }
 .integration-card li svg { color: #a8c78a; }
 .integration-card p { font-size: 16px; }

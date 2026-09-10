@@ -42,7 +42,7 @@ Credit debits and ledger states are atomic D1 batches. No balance can be overspe
 
 Expiring monthly credits are spent before starter or purchased credits. Refunded monthly credits retain the original expiry window. The seller dashboard and sales export report the FiveGen fee and the amount after that fee, explicitly before processor fees.
 
-Stripe direct charges collect `payment_intent_data[application_fee_amount]` for one-time sales and `subscription_data[application_fee_percent]` for subscriptions. Connected `invoice.created` events update draft renewal invoices to the creator's current plan fee; existing customer subscriptions continue after downgrade. Payment processing remains on Standard connected accounts. Existing unrelated connected-account invoices are ignored. Ordinary Whop links cannot enforce these fees and are therefore disabled until a tracked integration exists.
+Stripe is the sole payment provider. Stripe direct charges collect `payment_intent_data[application_fee_amount]` for one-time sales and `subscription_data[application_fee_percent]` for subscriptions. Connected `invoice.created` events update draft renewal invoices to the creator's current plan fee; existing customer subscriptions continue after downgrade. Payment processing remains on Standard connected accounts. Existing unrelated connected-account invoices are ignored.
 
 ## Required live setup
 

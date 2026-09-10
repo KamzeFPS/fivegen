@@ -12,7 +12,7 @@ The server enforces entitlements and the creation limit, including simultaneous 
 - One optional upsell, explicitly selected by the buyer. It cannot duplicate an included product.
 - Monthly or yearly recurring products do not combine deals or upsells. Subscriptions unlock downloads while active. Already downloaded files remain with the buyer.
 - Prices are calculated in integer cents on the server. Checkout revalidates the displayed total. Order contents are snapshotted, so delivery follows what was purchased even after an offer changes.
-- Arbitrary Whop links are disabled until commission-aware payments are integrated. Stripe collects the platform commission automatically.
+- Stripe is the sole payment provider and collects the platform commission automatically.
 
 ## Funnel editor
 

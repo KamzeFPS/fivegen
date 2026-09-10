@@ -12,7 +12,7 @@ FiveGen is a full-stack creator workspace for generating, editing, publishing, a
 - fal.ai FLUX 1.1 Pro Ultra image generation and Kling 2.6 Pro five-second video generation with native audio. Queue IDs persist; assets are copied to private R2 storage on completion. A campaign button queues three image formats and one video.
 - HTML guide export (print to PDF), Markdown, a ZIP product bundle, and individual supporting-file downloads. Generated media downloads separately from the asset library.
 - Stripe Connect Standard onboarding, connected-account checkout, signed webhook verification, idempotent sale recording, and purchase-gated ZIP delivery.
-- Existing Whop checkout links on storefronts. Whop payments, delivery, refunds, and reporting remain in Whop; native Whop payment synchronization is not implemented.
+- Stripe is the sole payment provider for product storefronts, funnels, subscriptions, and credit purchases.
 - Revenue totals, charts, date ranges, customer records, and CSV export derived from recorded Stripe orders. Sample data is clearly labeled and separate from persisted sales. Gross revenue is not net of fees or refunds.
 
 ## Activation

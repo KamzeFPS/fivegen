@@ -3,7 +3,7 @@ import { useEffect,useRef,useState } from "react";
 import { ArrowUpRight, Check, Gift, Loader2, LockKeyhole } from "lucide-react";
 import type { Commerce,Quote } from "@/lib/commerce";
 import { money } from "@/lib/product";
-export default function Purchase({slug,price,available,billing="once",hasCode=false,volume=false,initialQuote=null,cta,endsAt=""}:{slug:string;price:number;available:boolean;whopUrl?:string|null;billing?:Commerce["billing"];hasCode?:boolean;volume?:boolean;initialQuote?:Quote|null;cta?:string;endsAt?:string}){
+export default function Purchase({slug,price,available,billing="once",hasCode=false,volume=false,initialQuote=null,cta,endsAt=""}:{slug:string;price:number;available:boolean;billing?:Commerce["billing"];hasCode?:boolean;volume?:boolean;initialQuote?:Quote|null;cta?:string;endsAt?:string}){
   const [busy,setBusy]=useState(false),[quoting,setQuoting]=useState(false),[error,setError]=useState(""),[quote,setQuote]=useState(initialQuote),[quantity,setQuantity]=useState(1),[addUpsell,setAddUpsell]=useState(false),[code,setCode]=useState(""),[appliedCode,setAppliedCode]=useState("");
   const requestId=useRef(0);
   useEffect(()=>{void fetch("/api/visits",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({slug})}).catch(()=>{});},[slug]);

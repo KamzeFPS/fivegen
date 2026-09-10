@@ -20,7 +20,6 @@ const updateSchema = briefSchema.extend({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   status: z.enum(["draft", "published"]),
   content: contentSchema,
-  whopUrl: z.string().max(1500).nullable().optional(),
   commerce: commerceSchema.optional(),
   expectedUpdatedAt:z.number().int().optional(),
 });
@@ -34,7 +33,6 @@ export async function PATCH(
     const { id } = await params;
     const existing = productFromRow(await ownedProduct(id, u.userId));
     const data = updateSchema.parse(await req.json());
-    if(data.whopUrl)throw new ApiError("Whop checkout is paused until commission-aware payments are connected. Use Stripe checkout.",409);
     const commerce=data.commerce||existing.commerce||defaultCommerce();
     const commerceChanged=JSON.stringify(commerce)!==JSON.stringify(existing.commerce);
     if(commerceChanged && advancedCommerce(commerce))await requirePro(u.userId);
@@ -49,19 +47,6 @@ export async function PATCH(
         "Finish or cancel AI generation before saving or publishing this product.",
         409,
       );
-    if (data.whopUrl) {
-      let url: URL;
-      try {
-        url = new URL(data.whopUrl);
-      } catch {
-        throw new ApiError("Enter a valid Whop checkout URL.");
-      }
-      if (
-        url.protocol !== "https:" ||
-        !["whop.com", "www.whop.com"].includes(url.hostname)
-      )
-        throw new ApiError("Use an HTTPS checkout link on whop.com.");
-    }
     const collision = await database()
       .prepare("SELECT id FROM products WHERE slug=? AND id<>?")
       .bind(data.slug, id)
@@ -73,7 +58,7 @@ export async function PATCH(
       );
     const saved = await database()
       .prepare(
-        "UPDATE products SET slug=?,title=?,description=?,audience=?,format=?,price=?,color=?,content=?,status=?,whop_url=?,commerce=?,updated_at=? WHERE id=? AND owner=? AND (? IS NULL OR updated_at=?)",
+        "UPDATE products SET slug=?,title=?,description=?,audience=?,format=?,price=?,color=?,content=?,status=?,commerce=?,updated_at=? WHERE id=? AND owner=? AND (? IS NULL OR updated_at=?)",
       )
       .bind(
         data.slug,
@@ -85,7 +70,6 @@ export async function PATCH(
         data.color,
         JSON.stringify(data.content),
         data.status,
-        data.whopUrl || null,
         JSON.stringify(commerce),
         Math.max(Date.now(),existing.updatedAt+1),
         id,

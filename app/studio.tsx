@@ -162,7 +162,7 @@ const sampleOrders: Order[] = [
     productId: "1",
     email: "james@example.com",
     amount: 7900,
-    provider: "whop",
+    provider: "stripe",
     createdAt: Date.UTC(2026, 8, 10, 14, 0) - 1800000,
     title: "Build Your Personal Brand",
   },
@@ -959,7 +959,7 @@ export default function Studio({
                           </label>
                         </div>
                         <div className="checkout-setup"><CreditCard size={20}/><div><strong>{workspace.stripeReady ? "Stripe checkout connected" : "Connect your checkout"}</strong><p>{workspace.stripeReady ? "Paid purchases unlock the product automatically." : "Connect Stripe to accept payments and automatically collect your plan’s commission."}</p></div><button type="button" className="button secondary" onClick={() => void setupFromEditor("Payments")}>{workspace.stripeReady ? "Manage" : "Connect Stripe"}<ArrowUpRight size={14}/></button></div>
-                        <div className="sales-note">FiveGen commission: {workspace.plan.tier==="pro"?"3%":"10%"} of each paid sale, plus Stripe processing fees. Whop links are paused until tracked commission collection is available.</div>
+                        <div className="sales-note">FiveGen commission: {workspace.plan.tier==="pro"?"3%":"10%"} of each paid sale, plus Stripe processing fees.</div>
                         <label>
                           What customers get
                           <textarea
@@ -1413,7 +1413,7 @@ export default function Studio({
                                   "Digital product"}
                               </p>
                               <small>
-                                {o.provider === "whop" ? "Whop" : "Stripe"} ·{" "}
+                                {o.provider === "stripe" ? "Stripe" : o.provider === "free" ? "Free" : "Legacy payment"} ·{" "}
                                 {new Date(o.createdAt).toLocaleTimeString(
                                   "en-US",
                                   {
@@ -1640,9 +1640,9 @@ export default function Studio({
                       <h2>{money(revenue)}</h2>
                     </div>
                     <p>
-                      Payments go to your connected account.
+                      Payments go to your connected Stripe account.
                       <br />
-                      Manage payouts and refunds with your payment provider.
+                      Manage payouts and refunds in Stripe.
                     </p>
                   </div>
                   <div className="integration-grid">
@@ -1676,6 +1676,9 @@ export default function Studio({
                           Sales tracked in your dashboard
                         </li>
                       </ul>
+                      <div className="sales-note">
+                        Your plan: {workspace.plan.tier === "pro" ? "3%" : "10%"} FiveGen commission, plus Stripe processing fees.
+                      </div>
                       <button
                         className="button dark full"
                         disabled={busy}
@@ -1713,7 +1716,6 @@ export default function Studio({
                         </small>
                       )}
                     </section>
-                    <section className="panel integration-card"><span className="whop-word">◢ whop</span><span className="integration-status">Integration pending</span><h2>Commission-aware checkout</h2><p>Direct Whop links are paused while we add tracked payments and platform commissions. Use Stripe to sell and automatically apply your plan’s fee.</p><div className="sales-note">Your plan: {workspace.plan.tier==="pro"?"3%":"10%"} FiveGen commission, plus Stripe processing fees.</div></section>
                   </div>
                   <div className="info-note">
                     <CircleHelp size={19} />
@@ -1874,8 +1876,7 @@ export default function Studio({
                 <ArrowUpRight size={17} />
               </a>
               {publish.price > 0 &&
-                !workspace.stripeReady &&
-                !publish.whopUrl && (
+                !workspace.stripeReady && (
                   <p className="generation-note">
                     Your page is live. Connect Stripe to accept payments.
                   </p>

@@ -75,12 +75,6 @@ const csrf = await fetch(origin + "/api/workspace", {
   body: JSON.stringify({ name: "Attack" }),
 });
 assert.equal(csrf.status, 403, "Cross-origin writes denied");
-await call(
-  `/api/products/${p.id}`,
-  "PATCH",
-  { ...p, whopUrl: "https://evil.example/checkout" },
-  400,
-);
 const generated = await call(`/api/products/${p.id}/generate`, "POST", {}, 409);
 assert.ok(generated.error.includes("Unpublish"));
 await call(`/api/products/${p.id}`, "PATCH", { ...p, status: "draft" });
@@ -125,5 +119,5 @@ await call(`/api/products/${p.id}`, "PATCH", { ...p, status: "draft" });
 const unpublished = await fetch(origin + "/p/" + p.slug);
 assert.equal(unpublished.status, 404, "Unpublished storefront not accessible");
 console.log(
-  "PASS: render, auth, create, publish, paid-content isolation, checkout gating, CSRF, Whop URL validation, resumable generation failure, ZIP delivery, HTML escaping, encrypted provider keys, unpublish.",
+  "PASS: render, auth, create, publish, paid-content isolation, checkout gating, CSRF, resumable generation failure, ZIP delivery, HTML escaping, encrypted provider keys, unpublish.",
 );

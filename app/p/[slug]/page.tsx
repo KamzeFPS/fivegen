@@ -52,7 +52,6 @@ export default async function ProductPage({
             slug={p.slug}
             price={p.price}
             available={available}
-            whopUrl={p.whopUrl}
             billing={p.commerce?.billing||"once"}
             hasCode={!!c.deal.code}
             volume={c.deal.type==="volume"}

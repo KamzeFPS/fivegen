@@ -49,7 +49,6 @@ export type Product = Brief & {
   slug: string;
   status: "draft" | "published";
   content: ProductContent;
-  whopUrl?: string | null;
   commerce?: Commerce;
   createdAt: number;
   updatedAt: number;
