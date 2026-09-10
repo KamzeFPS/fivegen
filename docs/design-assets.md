@@ -8,4 +8,4 @@ Original assets generated with the built-in image generation tool for the FiveGe
 
 Font: locally served Inter variable Latin, distributed under the SIL Open Font License in `public/fonts/OFL.txt`. Source: Google Fonts (`fonts.googleapis.com` / `fonts.gstatic.com`). Non-Latin text uses the system font fallback.
 
-Brand: the user supplied the FiveGen logo on September 11, 2026. `public/brand/fivegen-original.png` preserves that source, and `fivegen-logo.webp` is a lossless format conversion. The interface displays the original orange monogram in a small white badge using CSS framing, alongside the FiveGen name.
+Brand: the user supplied the FiveGen logo on September 11, 2026. `public/brand/fivegen-original.png` preserves the initial source, and `fivegen-logo.webp` is its lossless format conversion. The user subsequently supplied a transparent PNG; `public/brand/fivegen-transparent.webp` preserves its pixels and alpha channel through lossless format conversion. The interface now displays that orange monogram directly on the page background using CSS framing, alongside the readable FiveGen name.

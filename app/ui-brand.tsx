@@ -4,7 +4,7 @@ export function Brand() {
   return (
     <span className="brand">
       <span className="brand-symbol">
-        <img src="/brand/fivegen-logo.webp" alt="" width="1254" height="1254" />
+        <img src="/brand/fivegen-transparent.webp" alt="" width="1254" height="1254" />
       </span>
       FiveGen
     </span>

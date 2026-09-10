@@ -8,8 +8,8 @@ export const metadata: Metadata = {
   description:
     "Turn what you know into beautiful digital products. Create, publish, and sell from one workspace.",
   icons: {
-    icon: "/brand/fivegen-logo.webp",
-    shortcut: "/brand/fivegen-logo.webp",
+    icon: "/brand/fivegen-transparent.webp",
+    shortcut: "/brand/fivegen-transparent.webp",
   },
 };
 

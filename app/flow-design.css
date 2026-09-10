@@ -1,6 +1,6 @@
 /* Customer journey: one clear next step and one scrolling surface per task. */
 .brand-home { align-self: flex-start; border-radius: 8px; }
-.brand-symbol { width: 35px; height: 35px; border-radius: 8px; overflow: hidden; position: relative; background: #fff; flex-shrink: 0; margin-right: 9px; }
+.brand-symbol { width: 35px; height: 35px; border-radius: 0; overflow: hidden; position: relative; background: transparent; flex-shrink: 0; margin-right: 9px; }
 .brand-symbol img { position: absolute; width: 78.375px; height: 78.375px; max-width: none; left: -22.25px; top: -15px; }
 .brand { font-size: 26px; }
 .sidebar-head { gap: 18px !important; padding-top: 23px !important; padding-bottom: 15px !important; }
