@@ -15,7 +15,7 @@ export function productBundle(p: Product, includeMarketing = true) {
           .join("\n\n"),
     ),
     "README.txt": strToU8(
-      `${p.title}\n\nOpen 01-product/guide.html in your browser. Use Print > Save as PDF to create a PDF.\nSupporting resources are in 02-resources. CSV files open in Excel or Google Sheets.\nReview any generated code before running it.\n\nCreated with Folio.`,
+      `${p.title}\n\nOpen 01-product/guide.html in your browser. Use Print > Save as PDF to create a PDF.\nSupporting resources are in 02-resources. CSV files open in Excel or Google Sheets.\nReview any generated code before running it.\n\nCreated with FiveGen.`,
     ),
   };
   for (const [i, f] of (p.content.files || []).entries())

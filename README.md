@@ -1,6 +1,6 @@
-# Folio — Digital Product Studio
+# FiveGen — Digital Product Studio
 
-Folio is a full-stack creator workspace for generating, editing, publishing, and selling digital products. The interface includes an overview, product editor, templates, revenue analytics, customers, payments, AI providers, and workspace settings.
+FiveGen is a full-stack creator workspace for generating, editing, publishing, and selling digital products. The interface includes an overview, product editor, templates, revenue analytics, customers, payments, AI providers, and workspace settings.
 
 ## What works
 
@@ -29,7 +29,7 @@ No AI keys or payment account credentials were supplied during implementation, s
 
 Text generation proceeds while the product editor is open, saves after every stage, and can be resumed after a refresh or failure. In-flight requests have a lease to prevent concurrent runs. Media processing runs at the provider; reopening the asset library resumes status collection. This is not an always-running background job service. Provider keys are required for subsequent polling.
 
-This implementation does not provide native proprietary formats, rendered PPTX/DOCX, actual Notion databases, long-form video editing, automatic tax/accounting, subscriptions, refund reconciliation, or a billing plan for the Folio platform. Custom generated HTML tools and code should be reviewed and tested before resale. No guaranteed outcome or revenue is implied.
+This implementation does not provide native proprietary formats, rendered PPTX/DOCX, actual Notion databases, long-form video editing, automatic tax/accounting, subscriptions, refund reconciliation, or a billing plan for the FiveGen platform. Custom generated HTML tools and code should be reviewed and tested before resale. No guaranteed outcome or revenue is implied.
 
 ## Validation
 

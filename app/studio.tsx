@@ -424,7 +424,7 @@ export default function Studio({
         .replace(/^[=+@-]/, "'") +
       '"';
     downloadText(
-      `${demo ? "sample-" : ""}folio-sales.csv`,
+      `${demo ? "sample-" : ""}fivegen-sales.csv`,
       [
         ["Date", "Product", "Customer", "Amount (USD)", "Provider"],
         ...orders.map((o) => [
@@ -1738,7 +1738,7 @@ export default function Studio({
                   <div className="info-note">
                     <CircleHelp size={19} />
                     <p>
-                      Folio only counts verified Stripe payments in live
+                      FiveGen only counts verified Stripe payments in live
                       revenue. Whop purchases are reported in Whop. Example
                       sales are visible only when sample data is enabled.
                     </p>
@@ -1842,7 +1842,7 @@ export default function Studio({
               <span className="footer-logo">✳</span> A little idea can go a long
               way.
             </span>
-            <span>Made for makers. Built with folio.</span>
+            <span>Made for makers. Built with FiveGen.</span>
           </footer>
         </main>
       </SidebarInset>

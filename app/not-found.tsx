@@ -14,7 +14,7 @@ export default function NotFound() {
           changed.
         </p>
         <a className="button primary" href="/">
-          Back to Folio
+          Back to FiveGen
         </a>
       </div>
     </main>

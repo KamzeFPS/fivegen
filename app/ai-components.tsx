@@ -130,7 +130,7 @@ export function AIProviders({
         <div>
           <h2>Your intelligence. Your creative team.</h2>
           <p>
-            Connect the models you trust. Folio turns them into one
+            Connect the models you trust. FiveGen turns them into one
             product-making workflow.
           </p>
         </div>

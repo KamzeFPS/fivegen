@@ -6,7 +6,7 @@ export function Brand() {
       <span className="brand-symbol">
         <Layers3 size={22} strokeWidth={2.5} />
       </span>
-      folio<span className="brand-period">.</span>
+      FiveGen<span className="brand-period">.</span>
     </span>
   );
 }
@@ -20,7 +20,7 @@ export function Cover({
   return (
     <div className={`product-cover ${product.color} ${large ? "large" : ""}`}>
       <div className="cover-top">
-        <span>FOLIO STUDIO</span>
+        <span>FIVEGEN STUDIO</span>
         <ArrowUpRight size={17} />
       </div>
       <div className="cover-title">{product.title}</div>

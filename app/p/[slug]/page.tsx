@@ -79,7 +79,7 @@ export default async function ProductPage({
       </section>
       <footer className="store-footer">
         Created by {String(row.seller_name || "an independent creator")} ·{" "}
-        <a href="/">Made with folio.</a>
+        <a href="/">Made with FiveGen.</a>
       </footer>
     </div>
   );

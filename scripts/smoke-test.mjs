@@ -35,7 +35,7 @@ assert.ok(
   "Run smoke tests only with an isolated local account that has no real API keys",
 );
 const brief = {
-  title: "Folio QA product",
+  title: "FiveGen QA product",
   description:
     "A local-only product used to verify secure publishing and delivery.",
   audience: "Quality assurance",

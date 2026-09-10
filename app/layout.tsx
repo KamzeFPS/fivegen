@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Folio — Your next idea, made real",
+  title: "FiveGen — Your next idea, made real",
   description:
     "Turn what you know into beautiful digital products. Create, publish, and sell from one workspace.",
   icons: {
