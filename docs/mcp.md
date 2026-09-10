@@ -4,15 +4,15 @@ FiveGen exposes a real, authenticated Streamable HTTP MCP server at `/api/mcp`. 
 
 ## Deployment status and activation
 
-The existing Site is owner-private. Unauthenticated external requests currently receive a Sites HTML 401 before reaching this application, including OAuth discovery requests. Consequently, **Claude/ChatGPT web connections cannot complete on the current private deployment**. The application implementation and local OAuth/MCP flow are tested; a connection inside the actual Claude or ChatGPT product has not been verified.
+The owner explicitly approved public access on September 11, 2026. The Site now allows external OAuth discovery without a browser session. Live, unauthenticated checks return HTTP 200 JSON for the protected-resource and authorization-server metadata, and `/api/mcp` returns the expected HTTP 401 JSON with its OAuth discovery challenge. Workspace and admin APIs continue to return HTTP 401 without authentication. The application implementation and local OAuth/MCP flow are tested; a connection inside the actual Claude or ChatGPT product has not been verified.
 
-Do not distribute Sites bypass tokens to users or AI clients. Do not silently change the Site audience. Activation requires an approved hosting change that allows the MCP and OAuth endpoints to be reached without a browser session. The current Sites access API exposes Site-wide custom/public access, not per-path access. Making this Site public would also expose existing published product/funnel pages, while workspace APIs and MCP tools continue to enforce authentication and ownership. An alternative is deploying behind a host that supports separate public OAuth/MCP routes.
+Do not distribute Sites bypass tokens to users or AI clients. Preserve the approved public audience. Published product/funnel pages are publicly reachable, while workspace APIs and MCP tools enforce authentication and ownership. The previous owner-private audience blocked discovery with a hosting-level HTML 401; switching to public access resolved that failure.
 
 The Sites connector can report platform-managed MCP connection details for publications that declare native MCP support, but the installed Sites skills do not document that declaration. No unsupported hosting manifest fields were guessed or added.
 
 Sites reserves `/mcp` for its native MCP publication feature; an undeclared publication returns a hosting-level 404 there. This application uses `/api/mcp` for its own authenticated MCP server. A public-audience change must be followed by a no-cookie discovery/protocol test before claiming web-client activation.
 
-Once reachable, use `https://folio-product-studio.kamzewac.chatgpt.site/api/mcp`. The **Connect AI** dashboard view has the endpoint, setup guidance, live connection list, revoke buttons, activity and generation prices. Its private-hosting notice should be updated after activation is verified externally.
+Use `https://folio-product-studio.kamzewac.chatgpt.site/api/mcp`. The **Connect AI** dashboard view has the endpoint, setup guidance, live connection list, revoke buttons, activity and generation prices. If an earlier connection attempt failed during OAuth discovery, retry it with this same URL.
 
 ## Authentication
 
@@ -54,7 +54,7 @@ Tools call the same application handlers directly under an AsyncLocalStorage ide
 
 ## Client setup
 
-After network activation:
+To connect:
 
 1. **Claude:** Customize → Connectors → Add custom connector. Name it FiveGen and paste the MCP URL. Use OAuth and sign in to the same FiveGen account. Organization policy may require an owner to add the connector.
 2. **ChatGPT:** enable developer mode under Settings → Security and login if available. Add a connection in ChatGPT Plugins, enter the MCP URL, and authorize FiveGen. Availability is account/workspace dependent.
@@ -86,4 +86,4 @@ node node_modules/vinext/dist/cli.js build
 
 The integration test uses the actual MCP SDK client and local HTTP server. It covers discovery, consent, PKCE rejection, single-use codes, token hashing, rotation/revocation, all-user isolation, retry deduplication, stale edits, Free/Pro permissions, and a create → edit → publish → public-page readback journey. Temporary local products, OAuth clients/connections and operation records are removed. It never starts a paid provider request. Existing credit tests exercise actual reservation SQL and the MCP per-call spending ceiling.
 
-Production OAuth/MCP network accessibility and a real end-user Claude/ChatGPT connection remain activation checks, not claimed passing tests.
+Production OAuth/MCP discovery and authentication boundaries passed no-cookie HTTP checks after public activation. A real end-user Claude/ChatGPT connection remains a client-side verification step, not a claimed passing test.
