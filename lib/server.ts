@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
 import type { Product } from "./product";
 import { readCommerce } from "./commerce";
+import { mcpIdentity } from "./mcp-context";
 export function binding(name: string): string {
   return String(
     (env as unknown as Record<string, unknown>)[name] ||
@@ -18,7 +19,7 @@ export function database() {
   return db;
 }
 export async function identity() {
-  const user = await getChatGPTUser();
+  const user = mcpIdentity.getStore() || await getChatGPTUser();
   if (!user)
     throw new ApiError("Sign in to save and publish your products.", 401);
   return user;

@@ -22,6 +22,7 @@ const updateSchema = briefSchema.extend({
   content: contentSchema,
   whopUrl: z.string().max(1500).nullable().optional(),
   commerce: commerceSchema.optional(),
+  expectedUpdatedAt:z.number().int().optional(),
 });
 export async function PATCH(
   req: Request,
@@ -70,9 +71,9 @@ export async function PATCH(
         "This product URL is already taken. Try another name.",
         409,
       );
-    await database()
+    const saved = await database()
       .prepare(
-        "UPDATE products SET slug=?,title=?,description=?,audience=?,format=?,price=?,color=?,content=?,status=?,whop_url=?,commerce=?,updated_at=? WHERE id=? AND owner=?",
+        "UPDATE products SET slug=?,title=?,description=?,audience=?,format=?,price=?,color=?,content=?,status=?,whop_url=?,commerce=?,updated_at=? WHERE id=? AND owner=? AND (? IS NULL OR updated_at=?)",
       )
       .bind(
         data.slug,
@@ -86,11 +87,14 @@ export async function PATCH(
         data.status,
         data.whopUrl || null,
         JSON.stringify(commerce),
-        Date.now(),
+        Math.max(Date.now(),existing.updatedAt+1),
         id,
         u.userId,
+        data.expectedUpdatedAt??null,
+        data.expectedUpdatedAt??null,
       )
       .run();
+    if(!saved.meta.changes)throw new ApiError("This product changed. Read the latest version before editing again.",409);
     return Response.json({
       product: productFromRow(await ownedProduct(id, u.userId)),
     });

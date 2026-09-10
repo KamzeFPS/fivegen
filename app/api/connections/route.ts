@@ -1,0 +1,5 @@
+import {z} from "zod";
+import {database,identity,failure,sameOrigin} from "@/lib/server";
+import {mcpOrigin} from "@/lib/mcp-auth";
+export async function GET(req:Request){try{const u=await identity(),db=database();const [connections,activity]=await Promise.all([db.prepare("SELECT id,name,scopes,created_at,last_used_at,refresh_expires FROM mcp_connections WHERE owner=? AND revoked=0 ORDER BY created_at DESC").bind(u.userId).all(),db.prepare("SELECT tool,state,created_at FROM mcp_calls WHERE owner=? ORDER BY created_at DESC LIMIT 20").bind(u.userId).all()]);return Response.json({url:`${mcpOrigin(req)}/mcp`,connections:connections.results,activity:activity.results},{headers:{"Cache-Control":"no-store"}});}catch(e){return failure(e);}}
+export async function DELETE(req:Request){try{sameOrigin(req);const u=await identity(),{id}=z.object({id:z.string().uuid()}).parse(await req.json());await database().prepare("UPDATE mcp_connections SET revoked=1 WHERE id=? AND owner=?").bind(id,u.userId).run();return Response.json({revoked:true});}catch(e){return failure(e);}}

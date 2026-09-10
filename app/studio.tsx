@@ -88,6 +88,7 @@ import {
 import { Brand, Cover } from "./ui-brand";
 import { CreateProductFlow, GrowingTextarea, ProductPreview, PublishReview } from "./product-flow";
 import { BillingPage, SalesTools } from "./sales-tools";
+import { ConnectionsPanel } from "./connections-panel";
 import { freePlan, type PlanInfo } from "@/lib/plans";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription } from "@/components/ui/alert-dialog";
 import {
@@ -119,7 +120,8 @@ type View =
   | "Payments"
   | "Settings"
   | "Plan & billing"
-  | "AI & credits";
+  | "AI & credits"
+  | "Connect AI";
 type Workspace = {
   plan: PlanInfo;
   admin?:boolean; textCost?:number;
@@ -295,6 +297,7 @@ export default function Studio({
     }
     if (new URLSearchParams(location.search).has("stripe")) setView("Payments");
     if (new URLSearchParams(location.search).has("billing")) setView("Plan & billing");
+    if (new URLSearchParams(location.search).has("connect")) setView("Connect AI");
   }, [user]);
   const commitNavigation = (v: View) => {
     setView(v);
@@ -689,6 +692,7 @@ export default function Studio({
               [
                 { name: "Payments", icon: CreditCard },
                 { name: "AI & credits", icon: Sparkles },
+                { name: "Connect AI", icon: Link2 },
                 { name: "Plan & billing", icon: Crown },
                 { name: "Settings", icon: Settings2 },
               ] as const
@@ -1111,6 +1115,7 @@ export default function Studio({
                         Customers: "The people who believe in what you make.",
                         Payments: "Get paid for what you know.",
                         "Plan & billing": "The right tools for your next stage.",
+                        "Connect AI": "Create and manage your products from the assistants you already use.",
                         Settings: "Make this space feel like yours.",
                         "AI & credits":
                           "Your credit balance, generation prices, and built-in AI.",
@@ -1724,6 +1729,7 @@ export default function Studio({
                 <AIProviders signedIn={!!user} onUpdate={() => void reload()} />
               )}
               {view === "Plan & billing" && <BillingPage plan={workspace.plan} onRefresh={() => void reload()} signedIn={!!user}/>}
+              {view === "Connect AI" && <ConnectionsPanel signedIn={!!user}/>}
               {view === "Settings" && (
                 <div className="settings-layout">
                   <section className="panel settings-card">

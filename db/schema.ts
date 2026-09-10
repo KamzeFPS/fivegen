@@ -1,4 +1,16 @@
 import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+export const mcpClients = sqliteTable("mcp_clients", {
+  id:text("id").primaryKey(),name:text("name").notNull(),redirects:text("redirects").notNull(),createdAt:integer("created_at").notNull(),
+});
+export const mcpCodes = sqliteTable("mcp_codes", {
+  hash:text("hash").primaryKey(),clientId:text("client_id").notNull(),owner:text("owner").notNull(),redirect:text("redirect").notNull(),challenge:text("challenge").notNull(),scopes:text("scopes").notNull(),resource:text("resource").notNull(),expires:integer("expires").notNull(),used:integer("used").notNull().default(0),
+});
+export const mcpConnections = sqliteTable("mcp_connections", {
+  id:text("id").primaryKey(),owner:text("owner").notNull(),clientId:text("client_id").notNull(),name:text("name").notNull(),scopes:text("scopes").notNull(),resource:text("resource").notNull(),accessHash:text("access_hash").notNull().unique(),refreshHash:text("refresh_hash").notNull().unique(),accessExpires:integer("access_expires").notNull(),refreshExpires:integer("refresh_expires").notNull(),revoked:integer("revoked").notNull().default(0),createdAt:integer("created_at").notNull(),lastUsedAt:integer("last_used_at").notNull(),
+},t=>[index("idx_mcp_connections_owner").on(t.owner)]);
+export const mcpCalls = sqliteTable("mcp_calls", {
+  id:text("id").primaryKey(),owner:text("owner").notNull(),connectionId:text("connection_id").notNull(),tool:text("tool").notNull(),fingerprint:text("fingerprint").notNull(),state:text("state").notNull(),result:text("result"),createdAt:integer("created_at").notNull(),
+},t=>[index("idx_mcp_calls_owner").on(t.owner,t.createdAt)]);
 export const products = sqliteTable(
   "products",
   {

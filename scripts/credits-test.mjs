@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import ts from 'typescript';
 import {DatabaseSync} from 'node:sqlite';
+import {AsyncLocalStorage} from 'node:async_hooks';
 import {creditPolicy,creditPacks,monthlyWindow,commissionAmount,commissionRate} from '../lib/credit-policy.ts';
 
 // Run the actual credit SQL against SQLite; only D1 transport and Stripe are mocked.
@@ -13,9 +14,11 @@ class ApiError extends Error{constructor(message,status=400){super(message);this
 let charge={payment_intent:'pi_test',amount_refunded:0,dispute:null};
 globalThis.__creditTest={ApiError,binding:()=>'',database:()=>db,stripe:async path=>{assert.ok(path.startsWith('charges/'));return charge;},planFor:async owner=>{const m=sqlite.prepare('SELECT * FROM memberships WHERE owner=?').get(owner);return {tier:m?.status==='active'&&m.period_end*1000>Date.now()?'pro':'free'};},creditPacks,creditPolicy,monthlyWindow};
 const source=fs.readFileSync('lib/credits.ts','utf8').replace(/^import .*;\r?\n/gm,'');
-const code='const {ApiError,binding,database,stripe,planFor,creditPacks,creditPolicy,monthlyWindow}=globalThis.__creditTest;\n'+ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
+globalThis.__creditTest.mcpCreditLimit=new AsyncLocalStorage();
+const code='const {ApiError,binding,database,stripe,planFor,creditPacks,creditPolicy,monthlyWindow,mcpCreditLimit}=globalThis.__creditTest;\n'+ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
 const c=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
 const owner='credit-test';
+await assert.rejects(()=>globalThis.__creditTest.mcpCreditLimit.run({remaining:9},()=>c.reserveCredits(owner,'over-mcp-cap','text',10)),e=>e.status===402);
 assert.deepEqual(await c.creditBalance(owner),{starter:1200,included:0,purchased:0,total:1200,media:0,renewsAt:null});
 await c.reserveCredits(owner,'text-1','text',10);assert.equal((await c.creditBalance(owner)).starter,1190);await c.completeCredits('text-1');
 await assert.rejects(()=>c.reserveCredits(owner,'text-1','text',10),e=>e.status===409);

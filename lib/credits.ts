@@ -1,5 +1,6 @@
 import {ApiError,binding,database,stripe} from "./server";
 import {creditPacks,creditPolicy,monthlyWindow,type CreditBalance} from "./credit-policy";
+import {mcpCreditLimit} from "./mcp-context";
 
 export async function creditBalance(owner:string):Promise<CreditBalance>{
   const db=database();
@@ -21,6 +22,8 @@ export async function creditBalance(owner:string):Promise<CreditBalance>{
 
 // The ledger claim, balance deduction, and state transition commit atomically in D1.
 export async function reserveCredits(owner:string,id:string,operation:string,cost:number){
+  const limit=mcpCreditLimit.getStore();
+  if(limit){if(cost>limit.remaining)throw new ApiError("This generation exceeds the credit limit approved for this MCP call.",402);limit.remaining-=cost;}
   if(!Number.isSafeInteger(cost)||cost<1)throw new Error("Invalid credit cost");
   const balance=await creditBalance(owner);
   const db=database(),text=operation==="text",now=Date.now();

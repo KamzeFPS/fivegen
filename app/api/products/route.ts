@@ -9,17 +9,19 @@ import {
 } from "@/lib/server";
 import { providerSettings } from "@/lib/ai";
 import { planFor } from "@/lib/billing";
+import { z } from "zod";
 export async function POST(req: Request) {
   try {
     sameOrigin(req);
     const u = await identity();
-    const brief = briefSchema.parse(await req.json());
+    const input = briefSchema.extend({generationMode:z.enum(["auto","manual"]).default("auto")}).parse(await req.json());
+    const brief = briefSchema.parse(input);
     const db = database();
     const plan = await planFor(u.userId);
     if (plan.used >= plan.limit)
       throw new ApiError(`Your ${plan.tier === "free" ? "Free" : "Pro"} plan includes ${plan.limit} products.${plan.tier === "free" ? " Upgrade to Pro for 100 products." : " Your existing products remain available."}`, 403);
     const ai = await providerSettings(u.userId);
-    const enabled = ai.connected[ai.config.textProvider]&&!ai.config.paused;
+    const enabled = input.generationMode !== "manual" && ai.connected[ai.config.textProvider]&&!ai.config.paused;
     const id = crypto.randomUUID();
     const slug = slugify(brief.title) + "-" + id.slice(0, 6);
     const now = Date.now();
