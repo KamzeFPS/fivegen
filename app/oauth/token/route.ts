@@ -3,7 +3,7 @@ import {digest,mcpOrigin,oauthFailure,oauthJson,randomToken} from "@/lib/mcp-aut
 export async function POST(req:Request){try{
   const raw=await req.text();if(raw.length>12000)throw new ApiError("Request too large.",413);
   const d=new URLSearchParams(raw),db=database(),client=d.get("client_id")||"",resource=d.get("resource"),now=Date.now();
-  if(resource!==`${mcpOrigin(req)}/mcp`)throw new ApiError("Invalid OAuth resource.");
+  if(resource!==`${mcpOrigin(req)}/api/mcp`)throw new ApiError("Invalid OAuth resource.");
   const access=randomToken(),refresh=randomToken(),accessHash=await digest(access),refreshHash=await digest(refresh);let scopes="";
   if(d.get("grant_type")==="authorization_code"){
     const verifier=d.get("code_verifier")||"";if(!/^[A-Za-z0-9._~-]{43,128}$/.test(verifier))throw new ApiError("Invalid code verifier.",401);

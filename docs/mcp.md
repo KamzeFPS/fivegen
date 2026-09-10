@@ -1,6 +1,6 @@
 # FiveGen MCP
 
-FiveGen exposes a real, authenticated Streamable HTTP MCP server at `/mcp`. It uses the official `@modelcontextprotocol/sdk` and works with compatible remote MCP clients. It is separate from browser WebMCP.
+FiveGen exposes a real, authenticated Streamable HTTP MCP server at `/api/mcp`. It uses the official `@modelcontextprotocol/sdk` and works with compatible remote MCP clients. It is separate from browser WebMCP.
 
 ## Deployment status and activation
 
@@ -10,13 +10,15 @@ Do not distribute Sites bypass tokens to users or AI clients. Do not silently ch
 
 The Sites connector can report platform-managed MCP connection details for publications that declare native MCP support, but the installed Sites skills do not document that declaration. No unsupported hosting manifest fields were guessed or added.
 
-Once reachable, use `https://folio-product-studio.kamzewac.chatgpt.site/mcp`. The **Connect AI** dashboard view has the endpoint, setup guidance, live connection list, revoke buttons, activity and generation prices. Its private-hosting notice should be updated after activation is verified externally.
+Sites reserves `/mcp` for its native MCP publication feature; an undeclared publication returns a hosting-level 404 there. This application uses `/api/mcp` for its own authenticated MCP server. A public-audience change must be followed by a no-cookie discovery/protocol test before claiming web-client activation.
+
+Once reachable, use `https://folio-product-studio.kamzewac.chatgpt.site/api/mcp`. The **Connect AI** dashboard view has the endpoint, setup guidance, live connection list, revoke buttons, activity and generation prices. Its private-hosting notice should be updated after activation is verified externally.
 
 ## Authentication
 
 OAuth authorization-code flow with mandatory S256 PKCE, dynamic public-client registration, RFC 9728 protected-resource discovery, issuer identification, exact registered redirect matching and resource binding. Browser consent uses the existing Sites sign-in identity. No separate customer passwords or AI provider keys are introduced.
 
-- `/.well-known/oauth-protected-resource` and `/mcp` resource suffix expose metadata.
+- `/.well-known/oauth-protected-resource` and `/api/mcp` resource suffix expose metadata.
 - `/.well-known/oauth-authorization-server` exposes authorization-server metadata.
 - `/oauth/register`, `/oauth/authorize`, `/oauth/consent`, `/oauth/token`, `/oauth/revoke` implement connection authorization.
 - Well-known URLs rewrite to ordinary route directories because Vinext excludes dot-prefixed route directories.

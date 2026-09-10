@@ -11,7 +11,7 @@ export function ConnectionsPanel({signedIn}:{signedIn:boolean}){
   useEffect(()=>{void load();},[signedIn]);
   async function disconnect(id:string){setBusy(id);try{const r=await fetch("/api/connections",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})});if(!r.ok)throw new Error("Could not disconnect. Try again.");await load();toast.success("Connection revoked. The assistant can no longer access FiveGen.");}catch(e){setError((e as Error).message);}finally{setBusy("");}}
   async function copy(text:string){try{await navigator.clipboard.writeText(text);setCopied(true);setTimeout(()=>setCopied(false),1800);}catch{toast.error("Copy unavailable. Select and copy the address below.");}}
-  const url=data?.url||"https://folio-product-studio.kamzewac.chatgpt.site/mcp";
+  const url=data?.url||"https://folio-product-studio.kamzewac.chatgpt.site/api/mcp";
   return <div className="connections-layout">
     {error&&<p className="error-banner" role="alert">{error}</p>}
     <section className="panel connection-setup"><div className="connection-heading"><div className="connection-mark"><Link2 size={24}/></div><div><span className="eyebrow">YOUR STUDIO, IN THE CONVERSATION</span><h2>Connect your AI assistant.</h2><p>Create products, build campaigns and manage your storefront from Claude or ChatGPT.</p></div></div>

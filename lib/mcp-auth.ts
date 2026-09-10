@@ -29,7 +29,7 @@ export async function authenticateMcp(req:Request){
   const match=/^Bearer ([A-Za-z0-9_-]{32,256})$/i.exec(req.headers.get("authorization")||"");
   if(!match)throw new ApiError("Connect your FiveGen account to continue.",401);
   const row=await database().prepare("SELECT id,owner,client_id,name,scopes,resource,access_expires FROM mcp_connections WHERE access_hash=? AND revoked=0 AND access_expires>?").bind(await digest(match[1]),Date.now()).first<Connection>();
-  if(!row||row.resource!==`${mcpOrigin(req)}/mcp`)throw new ApiError("Connection expired or was revoked. Reconnect FiveGen.",401);
+  if(!row||row.resource!==`${mcpOrigin(req)}/api/mcp`)throw new ApiError("Connection expired or was revoked. Reconnect FiveGen.",401);
   await database().prepare("UPDATE mcp_connections SET last_used_at=? WHERE id=? AND revoked=0").bind(Date.now(),row.id).run();
   return row;
 }
@@ -38,7 +38,7 @@ export const authQuery = z.object({
 });
 export async function validateAuthorization(input:unknown,origin:string){
   const data=authQuery.parse(input);
-  if(data.resource!==`${origin}/mcp`)throw new ApiError("Invalid OAuth resource.");
+  if(data.resource!==`${origin}/api/mcp`)throw new ApiError("Invalid OAuth resource.");
   const client=await database().prepare("SELECT * FROM mcp_clients WHERE id=?").bind(data.client_id).first<{id:string;name:string;redirects:string}>();
   if(!client||!JSON.parse(client.redirects).includes(data.redirect_uri))throw new ApiError("The client or callback address is not registered.");
   const scopes=[...new Set(data.scope.split(" ").filter(Boolean))];
