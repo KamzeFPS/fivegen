@@ -12,6 +12,7 @@ import {
   CircleHelp,
   CreditCard,
   ExternalLink,
+  Eye,
   FileText,
   Globe,
   LayoutDashboard,
@@ -43,6 +44,7 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   Dialog,
@@ -83,6 +85,8 @@ import {
   ProductFiles,
 } from "./ai-components";
 import { Brand, Cover } from "./ui-brand";
+import { CreateProductFlow, GrowingTextarea, ProductPreview, PublishReview } from "./product-flow";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription } from "@/components/ui/alert-dialog";
 import {
   Area,
   AreaChart,
@@ -181,6 +185,13 @@ function downloadText(name: string, text: string, type = "text/plain") {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+function StudioSidebar({ children }: { children: React.ReactNode }) {
+  const { setOpenMobile } = useSidebar();
+  return <Sidebar className="folio-sidebar"><div style={{ display: "contents" }} onClick={(event) => {
+    if (event.target instanceof Element && event.target.closest("button, a")) setOpenMobile(false);
+  }}>{children}</div></Sidebar>;
+}
+
 export default function Studio({
   user,
 }: {
@@ -212,6 +223,35 @@ export default function Studio({
   const [publish, setPublish] = useState<Product | null>(null);
   const [help, setHelp] = useState(false);
   const [settingsName, setSettingsName] = useState("My studio");
+  const [editorBaseline, setEditorBaseline] = useState("");
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const [preview, setPreview] = useState(false);
+  const [publishReview, setPublishReview] = useState(false);
+  const [creationError, setCreationError] = useState("");
+  const [resumeBrief, setResumeBrief] = useState(false);
+  const [returnProduct, setReturnProduct] = useState<Product | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const dirty = !!editor && !!editorBaseline && JSON.stringify(editor) !== editorBaseline;
+  useEffect(() => {
+    if (!dirty) return;
+    const protectEdits = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", protectEdits);
+    return () => window.removeEventListener("beforeunload", protectEdits);
+  }, [dirty]);
+  function receiveProduct(product: Product) {
+    setEditor(product);
+    setEditorBaseline(JSON.stringify(product));
+  }
+  function openEditor(product: Product) {
+    receiveProduct(product);
+    setSection(0);
+    setEditTab("content");
+    setView("My products");
+  }
+  function guardNavigation(action: () => void) {
+    if (dirty) setPendingAction(() => action);
+    else action();
+  }
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [view, editor?.id]);
@@ -237,26 +277,45 @@ export default function Studio({
       if (draft) {
         try {
           setBrief(JSON.parse(draft));
-          setStep(1);
-          setCreate(true);
+          setStep(2);
+          const destination = sessionStorage.getItem("fivegen-brief-destination");
+          if (destination === "AI providers") { setView("AI providers"); setResumeBrief(true); }
+          else setCreate(true);
         } catch {}
         sessionStorage.removeItem("folio-unsaved-brief");
+        sessionStorage.removeItem("fivegen-brief-destination");
       }
     }
     if (new URLSearchParams(location.search).has("stripe")) setView("Payments");
   }, [user]);
-  const navigate = (v: View) => {
+  const commitNavigation = (v: View) => {
     setView(v);
     setSearch("");
     setFilter("all");
     setEditor(null);
   };
+  const navigate = (v: View) => guardNavigation(() => commitNavigation(v));
+  async function setupFromEditor(view: "AI providers" | "Payments") {
+    if (!editor) return;
+    const product = dirty ? await save(editor) : editor;
+    if (!product) return;
+    setReturnProduct(product);
+    setPublishReview(false);
+    commitNavigation(view);
+  }
   const requireUser = () => {
     if (user) return true;
     window.location.href = "/signin-with-chatgpt?return_to=/";
     return false;
   };
   function startCreate(t?: Brief) {
+    guardNavigation(() => {
+    setCreationError("");
+    if (!t && (brief.title || brief.description || brief.audience)) {
+      setStep(1);
+      setCreate(true);
+      return;
+    }
     setBrief(
       t
         ? { ...t, language: "English", quality: "premium" }
@@ -271,12 +330,16 @@ export default function Studio({
     );
     setStep(0);
     setCreate(true);
+    });
   }
   async function generate() {
-    if (!user)
+    if (!user) {
       sessionStorage.setItem("folio-unsaved-brief", JSON.stringify(brief));
+      sessionStorage.removeItem("fivegen-brief-destination");
+    }
     if (!requireUser()) return;
     setBusy(true);
+    setCreationError("");
     try {
       const p = await api<{ product: Product; mode: string }>(
         "/api/products",
@@ -284,7 +347,10 @@ export default function Studio({
         brief,
       );
       setCreate(false);
-      setEditor(p.product);
+      receiveProduct(p.product);
+      setBrief({ ...templates[0], title: "", description: "", audience: "" });
+      setQuickIdea("");
+      setResumeBrief(false);
       setSection(0);
       setEditTab("content");
       setView("My products");
@@ -296,6 +362,7 @@ export default function Studio({
           : "Your editable starter is ready. Connect an AI provider for complete generation.",
       );
     } catch (e) {
+      setCreationError((e as Error).message);
       toast.error((e as Error).message);
     } finally {
       setBusy(false);
@@ -309,7 +376,7 @@ export default function Studio({
         "PATCH",
         p,
       );
-      setEditor(r.product);
+      receiveProduct(r.product);
       await reload();
       toast.success("Changes saved");
       return r.product;
@@ -328,7 +395,8 @@ export default function Studio({
         "PATCH",
         { ...p, status: "published" },
       );
-      setEditor(r.product);
+      receiveProduct(r.product);
+      setPublishReview(false);
       setPublish(r.product);
       await reload();
       toast.success("Your product page is published");
@@ -347,6 +415,26 @@ export default function Studio({
         "Could not copy. Open the product page and copy its address.",
       );
     }
+  }
+  async function exportEditor(kind: "bundle" | "export") {
+    if (!editor) return;
+    const product = dirty ? await save(editor) : editor;
+    if (!product) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/products/${product.id}/${kind}`);
+      if (!response.ok) throw new Error("Could not export this product. Please try again.");
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${product.slug}${kind === "bundle" ? "-complete-package.zip" : ".html"}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      toast.success("Download started");
+    } catch (error) { toast.error((error as Error).message); }
+    finally { setBusy(false); }
   }
   const cutoff = Date.now() - Number(period) * 86400000;
   const orders = demo
@@ -455,7 +543,7 @@ export default function Studio({
             onClick={() =>
               demo
                 ? startCreate(templates[i])
-                : (setEditor(p), setSection(0), setEditTab("content"))
+                : openEditor(p)
             }
             aria-label={`Edit ${p.title}`}
           >
@@ -485,7 +573,7 @@ export default function Studio({
                     onClick={() =>
                       demo
                         ? startCreate(templates[i])
-                        : (setEditor(p), setSection(0))
+                        : openEditor(p)
                     }
                   >
                     Edit product
@@ -538,9 +626,9 @@ export default function Studio({
     <SidebarProvider
       style={{ "--sidebar-width": "224px" } as React.CSSProperties}
     >
-      <Sidebar className="folio-sidebar">
+      <StudioSidebar>
         <SidebarHeader className="sidebar-head">
-          <Brand />
+          <button className="brand-home" aria-label="FiveGen studio home" onClick={() => navigate("Overview")}><Brand /></button>
           <button
             className="workspace-switch"
             onClick={() => navigate("Settings")}
@@ -605,16 +693,6 @@ export default function Studio({
               </SidebarMenuItem>
             ))}
           </SidebarMenu>
-          <div className="sidebar-note">
-            <span className="note-icon">
-              <Sparkles size={19} />
-            </span>
-            <strong>Your creative engine</strong>
-            <p>Connect your models. Bring your ideas to life.</p>
-            <button onClick={() => navigate("AI providers")}>
-              Manage AI providers <ArrowUpRight size={15} />
-            </button>
-          </div>
         </SidebarContent>
         <SidebarFooter className="sidebar-footer">
           <button className="help-link" onClick={() => setHelp(true)}>
@@ -640,7 +718,7 @@ export default function Studio({
             <ChevronDown size={15} />
           </button>
         </SidebarFooter>
-      </Sidebar>
+      </StudioSidebar>
       <SidebarInset className="main-shell">
         <header className="topbar">
           <div className="breadcrumbs">
@@ -672,6 +750,7 @@ export default function Studio({
           </div>
         </header>
         <main className={`workspace-main ${view === "Overview" && !editor ? "studio-home" : ""}`} key={editor?.id || view}>
+          {!editor && (returnProduct || resumeBrief) && <div className="resume-work"><div><strong>{returnProduct ? returnProduct.title : "Your product brief is ready"}</strong><span>Continue where you left off after setup.</span></div><button className="button secondary" onClick={() => { if(returnProduct) { openEditor(returnProduct); setReturnProduct(null); } else { setStep(2); setCreate(true); } }}><ArrowLeft size={16}/>{returnProduct ? "Back to product" : "Resume creation"}</button></div>}
           {error && (
             <div role="alert" className="error-banner">
               {error}
@@ -680,75 +759,49 @@ export default function Studio({
           )}
           {editor ? (
             <>
-              <div className="page-heading">
-                <div>
-                  <button className="back-link" onClick={() => setEditor(null)}>
-                    <ArrowLeft size={15} />
-                    All products
-                  </button>
-                  <h1>{editor.title}</h1>
-                  <p>Make it yours. Then make it available to the world.</p>
-                </div>
-                <div className="heading-actions">
-                  <button
-                    className="button secondary"
-                    disabled={busy}
-                    onClick={() => void save(editor)}
-                  >
-                    Save changes
-                  </button>
-                  <button
-                    className="button primary"
-                    disabled={busy}
-                    onClick={() => void publishProduct(editor)}
-                  >
-                    {busy ? (
-                      <Loader2 className="spin" size={16} />
-                    ) : (
-                      <Globe size={16} />
-                    )}
-                    Publish product
-                  </button>
+              <div className="editor-commandbar">
+                <div className="editor-identity"><button className="back-link" onClick={() => navigate("My products")}><ArrowLeft size={15} /> All products</button><h1>{editor.title}</h1><span className={dirty ? "save-state unsaved" : "save-state"}>{generating ? "AI is working…" : busy ? "Saving…" : dirty ? "Unsaved changes" : "All changes saved"}</span></div>
+                <div className="editor-actions">
+                  <button className="button secondary" onClick={() => setPreview(true)}><Eye size={16} />Preview</button>
+                  <DropdownMenu><DropdownMenuTrigger asChild><button className="button secondary" disabled={busy || generating}><ArrowDownToLine size={16} /><span>Export</span><ChevronDown size={14} /></button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => void exportEditor("bundle")}>Complete package · ZIP</DropdownMenuItem><DropdownMenuItem onClick={() => void exportEditor("export")}>Printable guide · HTML / PDF</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
+                  <button className="button secondary" disabled={busy || generating || !dirty} onClick={() => void save(editor)}><Check size={16} />Save</button>
+                  <button className="button primary" disabled={busy || generating} onClick={() => setPublishReview(true)}><Globe size={16} />{editor.status === "published" ? "Publish changes" : "Publish"}</button>
                 </div>
               </div>
               <GenerationProgress
                 key={editor.id}
                 product={editor}
-                onProduct={setEditor}
+                onProduct={receiveProduct}
+                aiReady={workspace.capabilities.ai}
+                onSetup={() => void setupFromEditor("AI providers")}
+                onBeforeGenerate={async () => !dirty || !!(await save(editor))}
+                onRunningChange={setGenerating}
                 onComplete={() => void reload()}
               />
               <Tabs value={editTab} onValueChange={setEditTab}>
                 <TabsList className="editor-tabs">
-                  <TabsTrigger value="content">Product content</TabsTrigger>
+                  <TabsTrigger value="content">1. Content</TabsTrigger>
                   <TabsTrigger value="storefront">
-                    Storefront & pricing
+                    2. Storefront
                   </TabsTrigger>
-                  <TabsTrigger value="launch">Launch kit</TabsTrigger>
-                  <TabsTrigger value="files">Product files</TabsTrigger>
-                  <TabsTrigger value="media">Marketing studio</TabsTrigger>
+                  <TabsTrigger value="launch">3. Launch kit</TabsTrigger>
+                  <TabsTrigger value="files">4. Files</TabsTrigger>
+                  <TabsTrigger value="media">5. Marketing</TabsTrigger>
                 </TabsList>
               </Tabs>
               {editTab === "media" ? (
-                <MediaStudio product={editor} />
+                <MediaStudio product={editor} onSetup={() => void setupFromEditor("AI providers")} />
               ) : editTab === "files" ? (
                 <ProductFiles product={editor} />
               ) : (
                 <div className="editor-layout">
                   {" "}
-                  <div className="panel editor-panel">
+                  <fieldset className="panel editor-panel" disabled={generating}>
                     {editTab === "content" ? (
                       <>
-                        <div className="section-picker">
-                          {editor.content.sections.map((s, i) => (
-                            <button
-                              key={i}
-                              className={section === i ? "selected" : ""}
-                              onClick={() => setSection(i)}
-                            >
-                              <span>{String(i + 1).padStart(2, "0")}</span>
-                              {s.title}
-                            </button>
-                          ))}
+                        <div className="chapter-toolbar">
+                          <div className="chapter-select"><label htmlFor="chapter-select">Section {section + 1} of {editor.content.sections.length}</label><Select value={String(section)} onValueChange={(value) => setSection(Number(value))}><SelectTrigger id="chapter-select"><SelectValue /></SelectTrigger><SelectContent>{editor.content.sections.map((item,index) => <SelectItem key={index} value={String(index)}>{index + 1}. {item.title}</SelectItem>)}</SelectContent></Select></div>
+                          <div className="chapter-actions"><button className="icon-button" disabled={section === 0} aria-label="Previous section" onClick={() => setSection(section - 1)}><ArrowLeft size={17}/></button><button className="icon-button" disabled={section >= editor.content.sections.length - 1} aria-label="Next section" onClick={() => setSection(section + 1)}><ArrowRight size={17}/></button><button className="button secondary" disabled={generating || editor.content.sections.length >= 30} onClick={() => { setEditor({...editor, content:{...editor.content, sections:[...editor.content.sections,{title:"New section",body:"Add your knowledge here."}]}}); setSection(editor.content.sections.length); }}><Plus size={16}/><span>Add section</span></button></div>
                         </div>
                         <div className="content-editor">
                           <label>
@@ -775,7 +828,7 @@ export default function Studio({
                           </label>
                           <label>
                             Content
-                            <textarea
+                            <GrowingTextarea
                               className="document-textarea"
                               value={
                                 editor.content.sections[section]?.body || ""
@@ -805,19 +858,21 @@ export default function Studio({
                                 onChange={(e) => setRevision(e.target.value)}
                               />
                             </label>
+                            {!workspace.capabilities.ai && <button className="text-link" type="button" onClick={() => void setupFromEditor("AI providers")}>Connect AI to refine this section <ArrowRight size={14}/></button>}
                             <button
                               className="button secondary"
-                              disabled={busy || revision.length < 8}
+                              disabled={busy || generating || revision.length < 8 || !workspace.capabilities.ai}
                               onClick={async () => {
                                 setBusy(true);
                                 try {
                                   if (!(await save(editor))) return;
+                                  setBusy(true);
                                   const d = await api<{ product: Product }>(
                                     `/api/products/${editor.id}/revise`,
                                     "POST",
                                     { index: section, instructions: revision },
                                   );
-                                  setEditor(d.product);
+                                  receiveProduct(d.product);
                                   setRevision("");
                                   await reload();
                                   toast.success("Section improved");
@@ -832,29 +887,7 @@ export default function Studio({
                               Refine section
                             </button>
                           </div>
-                          <button
-                            className="button secondary"
-                            onClick={() => {
-                              setEditor({
-                                ...editor,
-                                content: {
-                                  ...editor.content,
-                                  sections: [
-                                    ...editor.content.sections,
-                                    {
-                                      title: "New section",
-                                      body: "Add your knowledge here.",
-                                    },
-                                  ],
-                                },
-                              });
-                              setSection(editor.content.sections.length);
-                            }}
-                            disabled={editor.content.sections.length >= 30}
-                          >
-                            <Plus size={16} />
-                            Add section
-                          </button>
+
                         </div>
                       </>
                     ) : editTab === "storefront" ? (
@@ -907,6 +940,7 @@ export default function Studio({
                             />
                           </label>
                         </div>
+                        <div className="checkout-setup"><CreditCard size={20}/><div><strong>{workspace.stripeReady ? "Stripe checkout connected" : "Connect your checkout"}</strong><p>{workspace.stripeReady ? "Paid purchases unlock the product automatically." : "Connect Stripe or paste your Whop link below to accept payments."}</p></div><button type="button" className="button secondary" onClick={() => void setupFromEditor("Payments")}>{workspace.stripeReady ? "Manage" : "Connect Stripe"}<ArrowUpRight size={14}/></button></div>
                         <label>
                           Whop checkout link (optional)
                           <input
@@ -976,7 +1010,7 @@ export default function Studio({
                       <div className="form-stack">
                         <label>
                           Your 7-day launch plan & email
-                          <textarea
+                          <GrowingTextarea
                             className="document-textarea"
                             value={editor.content.launch}
                             onChange={(e) =>
@@ -1004,7 +1038,7 @@ export default function Studio({
                         </button>
                       </div>
                     )}
-                  </div>
+                  </fieldset>
                   <aside className="editor-preview">
                     <span className="eyebrow">YOUR PRODUCT AT A GLANCE</span>
                     <Cover product={editor} large />
@@ -1018,13 +1052,7 @@ export default function Studio({
                       <button
                         className="button secondary full"
                         disabled={busy}
-                        onClick={async () => {
-                          if (await save(editor))
-                            window.open(
-                              `/api/products/${editor.id}/export`,
-                              "_blank",
-                            );
-                        }}
+                        onClick={() => void exportEditor("bundle")}
                       >
                         <ArrowDownToLine size={16} />
                         Export product
@@ -1046,6 +1074,7 @@ export default function Studio({
                   </aside>
                 </div>
               )}
+              <div className="editor-step-footer"><span>{["Review your content, then shape your storefront.", "Set a price and connect checkout before you share.", "Your campaign copy is ready to edit and export.", "Review what your customers will receive.", "Ready to share your product?"][["content","storefront","launch","files","media"].indexOf(editTab)]}</span><button className="button primary" disabled={busy || generating} onClick={() => { const next = ["content","storefront","launch","files","media"][["content","storefront","launch","files","media"].indexOf(editTab) + 1]; if (next) { setEditTab(next); window.scrollTo({top:0,behavior:"instant"}); } else setPublishReview(true); }}>{({content:"Continue to storefront",storefront:"Continue to launch kit",launch:"Review product files",files:"Open marketing studio",media:"Review & publish"} as Record<string,string>)[editTab]}<ArrowRight size={16}/></button></div>
             </>
           ) : (
             <>
@@ -1832,229 +1861,14 @@ export default function Studio({
           </footer>
         </main>
       </SidebarInset>
-      <Dialog open={create} onOpenChange={(v) => !busy && setCreate(v)}>
-        <DialogContent className="create-dialog">
-          <DialogHeader>
-            <span className="dialog-symbol">
-              <Sparkles size={24} />
-            </span>
-            <div className="eyebrow">LET’S MAKE SOMETHING WORTH SHARING</div>
-            <DialogTitle>
-              {step === 0
-                ? "What are you creating?"
-                : busy
-                  ? "Bringing your idea to life…"
-                  : "Give your idea a little detail."}
-            </DialogTitle>
-            <DialogDescription>
-              {step === 0
-                ? "Start with a format. You can make it entirely your own."
-                : "Tell us what you know and who you want to help."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="step-indicator">
-            <span className="active" />
-            <span className={step === 1 ? "active" : ""} />
-          </div>
-          {step === 0 ? (
-            <>
-              <div className="format-options">
-                {formats.map((f, i) => {
-                  const Icon = [
-                    BookOpen,
-                    Zap,
-                    Layers3,
-                    TrendingUp,
-                    FileText,
-                    Package,
-                  ][i];
-                  return (
-                    <button
-                      className={brief.format === f ? "chosen" : ""}
-                      key={f}
-                      onClick={() => setBrief({ ...brief, format: f })}
-                    >
-                      <Icon size={22} />
-                      <span>
-                        <strong>{f}</strong>
-                        <small>
-                          {
-                            [
-                              "Share your knowledge, one page at a time.",
-                              "Teach a skill in focused, practical lessons.",
-                              "Give your audience a useful head start.",
-                              "Help someone build a habit that sticks.",
-                              "Turn your process into a repeatable system.",
-                              "A calculator, workbook, code kit, or something entirely new.",
-                            ][i]
-                          }
-                        </small>
-                      </span>
-                      <span className="radio-dot">
-                        {brief.format === f && <span />}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              <button
-                className="button primary full"
-                onClick={() => setStep(1)}
-              >
-                Continue
-                <ArrowRight size={17} />
-              </button>
-            </>
-          ) : (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                void generate();
-              }}
-              className="form-stack"
-            >
-              <label>
-                Product name
-                <input
-                  autoFocus
-                  required
-                  minLength={3}
-                  maxLength={100}
-                  placeholder="e.g. The Freelancer’s First Client Playbook"
-                  value={brief.title}
-                  onChange={(e) =>
-                    setBrief({ ...brief, title: e.target.value })
-                  }
-                />
-              </label>
-              <label>
-                What will your product help people do?
-                <textarea
-                  required
-                  minLength={12}
-                  maxLength={12000}
-                  placeholder="Share the problem you solve, your approach, and what people will walk away with…"
-                  value={brief.description}
-                  onChange={(e) =>
-                    setBrief({ ...brief, description: e.target.value })
-                  }
-                />
-              </label>
-              <div className="form-two">
-                <label>
-                  Who is it for?
-                  <input
-                    required
-                    minLength={3}
-                    maxLength={300}
-                    placeholder="e.g. First-time freelancers"
-                    value={brief.audience}
-                    onChange={(e) =>
-                      setBrief({ ...brief, audience: e.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  Price · USD
-                  <input
-                    required
-                    type="number"
-                    min="0"
-                    max="9999"
-                    step="0.01"
-                    value={brief.price}
-                    onChange={(e) =>
-                      setBrief({ ...brief, price: Number(e.target.value) })
-                    }
-                  />
-                </label>
-              </div>
-              <label>
-                Creative direction & requirements
-                <textarea
-                  maxLength={12000}
-                  placeholder="Describe the deliverables, examples to include, depth, visual style, and what would make this exceptional…"
-                  value={brief.instructions || ""}
-                  onChange={(e) =>
-                    setBrief({ ...brief, instructions: e.target.value })
-                  }
-                />
-              </label>
-              <div className="form-two">
-                <label>
-                  Language
-                  <input
-                    placeholder="English, Mongolian…"
-                    value={brief.language || "English"}
-                    onChange={(e) =>
-                      setBrief({ ...brief, language: e.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  Depth
-                  <Select
-                    value={brief.quality || "premium"}
-                    onValueChange={(v) =>
-                      setBrief({
-                        ...brief,
-                        quality: v as "premium" | "balanced",
-                      })
-                    }
-                  >
-                    <SelectTrigger className="provider-select">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="premium">
-                        Premium · in depth
-                      </SelectItem>
-                      <SelectItem value="balanced">
-                        Balanced · focused
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </label>
-              </div>
-              <div className="generation-note">
-                <Sparkles size={16} />
-                {workspace.capabilities.ai
-                  ? "AI will create your full product, supporting files, sales copy, and launch campaign. Create images and videos in the Marketing studio."
-                  : "Starter mode: an editable structure, worksheets, and launch kit. Add your expertise before selling."}
-              </div>
-              <div className="dialog-actions">
-                <button
-                  className="button secondary"
-                  type="button"
-                  disabled={busy}
-                  onClick={() => setStep(0)}
-                >
-                  <ArrowLeft size={16} />
-                  Back
-                </button>
-                <button
-                  className="button primary"
-                  disabled={busy}
-                  type="submit"
-                >
-                  {busy ? (
-                    <Loader2 className="spin" size={17} />
-                  ) : (
-                    <Sparkles size={17} />
-                  )}{" "}
-                  {busy
-                    ? "Creating your product…"
-                    : user
-                      ? workspace.capabilities.ai
-                        ? "Generate complete product"
-                        : "Create editable starter"
-                      : "Sign in & create"}
-                </button>
-              </div>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
+      <CreateProductFlow open={create} onOpenChange={setCreate} brief={brief} onBriefChange={setBrief} step={step} onStepChange={setStep} busy={busy} aiReady={workspace.capabilities.ai} signedIn={!!user} error={creationError} onCreate={() => void generate()} onConnectAI={() => { if (!user) { sessionStorage.setItem("folio-unsaved-brief", JSON.stringify(brief)); sessionStorage.setItem("fivegen-brief-destination", "AI providers"); } setCreate(false); setResumeBrief(true); commitNavigation("AI providers"); }} />
+      {editor && <>
+        <ProductPreview product={editor} open={preview} onOpenChange={setPreview} />
+        <PublishReview product={editor} open={publishReview} onOpenChange={setPublishReview} busy={busy} paymentsReady={!!workspace.stripeReady} onPayments={() => { setEditTab("storefront"); setPublishReview(false); }} onPublish={() => void publishProduct(editor)} />
+      </>}
+      <AlertDialog open={!!pendingAction} onOpenChange={(open) => !open && !busy && setPendingAction(null)}>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Save your changes?</AlertDialogTitle><AlertDialogDescription>Your latest edits haven’t been saved yet.</AlertDialogDescription></AlertDialogHeader><div className="unsaved-actions"><button className="button secondary" disabled={busy} onClick={() => setPendingAction(null)}>Keep editing</button><button className="button secondary" disabled={busy} onClick={() => { const action = pendingAction; if(editorBaseline) setEditor(JSON.parse(editorBaseline)); setPendingAction(null); action?.(); }}>Discard edits</button><button className="button primary" disabled={busy} onClick={async () => { if(editor && await save(editor)) { const action = pendingAction; setPendingAction(null); action?.(); } }}>{busy ? "Saving…" : "Save & continue"}</button></div></AlertDialogContent>
+      </AlertDialog>
       <Dialog open={!!publish} onOpenChange={() => setPublish(null)}>
         <DialogContent className="publish-dialog">
           <DialogHeader>

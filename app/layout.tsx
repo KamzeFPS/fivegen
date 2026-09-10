@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./studio-design.css";
+import "./flow-design.css";
 
 export const metadata: Metadata = {
   title: "FiveGen — Your next idea, made real",
   description:
     "Turn what you know into beautiful digital products. Create, publish, and sell from one workspace.",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: "/brand/fivegen-logo.webp",
+    shortcut: "/brand/fivegen-logo.webp",
   },
 };
 

@@ -352,26 +352,37 @@ export function GenerationProgress({
   product,
   onProduct,
   onComplete,
+  aiReady,
+  onSetup,
+  onBeforeGenerate,
+  onRunningChange,
 }: {
   product: Product;
   onProduct: (p: Product) => void;
   onComplete: () => void;
+  aiReady: boolean;
+  onSetup: () => void;
+  onBeforeGenerate: () => Promise<boolean>;
+  onRunningChange: (running: boolean) => void;
 }) {
   const [job, setJob] = useState<Job | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
   const mounted = useRef(true);
+  useEffect(() => { onRunningChange(running); return () => onRunningChange(false); }, [running, onRunningChange]);
   const stop = useRef(false);
   const inProgress = useRef(false);
   const productRef = useRef(product);
   productRef.current = product;
   async function run() {
     if (inProgress.current) return;
+    if (!aiReady) { onSetup(); return; }
     inProgress.current = true;
-    stop.current = false;
-    setRunning(true);
-    setError("");
     try {
+      if (!(await onBeforeGenerate())) return;
+      stop.current = false;
+      setRunning(true);
+      setError("");
       let done = false;
       while (!done && !stop.current && mounted.current) {
         const d = await request<{
@@ -455,14 +466,14 @@ export function GenerationProgress({
                   : "Designing your product architecture…"
                 : job
                   ? "Your product is taking shape."
-                  : "Take this product further with AI."}
+                  : aiReady ? "Take this product further with AI." : "Your editable starter is ready."}
           </strong>
           <p>
             {completed
               ? "Review your content, explore your supporting files, and generate your marketing visuals."
               : running
                 ? "Each completed step is saved. You can pause after the current step."
-                : "Create complete content and a launch campaign using your connected provider."}
+                : aiReady ? "Create complete content and a launch campaign using your connected provider." : "Add your expertise here, or connect AI to generate a complete product."}
           </p>
         </div>
         <div className="generation-actions">
@@ -479,9 +490,9 @@ export function GenerationProgress({
             </button>
           ) : !completed ? (
             <>
-              <button className="button primary" onClick={() => void run()}>
+              <button className="button primary" onClick={() => aiReady ? void run() : onSetup()}>
                 <Play size={14} />
-                {job ? "Resume generation" : "Generate with AI"}
+                {!aiReady ? "Connect AI" : job ? "Resume generation" : "Generate with AI"}
               </button>
               {job && (
                 <button
@@ -530,7 +541,9 @@ type Asset = {
   error?: string;
   created_at: number;
 };
-export function MediaStudio({ product }: { product: Product }) {
+export function MediaStudio({ product, onSetup }: { product: Product; onSetup: () => void }) {
+  const [mediaReady, setMediaReady] = useState<boolean | null>(null);
+  useEffect(() => { void request<Settings>("/api/providers").then((settings) => setMediaReady(settings.connected.fal)).catch(() => setMediaReady(false)); }, []);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [kind, setKind] = useState<"image" | "video">("image");
   const [aspect, setAspect] = useState("1:1");
@@ -624,6 +637,7 @@ export function MediaStudio({ product }: { product: Product }) {
   }
   return (
     <div className="media-studio">
+      {mediaReady === false && <div className="checkout-setup media-setup"><ImagePlus size={21}/><div><strong>Connect your image & video provider</strong><p>Add your fal.ai key to generate marketing assets. Your product stays saved.</p></div><button className="button primary" onClick={onSetup}>Connect provider <ArrowRight size={15}/></button></div>}
       <section className="media-create panel">
         <div className="panel-heading">
           <div>
@@ -689,7 +703,7 @@ export function MediaStudio({ product }: { product: Product }) {
             </span>
             <button
               className="button primary"
-              disabled={busy || prompt.length < 15}
+              disabled={busy || prompt.length < 15 || !mediaReady}
               onClick={() => void generate()}
             >
               {busy ? (
@@ -715,11 +729,11 @@ export function MediaStudio({ product }: { product: Product }) {
         </div>
         <button
           className="button dark"
-          disabled={busy}
-          onClick={() => void campaign()}
+          disabled={busy || mediaReady === null}
+          onClick={() => mediaReady ? void campaign() : onSetup()}
         >
           <WandSparkles size={16} />
-          Generate campaign
+          {mediaReady === false ? "Connect provider" : "Generate campaign"}
         </button>
       </section>
       {error && (

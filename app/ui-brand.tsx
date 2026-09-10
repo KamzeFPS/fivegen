@@ -1,10 +1,10 @@
-import { ArrowUpRight, Layers3 } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import type { Brief } from "@/lib/product";
 export function Brand() {
   return (
     <span className="brand">
       <span className="brand-symbol">
-        <Layers3 size={22} strokeWidth={2.5} />
+        <img src="/brand/fivegen-logo.webp" alt="" width="1254" height="1254" />
       </span>
       FiveGen
     </span>

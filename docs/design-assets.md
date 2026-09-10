@@ -7,3 +7,5 @@ Original assets generated with the built-in image generation tool for the FiveGe
 - `public/studio/chrome.webp`: close-up chrome sculptural flower with fluid metallic petals and muted champagne-silver reflections on a black backdrop. Portrait 4:5 high-fashion art photography, tactile metallic detail, controlled sculptural studio lighting, luminous muted reflections and deep black shadows. No text, words, logos, watermarks, UI or frame.
 
 Font: locally served Inter variable Latin, distributed under the SIL Open Font License in `public/fonts/OFL.txt`. Source: Google Fonts (`fonts.googleapis.com` / `fonts.gstatic.com`). Non-Latin text uses the system font fallback.
+
+Brand: the user supplied the FiveGen logo on September 11, 2026. `public/brand/fivegen-original.png` preserves that source, and `fivegen-logo.webp` is a lossless format conversion. The interface displays the original orange monogram in a small white badge using CSS framing, alongside the FiveGen name.
