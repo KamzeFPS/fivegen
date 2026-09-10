@@ -15,6 +15,13 @@
       "when": 1789061250794,
       "tag": "0001_next_living_mummy",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789063490551,
+      "tag": "0002_nifty_spirit",
+      "breakpoints": true
     }
   ]
 }

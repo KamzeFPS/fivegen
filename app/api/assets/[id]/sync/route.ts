@@ -6,6 +6,7 @@ import {
   identity,
   sameOrigin,
 } from "@/lib/server";
+import {refundCredits,completeCredits} from "@/lib/credits";
 import { providerKey } from "@/lib/ai";
 export async function POST(
   req: Request,
@@ -35,6 +36,10 @@ export async function POST(
     const s = (await r.json()) as any;
     if (!r.ok)
       throw new ApiError("Could not check this job. Try again shortly.", 502);
+    if (["FAILED","ERROR","CANCELLED"].includes(s.status)) {
+      await db.prepare("UPDATE assets SET status='failed',error='Generation failed; credits returned.' WHERE id=?").bind(id).run();
+      await refundCredits(id);return Response.json({status:"failed",error:"Generation failed; credits returned."});
+    }
     if (s.status !== "COMPLETED") {
       await db
         .prepare("UPDATE assets SET status=? WHERE id=?")
@@ -48,16 +53,13 @@ export async function POST(
     const d = (await result.json()) as any;
     if (!result.ok || d.error) {
       const message =
-        typeof d.detail === "string"
-          ? d.detail
-          : typeof d.error === "string"
-            ? d.error
-            : "The provider could not generate this asset.";
+        "The provider could not generate this asset. Credits returned.";
       await db
         .prepare("UPDATE assets SET status=?,error=? WHERE id=?")
         .bind("failed", message.slice(0, 500), id)
         .run();
-      return Response.json({ status: "failed", error: message });
+      await refundCredits(id);
+      return Response.json({ status: "failed", error: "Generation failed; credits returned." });
     }
     const media = a.kind === "image" ? d.images?.[0] : d.video;
     if (!media?.url)
@@ -96,6 +98,7 @@ export async function POST(
       .prepare("UPDATE assets SET status=?,object_key=? WHERE id=?")
       .bind("completed", objectKey, id)
       .run();
+    await completeCredits(id);
     return Response.json({ status: "completed" });
   } catch (e) {
     return failure(e);

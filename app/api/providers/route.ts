@@ -6,12 +6,16 @@ import {
   sameOrigin,
   ApiError,
 } from "@/lib/server";
-import { providerSchema, providerSettings, seal } from "@/lib/ai";
+import { MASTER_OWNER, providerSchema, providerSettings, seal } from "@/lib/ai";
+import {isAdmin,requireAdmin} from "@/lib/admin";
+import {creditBalance} from "@/lib/credits";
+import {creditPolicy,textCredits} from "@/lib/credit-policy";
 export async function GET() {
   try {
     const u = await identity();
     const s = await providerSettings(u.userId);
     return Response.json({
+      admin:isAdmin(u),credits:await creditBalance(u.userId),costs:{text:textCredits(s.config.textProvider),image:creditPolicy.image,video:creditPolicy.video},
       config: s.config,
       connected: s.connected,
       secure: s.secure,
@@ -23,7 +27,7 @@ export async function GET() {
 export async function PUT(req: Request) {
   try {
     sameOrigin(req);
-    const u = await identity();
+    const u = await requireAdmin();
     const data = z
       .object({
         config: providerSchema,
@@ -33,6 +37,7 @@ export async function PUT(req: Request) {
         remove: z.enum(["openai", "anthropic", "fal"]).optional(),
       })
       .parse(await req.json());
+    if(data.config.textModel!==(data.config.textProvider==="openai"?"gpt-4.1-mini":"claude-haiku-4-5"))throw new ApiError("Choose the matching model for this provider.");
     const current = await providerSettings(u.userId);
     const keys: { [k: string]: unknown } = {
       openai: current.row?.openai ?? null,
@@ -45,7 +50,7 @@ export async function PUT(req: Request) {
         const key = data[p]!.trim();
         if (key.length < 20)
           throw new ApiError("That API key looks incomplete.");
-        keys[p] = await seal(key, u.userId);
+        keys[p] = await seal(key, MASTER_OWNER);
       }
     }
     await database()
@@ -53,7 +58,7 @@ export async function PUT(req: Request) {
         "INSERT INTO providers (owner,openai,anthropic,fal,config) VALUES (?,?,?,?,?) ON CONFLICT(owner) DO UPDATE SET openai=excluded.openai,anthropic=excluded.anthropic,fal=excluded.fal,config=excluded.config",
       )
       .bind(
-        u.userId,
+        MASTER_OWNER,
         keys.openai,
         keys.anthropic,
         keys.fal,

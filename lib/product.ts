@@ -60,6 +60,7 @@ export type Order = {
   email: string;
   amount: number;
   provider: string;
+  platformFee?:number;
   createdAt: number;
   title?: string;
 };

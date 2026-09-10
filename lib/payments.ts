@@ -1,11 +1,13 @@
 import { ApiError, database, stripe } from "./server";
 import type { OfferProduct } from "./commerce";
+import {commissionAmount,commissionRate} from "./credit-policy";
+import {planFor} from "./billing";
 export type PurchasedItem=OfferProduct & {amount:number};
 export function orderItems(order:Record<string,unknown>):PurchasedItem[]{try{return JSON.parse(String(order.items||"[]"));}catch{return [];}}
 async function insertOrder(id:string,intent:Record<string,unknown>,email:string,provider:string,subscriptionId:string|null=null,customerId:string|null=null){
   const token=crypto.randomUUID()+crypto.randomUUID();
-  await database().prepare("INSERT OR IGNORE INTO orders (id,product_id,owner,email,amount,provider,token,items,subscription_id,customer_id,stripe_account,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
-    .bind(id,intent.product_id,intent.owner,email,intent.amount,provider,token,intent.items||"[]",subscriptionId,customerId,intent.account||null,Date.now()).run();
+  await database().prepare("INSERT OR IGNORE INTO orders (id,product_id,owner,email,amount,platform_fee,provider,token,items,subscription_id,customer_id,stripe_account,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .bind(id,intent.product_id,intent.owner,email,intent.amount,intent.platform_fee||0,provider,token,intent.items||"[]",subscriptionId,customerId,intent.account||null,Date.now()).run();
   return (await database().prepare("SELECT * FROM orders WHERE id=?").bind(id).first())!;
 }
 export async function recordFreeOrder(ref:string){
@@ -83,5 +85,17 @@ export async function recordRenewal(invoice:Record<string,any>,account:string){
     throw new ApiError("The initial subscription order has not arrived yet.",409);
   }
   const amount=Number(invoice.amount_paid);if(!Number.isSafeInteger(amount)||amount<0)throw new ApiError("Invalid invoice amount.");
-  await insertOrder(String(invoice.id),{...original,amount,account},String(original.email),"stripe",String(subId),String(original.customer_id));
+  await insertOrder(String(invoice.id),{...original,amount,account,platform_fee:Number(invoice.application_fee_amount||0)},String(original.email),"stripe",String(subId),String(original.customer_id));
+}
+export async function updateRenewalCommission(invoice:Record<string,any>,account:string){
+  if(invoice.status!=="draft"||invoice.billing_reason==="subscription_create")return;
+  const subId=invoice.parent?.subscription_details?.subscription||invoice.subscription;
+  if(!subId)return;
+  const subscription=await stripe(`subscriptions/${subId}`,undefined,account);
+  const owner=subscription.metadata?.owner;if(!owner||!subscription.metadata?.order_ref)return;
+  const seller=await database().prepare("SELECT stripe_account FROM sellers WHERE owner=?").bind(owner).first();
+  if(seller?.stripe_account!==account)throw new ApiError("Subscription account mismatch.",403);
+  const plan=await planFor(owner);
+  await stripe(`subscriptions/${subId}`,new URLSearchParams({application_fee_percent:String(commissionRate(plan.tier))}),account);
+  await stripe(`invoices/${invoice.id}`,new URLSearchParams({application_fee_amount:String(commissionAmount(Math.max(0,Number(invoice.total)||0),plan.tier))}),account);
 }

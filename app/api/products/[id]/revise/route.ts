@@ -9,11 +9,15 @@ import {
   productFromRow,
   sameOrigin,
 } from "@/lib/server";
+import {reserveCredits,refundCredits,completeCredits} from "@/lib/credits";
+import {textCredits} from "@/lib/credit-policy";
+import {providerSettings} from "@/lib/ai";
 import { productSystem, textGeneration } from "@/lib/ai";
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  let creditId="";
   try {
     sameOrigin(req);
     const u = await identity();
@@ -39,6 +43,9 @@ export async function POST(
       .parse(await req.json());
     const section = p.content.sections[data.index];
     if (!section) throw new ApiError("Section not found.", 404);
+    creditId=crypto.randomUUID();
+    const ai=await providerSettings();
+    await reserveCredits(u.userId,creditId,"text",textCredits(ai.config.textProvider));
     const revised = sectionSchema.parse(
       await textGeneration(
         u.userId,
@@ -59,10 +66,12 @@ export async function POST(
         "The product was edited while AI was working. Reload before retrying.",
         409,
       );
+    await completeCredits(creditId);
     return Response.json({
       product: productFromRow(await ownedProduct(id, u.userId)),
     });
   } catch (e) {
+    if(creditId)await refundCredits(creditId);
     return failure(e);
   }
 }

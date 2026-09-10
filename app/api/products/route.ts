@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     if (plan.used >= plan.limit)
       throw new ApiError(`Your ${plan.tier === "free" ? "Free" : "Pro"} plan includes ${plan.limit} products.${plan.tier === "free" ? " Upgrade to Pro for 100 products." : " Your existing products remain available."}`, 403);
     const ai = await providerSettings(u.userId);
-    const enabled = ai.connected[ai.config.textProvider];
+    const enabled = ai.connected[ai.config.textProvider]&&!ai.config.paused;
     const id = crypto.randomUUID();
     const slug = slugify(brief.title) + "-" + id.slice(0, 6);
     const now = Date.now();

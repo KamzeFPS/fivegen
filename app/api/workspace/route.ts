@@ -10,6 +10,9 @@ import {
 } from "@/lib/server";
 import { providerSettings } from "@/lib/ai";
 import { planFor } from "@/lib/billing";
+import {isAdmin} from "@/lib/admin";
+import {creditBalance} from "@/lib/credits";
+import {textCredits} from "@/lib/credit-policy";
 export async function GET() {
   try {
     const user = await identity();
@@ -47,6 +50,7 @@ export async function GET() {
       }
     }
     return Response.json({
+      admin:isAdmin(user),credits:await creditBalance(user.userId),textCost:textCredits(ai.config.textProvider),
       plan: await planFor(user.userId),
       products: p.results.map(productFromRow),
       orders: o.results.map((r) => ({
@@ -54,6 +58,7 @@ export async function GET() {
         productId: r.product_id,
         email: r.email,
         amount: r.amount,
+        platformFee:r.platform_fee,
         provider: r.provider,
         createdAt: r.created_at,
         title: r.title,
@@ -64,7 +69,7 @@ export async function GET() {
         stripeAccount: s?.stripe_account || null,
       },
       capabilities: {
-        ai: ai.connected[ai.config.textProvider],
+        ai: ai.connected[ai.config.textProvider]&&!ai.config.paused,
         stripe: !!binding("STRIPE_SECRET_KEY"),
         domain: binding("PRODUCT_DOMAIN") || null,
       },

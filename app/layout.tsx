@@ -3,6 +3,7 @@ import "./globals.css";
 import "./studio-design.css";
 import "./flow-design.css";
 import "./sales-design.css";
+import "./credits-design.css";
 
 export const metadata: Metadata = {
   title: "FiveGen — Your next idea, made real",

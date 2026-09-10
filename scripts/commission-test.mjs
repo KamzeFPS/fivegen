@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import ts from 'typescript';
+import {z} from 'zod';
+import {DatabaseSync} from 'node:sqlite';
+import {selectionSchema} from '../lib/commerce.ts';
+import {commissionAmount,commissionRate} from '../lib/credit-policy.ts';
+const db=new DatabaseSync(':memory:');for(const f of fs.readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())db.exec(fs.readFileSync('drizzle/'+f,'utf8'));
+const stmt=(sql,args=[])=>({bind:(...v)=>stmt(sql,v),first:async()=>db.prepare(sql).get(...args)||null,run:async()=>({meta:{changes:db.prepare(sql).run(...args).changes}})});
+class ApiError extends Error{constructor(message,status=400){super(message);this.status=status;}}
+let tier='free',billing='once',forms=[];
+const stripe=async(path,fields,account)=>{if(path.startsWith('accounts/'))return {charges_enabled:true};if(path.startsWith('subscriptions/')&&!fields)return {metadata:{owner:'creator',order_ref:'test'},status:'active'};forms.push({path,fields:Object.fromEntries(fields||[]),account});return {id:'cs_'+crypto.randomUUID(),url:'https://checkout.stripe.com/test'};};
+const dependencies={ApiError,database:()=>({prepare:stmt}),failure:e=>Response.json({error:e.message},{status:e.status||500}),sameOrigin:()=>{},stripe,quoteProduct:async()=>({row:{id:'product',owner:'creator',stripe_account:'acct_test',title:'Test'},plan:{tier},quote:{total:4900,billing,quantity:1,items:[{id:'product',slug:'test',title:'Test',price:49,amount:4900}]}}),selectionSchema,recordFreeOrder:async()=>{throw Error('not expected');},z,commissionAmount,commissionRate,planFor:async()=>({tier})};
+async function module(path,keys){globalThis.__commissionTest=dependencies;const source=fs.readFileSync(path,'utf8').replace(/^import .*;\r?\n/gm,'');const code=`const {${keys.join(',')}}=globalThis.__commissionTest;\n`+ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;return import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));}
+const route=await module('app/api/checkout/route.ts',Object.keys(dependencies));
+const call=expectedTotal=>route.POST(new Request('http://localhost/api/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:'test',expectedTotal})}));
+assert.equal((await call(4900)).status,200);assert.equal(forms.at(-1).fields['payment_intent_data[application_fee_amount]'],'490');assert.equal(forms.at(-1).account,'acct_test');
+tier='pro';assert.equal((await call(4900)).status,200);assert.equal(forms.at(-1).fields['payment_intent_data[application_fee_amount]'],'147');
+const intent=db.prepare('SELECT * FROM checkout_intents ORDER BY rowid DESC LIMIT 1').get();assert.equal(intent.platform_fee,147);
+assert.equal((await call(1)).status,409);
+billing='month';assert.equal((await call(4900)).status,200);assert.equal(forms.at(-1).fields['subscription_data[application_fee_percent]'],'3');assert.ok(!('payment_intent_data[application_fee_amount]' in forms.at(-1).fields));
+const payments=await module('lib/payments.ts',['ApiError','database','stripe','commissionAmount','commissionRate','planFor']);
+const session={id:intent.session_id,metadata:{order_ref:intent.id,owner:intent.owner,product_id:intent.product_id},payment_status:'paid',mode:'payment',currency:'usd',amount_total:4900,customer_details:{email:'buyer@example.test'}};
+await payments.recordPayment(session,'acct_test');await payments.recordPayment(session,'acct_test');assert.equal(db.prepare('SELECT COUNT(*) n FROM orders').get().n,1);assert.equal(db.prepare('SELECT platform_fee FROM orders').get().platform_fee,147);
+await assert.rejects(()=>payments.recordPayment({...session,amount_total:10},'acct_test'),e=>e.status===409);
+db.prepare("INSERT INTO sellers (owner,name,stripe_account,created_at) VALUES ('creator','Test','acct_test',0)").run();
+tier='free';await payments.updateRenewalCommission({id:'in_test',status:'draft',billing_reason:'subscription_cycle',subscription:'sub_test',total:4900},'acct_test');assert.equal(forms.at(-1).fields.application_fee_amount,'490');assert.equal(forms.at(-2).fields.application_fee_percent,'10');
+tier='pro';await payments.updateRenewalCommission({id:'in_test',status:'draft',billing_reason:'subscription_cycle',subscription:'sub_test',total:4900},'acct_test');assert.equal(forms.at(-1).fields.application_fee_amount,'147');
+db.close();delete globalThis.__commissionTest;
+console.log('Passed: actual Checkout field generation for 10%/3% fees, subscription percentage, captured fee records, duplicate payment events, tamper checks, and renewal fee changes. Stripe transport mocked; no charges made.');

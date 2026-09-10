@@ -13,7 +13,7 @@ export async function quoteProduct(slug:string,quantity=1,code="",addUpsell=fals
     const p=await database().prepare("SELECT * FROM products WHERE id=? AND owner=? AND status='published'").bind(id,row.owner).first();
     if(p && p.id!==product.id){const item=productFromRow(p);if(item.commerce?.billing==="once")related.push(item);}
   }
-  try { return {row,commerce,quote:calculateQuote(product,commerce,related,quantity,code,addUpsell)}; }
+  try { return {row,commerce,plan,quote:calculateQuote(product,commerce,related,quantity,code,addUpsell)}; }
   catch(e){throw new ApiError((e as Error).message,409);}
 }
 export async function validateRelated(owner:string,id:string,c:Commerce){

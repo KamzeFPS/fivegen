@@ -119,9 +119,10 @@ type View =
   | "Payments"
   | "Settings"
   | "Plan & billing"
-  | "AI providers";
+  | "AI & credits";
 type Workspace = {
   plan: PlanInfo;
+  admin?:boolean; textCost?:number;
   products: Product[];
   orders: Order[];
   visits: { createdAt: number }[];
@@ -285,7 +286,7 @@ export default function Studio({
           setBrief(JSON.parse(draft));
           setStep(2);
           const destination = sessionStorage.getItem("fivegen-brief-destination");
-          if (destination === "AI providers") { setView("AI providers"); setResumeBrief(true); }
+          if (destination === "AI & credits") { setView("AI & credits"); setResumeBrief(true); }
           else setCreate(true);
         } catch {}
         sessionStorage.removeItem("folio-unsaved-brief");
@@ -302,7 +303,7 @@ export default function Studio({
     setEditor(null);
   };
   const navigate = (v: View) => guardNavigation(() => commitNavigation(v));
-  async function setupFromEditor(view: "AI providers" | "Payments") {
+  async function setupFromEditor(view: "AI & credits" | "Payments") {
     if (!editor) return;
     const product = dirty ? await save(editor) : editor;
     if (!product) return;
@@ -367,7 +368,7 @@ export default function Studio({
       toast.success(
         p.mode === "ai"
           ? "Your AI production workflow is starting."
-          : "Your editable starter is ready. Connect an AI provider for complete generation.",
+          : "Your editable starter is ready. FiveGen AI is being configured. You can edit your draft now.",
       );
     } catch (e) {
       setCreationError((e as Error).message);
@@ -527,13 +528,15 @@ export default function Studio({
     downloadText(
       `${demo ? "sample-" : ""}fivegen-sales.csv`,
       [
-        ["Date", "Product", "Customer", "Amount (USD)", "Provider"],
+        ["Date", "Product", "Customer", "Gross amount (USD)", "Provider", "FiveGen fee (USD)", "After FiveGen fee, before processing (USD)"],
         ...orders.map((o) => [
           new Date(o.createdAt).toISOString(),
           o.title || "",
           o.email,
           (o.amount / 100).toFixed(2),
           o.provider,
+          ((o.platformFee||0)/100).toFixed(2),
+          ((o.amount-(o.platformFee||0))/100).toFixed(2),
         ]),
       ]
         .map((r) => r.map(cells).join(","))
@@ -685,7 +688,7 @@ export default function Studio({
             {(
               [
                 { name: "Payments", icon: CreditCard },
-                { name: "AI providers", icon: Sparkles },
+                { name: "AI & credits", icon: Sparkles },
                 { name: "Plan & billing", icon: Crown },
                 { name: "Settings", icon: Settings2 },
               ] as const
@@ -781,8 +784,9 @@ export default function Studio({
                 key={editor.id}
                 product={editor}
                 onProduct={receiveProduct}
+                textCost={workspace.textCost||10}
                 aiReady={workspace.capabilities.ai}
-                onSetup={() => void setupFromEditor("AI providers")}
+                onSetup={() => void setupFromEditor("AI & credits")}
                 onBeforeGenerate={async () => !dirty || !!(await save(editor))}
                 onRunningChange={setGenerating}
                 onComplete={() => void reload()}
@@ -800,7 +804,7 @@ export default function Studio({
                 </TabsList>
               </Tabs>
               {editTab === "sales" ? <fieldset className="sales-tools-fieldset" disabled={busy||generating}><SalesTools product={editor} products={workspace.products} plan={workspace.plan} onChange={setEditor} onUpgrade={() => { guardNavigation(()=>{setReturnProduct(editor);commitNavigation("Plan & billing");}); }}/></fieldset> : editTab === "media" ? (
-                <MediaStudio product={editor} onSetup={() => void setupFromEditor("AI providers")} />
+                <MediaStudio product={editor} onSetup={() => void setupFromEditor("AI & credits")} />
               ) : editTab === "files" ? (
                 <ProductFiles product={editor} />
               ) : (
@@ -868,7 +872,7 @@ export default function Studio({
                                 onChange={(e) => setRevision(e.target.value)}
                               />
                             </label>
-                            {!workspace.capabilities.ai && <button className="text-link" type="button" onClick={() => void setupFromEditor("AI providers")}>Connect AI to refine this section <ArrowRight size={14}/></button>}
+                            {!workspace.capabilities.ai && <button className="text-link" type="button" onClick={() => void setupFromEditor("AI & credits")}>View AI availability & credits <ArrowRight size={14}/></button>}
                             <button
                               className="button secondary"
                               disabled={busy || generating || revision.length < 8 || !workspace.capabilities.ai}
@@ -894,7 +898,7 @@ export default function Studio({
                               }}
                             >
                               <Sparkles size={15} />
-                              Refine section
+                              Refine section · {workspace.textCost||10} credits
                             </button>
                           </div>
 
@@ -950,23 +954,8 @@ export default function Studio({
                             />
                           </label>
                         </div>
-                        <div className="checkout-setup"><CreditCard size={20}/><div><strong>{workspace.stripeReady ? "Stripe checkout connected" : "Connect your checkout"}</strong><p>{workspace.stripeReady ? "Paid purchases unlock the product automatically." : "Connect Stripe or paste your Whop link below to accept payments."}</p></div><button type="button" className="button secondary" onClick={() => void setupFromEditor("Payments")}>{workspace.stripeReady ? "Manage" : "Connect Stripe"}<ArrowUpRight size={14}/></button></div>
-                        <label>
-                          Whop checkout link (optional)
-                          <input
-                            type="url"
-                            placeholder="https://whop.com/checkout/…"
-                            value={editor.whopUrl || ""}
-                            onChange={(e) =>
-                              setEditor({ ...editor, whopUrl: e.target.value })
-                            }
-                          />
-                          <small>
-                            Use your own Whop checkout. Set up product delivery
-                            in Whop. Whop sales are managed in your Whop
-                            dashboard.
-                          </small>
-                        </label>
+                        <div className="checkout-setup"><CreditCard size={20}/><div><strong>{workspace.stripeReady ? "Stripe checkout connected" : "Connect your checkout"}</strong><p>{workspace.stripeReady ? "Paid purchases unlock the product automatically." : "Connect Stripe to accept payments and automatically collect your plan’s commission."}</p></div><button type="button" className="button secondary" onClick={() => void setupFromEditor("Payments")}>{workspace.stripeReady ? "Manage" : "Connect Stripe"}<ArrowUpRight size={14}/></button></div>
+                        <div className="sales-note">FiveGen commission: {workspace.plan.tier==="pro"?"3%":"10%"} of each paid sale, plus Stripe processing fees. Whop links are paused until tracked commission collection is available.</div>
                         <label>
                           What customers get
                           <textarea
@@ -1123,8 +1112,8 @@ export default function Studio({
                         Payments: "Get paid for what you know.",
                         "Plan & billing": "The right tools for your next stage.",
                         Settings: "Make this space feel like yours.",
-                        "AI providers":
-                          "A complete creative team, powered by your favorite models.",
+                        "AI & credits":
+                          "Your credit balance, generation prices, and built-in AI.",
                       }[view]
                     }
                   </p>
@@ -1178,8 +1167,8 @@ export default function Studio({
               {view === "Overview" && !demo && !workspace.capabilities.ai && (
                 <div className="ai-setup-note">
                   <Sparkles size={19}/>
-                  <div><strong>Connect your creative team.</strong><p>Add your AI providers to generate complete products, marketing images, and videos.</p></div>
-                  <button className="text-link" onClick={()=>navigate("AI providers")}>Set up AI <ArrowRight size={15}/></button>
+                  <div><strong>Your AI, built into FiveGen.</strong><p>Generate complete products, images, and videos with FiveGen credits. No API keys needed.</p></div>
+                  <button className="text-link" onClick={()=>navigate("AI & credits")}>View AI & credits <ArrowRight size={15}/></button>
                 </div>
               )}
               {view === "Overview" && (
@@ -1617,6 +1606,7 @@ export default function Studio({
                           </TableCell>
                           <TableCell className="text-right">
                             {money(o.amount)}
+                            <small className="order-fee">FiveGen fee {money(o.platformFee||0)} · {money(o.amount-(o.platformFee||0))} before processing</small>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -1718,60 +1708,19 @@ export default function Studio({
                         </small>
                       )}
                     </section>
-                    <section className="panel integration-card">
-                      <span className="whop-word">◢ whop</span>
-                      <span className="integration-status">
-                        Hosted checkout
-                      </span>
-                      <h2>Sell with Whop</h2>
-                      <p>
-                        Bring your Whop checkout link to any product. Customers
-                        complete their purchase and receive access through Whop.
-                      </p>
-                      <ul>
-                        <li>
-                          <Check size={15} />
-                          Your existing Whop checkout
-                        </li>
-                        <li>
-                          <Check size={15} />
-                          Payments handled by Whop
-                        </li>
-                        <li>
-                          <Check size={15} />
-                          Delivery and analytics in Whop
-                        </li>
-                      </ul>
-                      <button
-                        className="button secondary full"
-                        onClick={() => navigate("My products")}
-                      >
-                        <Link2 size={16} />
-                        Add a link to a product
-                        <ArrowRight size={16} />
-                      </button>
-                      <a
-                        className="text-link"
-                        href="https://whop.com/dashboard/"
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Open Whop dashboard
-                        <ExternalLink size={14} />
-                      </a>
-                    </section>
+                    <section className="panel integration-card"><span className="whop-word">◢ whop</span><span className="integration-status">Integration pending</span><h2>Commission-aware checkout</h2><p>Direct Whop links are paused while we add tracked payments and platform commissions. Use Stripe to sell and automatically apply your plan’s fee.</p><div className="sales-note">Your plan: {workspace.plan.tier==="pro"?"3%":"10%"} FiveGen commission, plus Stripe processing fees.</div></section>
                   </div>
                   <div className="info-note">
                     <CircleHelp size={19} />
                     <p>
                       FiveGen only counts verified Stripe payments in live
-                      revenue. Whop purchases are reported in Whop. Example
+                      revenue. Your FiveGen commission is deducted automatically. Example
                       sales are visible only when sample data is enabled.
                     </p>
                   </div>
                 </>
               )}
-              {view === "AI providers" && (
+              {view === "AI & credits" && (
                 <AIProviders signedIn={!!user} onUpdate={() => void reload()} />
               )}
               {view === "Plan & billing" && <BillingPage plan={workspace.plan} onRefresh={() => void reload()} signedIn={!!user}/>}
@@ -1832,7 +1781,7 @@ export default function Studio({
                         <p>
                           {workspace.capabilities.ai
                             ? "Products are generated from your brief."
-                            : "Create editable outlines and worksheets now. Add an AI provider key on the server to generate subject-specific content."}
+                            : "Create editable outlines and worksheets now. FiveGen AI will be available when the administrator completes setup."}
                         </p>
                       </div>
                     </div>
@@ -1873,7 +1822,7 @@ export default function Studio({
           </footer>
         </main>
       </SidebarInset>
-      <CreateProductFlow open={create} onOpenChange={setCreate} brief={brief} onBriefChange={setBrief} step={step} onStepChange={setStep} busy={busy} aiReady={workspace.capabilities.ai} signedIn={!!user} error={creationError} onCreate={() => void generate()} onConnectAI={() => { if (!user) { sessionStorage.setItem("folio-unsaved-brief", JSON.stringify(brief)); sessionStorage.setItem("fivegen-brief-destination", "AI providers"); } setCreate(false); setResumeBrief(true); commitNavigation("AI providers"); }} />
+      <CreateProductFlow textCost={workspace.textCost||10} open={create} onOpenChange={setCreate} brief={brief} onBriefChange={setBrief} step={step} onStepChange={setStep} busy={busy} aiReady={workspace.capabilities.ai} signedIn={!!user} error={creationError} onCreate={() => void generate()} onConnectAI={() => { if (!user) { sessionStorage.setItem("folio-unsaved-brief", JSON.stringify(brief)); sessionStorage.setItem("fivegen-brief-destination", "AI & credits"); } setCreate(false); setResumeBrief(true); commitNavigation("AI & credits"); }} />
       {editor && <>
         <ProductPreview product={editor} open={preview} onOpenChange={setPreview} />
         <PublishReview product={editor} open={publishReview} onOpenChange={setPublishReview} busy={busy} paymentsReady={!!workspace.stripeReady} onPayments={() => { setEditTab("storefront"); setPublishReview(false); }} onPublish={() => void publishProduct(editor)} />
@@ -1922,8 +1871,7 @@ export default function Studio({
                 !workspace.stripeReady &&
                 !publish.whopUrl && (
                   <p className="generation-note">
-                    Your page is live. Connect Stripe or add a Whop checkout
-                    link to accept payments.
+                    Your page is live. Connect Stripe to accept payments.
                   </p>
                 )}
             </>
@@ -1950,7 +1898,7 @@ export default function Studio({
               ],
               [
                 "Connect",
-                "Connect Stripe for automatic delivery, or add your Whop checkout link.",
+                "Connect Stripe for payments, commission collection, and automatic delivery.",
               ],
               [
                 "Publish",

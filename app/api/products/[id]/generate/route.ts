@@ -9,6 +9,9 @@ import {
   productFromRow,
   sameOrigin,
 } from "@/lib/server";
+import {reserveCredits,refundCredits} from "@/lib/credits";
+import {textCredits} from "@/lib/credit-policy";
+import {providerSettings} from "@/lib/ai";
 import { textGeneration, productSystem } from "@/lib/ai";
 export async function GET(
   _req: Request,
@@ -64,6 +67,7 @@ export async function POST(
   let id = "",
     owner = "",
     locked = false;
+  let creditId="";
   try {
     sameOrigin(req);
     const u = await identity();
@@ -91,6 +95,7 @@ export async function POST(
     }
     if (job!.status === "completed")
       return Response.json({ product: p, done: true });
+    if(Number(job!.attempts||0)>=3)throw new ApiError("This step has failed three times. Stop this generation and adjust the brief before retrying.",429);
     const lock = await db
       .prepare(
         "UPDATE generation SET lease=?,status=?,error=NULL WHERE product_id=? AND owner=? AND lease<?",
@@ -103,6 +108,9 @@ export async function POST(
         409,
       );
     locked = true;
+    creditId=crypto.randomUUID();
+    const ai=await providerSettings();
+    await reserveCredits(owner,creditId,"text",textCredits(ai.config.textProvider));
     const brief = briefSchema.parse(JSON.parse(String(job!.brief)));
     const context = JSON.stringify(brief);
     const stage = Number(job!.stage);
@@ -178,9 +186,10 @@ export async function POST(
         .bind(JSON.stringify(p.content), Date.now(), id, owner),
       db
         .prepare(
-          "UPDATE generation SET stage=?,status=?,lease=0,error=NULL,updated_at=? WHERE product_id=? AND owner=?",
+          "UPDATE generation SET stage=?,status=?,lease=0,error=NULL,attempts=0,updated_at=? WHERE product_id=? AND owner=?",
         )
         .bind(stage + 1, done ? "completed" : "queued", Date.now(), id, owner),
+      db.prepare("UPDATE credit_usage SET state='completed' WHERE id=? AND state='reserved'").bind(creditId),
     ]);
     locked = false;
     return Response.json({
@@ -190,14 +199,16 @@ export async function POST(
       total: p.content.sections.length + 1,
     });
   } catch (e) {
+    if(creditId)await refundCredits(creditId);
     if (locked)
       await database()
         .prepare(
-          "UPDATE generation SET status=?,error=?,lease=0,updated_at=? WHERE product_id=? AND owner=?",
+          "UPDATE generation SET status=?,error=?,lease=0,attempts=attempts+?,updated_at=? WHERE product_id=? AND owner=?",
         )
         .bind(
           "failed",
           e instanceof Error ? e.message.slice(0, 500) : "Generation failed",
+          e instanceof ApiError && e.status !== 502 ? 0 : 1,
           Date.now(),
           id,
           owner,

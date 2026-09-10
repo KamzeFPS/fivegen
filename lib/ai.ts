@@ -1,11 +1,13 @@
 import { z } from "zod";
 import { ApiError, binding, database } from "./server";
+import {reserveAIBudget} from "./credits";
 export const providerSchema = z.object({
+  dailyBudget:z.number().min(1).max(10000).default(10),
+  paused:z.boolean().default(false),
   textProvider: z.enum(["openai", "anthropic"]).default("openai"),
   textModel: z
-    .string()
-    .regex(/^[\w.:-]{1,100}$/)
-    .default("gpt-5.4"),
+    .enum(["gpt-4.1-mini", "claude-haiku-4-5"])
+    .default("gpt-4.1-mini"),
   imageModel: z
     .enum(["fal-ai/flux-pro/v1.1-ultra"])
     .default("fal-ai/flux-pro/v1.1-ultra"),
@@ -13,6 +15,7 @@ export const providerSchema = z.object({
     .enum(["fal-ai/kling-video/v2.6/pro/text-to-video"])
     .default("fal-ai/kling-video/v2.6/pro/text-to-video"),
 });
+export const MASTER_OWNER="__fivegen_platform__";
 export type ProviderConfig = z.infer<typeof providerSchema>;
 async function cryptoKey() {
   const raw = binding("CREDENTIAL_ENCRYPTION_KEY");
@@ -56,21 +59,19 @@ async function unseal(value: string, owner: string) {
   );
   return new TextDecoder().decode(plain);
 }
-export async function providerSettings(owner: string) {
+export async function providerSettings(_owner?: string) {
   const row = await database()
     .prepare("SELECT * FROM providers WHERE owner=?")
-    .bind(owner)
+    .bind(MASTER_OWNER)
     .first();
-  const config = providerSchema.parse(
-    row ? JSON.parse(String(row.config)) : {},
-  );
+  const config = providerSchema.parse(row ? JSON.parse(String(row.config)) : {});
   return {
     row,
     config,
     connected: {
-      openai: !!row?.openai,
-      anthropic: !!row?.anthropic,
-      fal: !!row?.fal,
+      openai: !!row?.openai || !!binding("OPENAI_API_KEY"),
+      anthropic: !!row?.anthropic || !!binding("ANTHROPIC_API_KEY"),
+      fal: !!row?.fal || !!binding("FAL_KEY"),
     },
     secure: !!binding("CREDENTIAL_ENCRYPTION_KEY"),
   };
@@ -81,9 +82,11 @@ export async function providerKey(
 ) {
   const s = await providerSettings(owner);
   const val = s.row?.[provider];
-  if (val) return unseal(String(val), owner);
+  if (val) return unseal(String(val), MASTER_OWNER);
+  const runtime=binding(provider==="fal"?"FAL_KEY":provider==="openai"?"OPENAI_API_KEY":"ANTHROPIC_API_KEY");
+  if(runtime)return runtime;
   throw new ApiError(
-    `Connect your ${provider === "fal" ? "fal.ai" : provider === "openai" ? "OpenAI" : "Anthropic"} API key in AI providers first.`,
+    "FiveGen AI is being configured by the administrator. Your saved work is safe.",
     409,
   );
 }
@@ -95,6 +98,10 @@ export async function textGeneration(
 ) {
   const { config } = await providerSettings(owner);
   const key = await providerKey(owner, config.textProvider);
+  const inputBytes=new TextEncoder().encode(system+prompt).length;
+  if(inputBytes>64000)throw new ApiError("This request is too large. Shorten the brief or instructions.");
+  const inputRate=config.textProvider==="anthropic"?1:0.4,outputRate=config.textProvider==="anthropic"?5:1.6;
+  await reserveAIBudget(Math.ceil(inputBytes*inputRate+maxTokens*outputRate));
   let output = "";
   if (config.textProvider === "openai") {
     const r = await fetch("https://api.openai.com/v1/responses", {
@@ -115,7 +122,7 @@ export async function textGeneration(
     });
     const d = (await r.json()) as any;
     if (!r.ok)
-      throw new ApiError(d.error?.message || "OpenAI generation failed.", 502);
+      throw new ApiError("AI generation is temporarily unavailable. Please retry later.", 502);
     if (d.status === "incomplete")
       throw new ApiError(
         "The model reached its output limit. Try a more focused brief or another model.",
@@ -147,7 +154,7 @@ export async function textGeneration(
     const d = (await r.json()) as any;
     if (!r.ok)
       throw new ApiError(
-        d.error?.message || "Anthropic generation failed.",
+        "AI generation is temporarily unavailable. Please retry later.",
         502,
       );
     if (d.stop_reason === "max_tokens")

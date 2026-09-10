@@ -1,0 +1,48 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import ts from 'typescript';
+import {DatabaseSync} from 'node:sqlite';
+import {creditPolicy,creditPacks,monthlyWindow,commissionAmount,commissionRate} from '../lib/credit-policy.ts';
+
+// Run the actual credit SQL against SQLite; only D1 transport and Stripe are mocked.
+const sqlite=new DatabaseSync(':memory:');
+for(const file of fs.readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(fs.readFileSync('drizzle/'+file,'utf8'));
+function statement(sql,values=[]){return {bind(...args){return statement(sql,args);},async first(){return sqlite.prepare(sql).get(...values)||null;},async all(){return {results:sqlite.prepare(sql).all(...values)};},async run(){const r=sqlite.prepare(sql).run(...values);return {meta:{changes:r.changes}};},sql,values};}
+const db={prepare:statement,async batch(items){sqlite.exec('BEGIN');try{const results=items.map(x=>({meta:{changes:sqlite.prepare(x.sql).run(...x.values).changes}}));sqlite.exec('COMMIT');return results;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};
+class ApiError extends Error{constructor(message,status=400){super(message);this.status=status;}}
+let charge={payment_intent:'pi_test',amount_refunded:0,dispute:null};
+globalThis.__creditTest={ApiError,binding:()=>'',database:()=>db,stripe:async path=>{assert.ok(path.startsWith('charges/'));return charge;},planFor:async owner=>{const m=sqlite.prepare('SELECT * FROM memberships WHERE owner=?').get(owner);return {tier:m?.status==='active'&&m.period_end*1000>Date.now()?'pro':'free'};},creditPacks,creditPolicy,monthlyWindow};
+const source=fs.readFileSync('lib/credits.ts','utf8').replace(/^import .*;\r?\n/gm,'');
+const code='const {ApiError,binding,database,stripe,planFor,creditPacks,creditPolicy,monthlyWindow}=globalThis.__creditTest;\n'+ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
+const c=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
+const owner='credit-test';
+assert.deepEqual(await c.creditBalance(owner),{starter:1200,included:0,purchased:0,total:1200,media:0,renewsAt:null});
+await c.reserveCredits(owner,'text-1','text',10);assert.equal((await c.creditBalance(owner)).starter,1190);await c.completeCredits('text-1');
+await assert.rejects(()=>c.reserveCredits(owner,'text-1','text',10),e=>e.status===409);
+await assert.rejects(()=>c.reserveCredits(owner,'free-media','image',12),e=>e.status===402);
+sqlite.prepare('UPDATE wallets SET starter=0,purchased=100 WHERE owner=?').run(owner);
+const parallel=await Promise.allSettled(Array.from({length:20},(_,i)=>c.reserveCredits(owner,'parallel-'+i,'image',10)));
+assert.equal(parallel.filter(r=>r.status==='fulfilled').length,10);assert.equal((await c.creditBalance(owner)).purchased,0);
+await Promise.all([c.refundCredits('parallel-0'),c.refundCredits('parallel-0'),c.refundCredits('parallel-0')]);assert.equal((await c.creditBalance(owner)).purchased,10);
+const start=Date.UTC(new Date().getUTCFullYear(),0,31),end=Date.UTC(new Date().getUTCFullYear()+1,0,31);
+sqlite.prepare("INSERT INTO memberships (owner,subscription_id,status,interval,period_start,period_end,updated_at) VALUES (?,?,'active','year',?,?,?)").run(owner,'sub_test',start/1000,end/1000,Date.now());
+assert.equal((await c.creditBalance(owner)).included,1000);
+await c.reserveCredits(owner,'monthly-1','image',12);assert.equal((await c.creditBalance(owner)).included,988);assert.equal((await c.creditBalance(owner)).included,988);
+sqlite.prepare("UPDATE memberships SET status='past_due' WHERE owner=?").run(owner);assert.equal((await c.creditBalance(owner)).included,0);assert.equal((await c.creditBalance(owner)).purchased,10);
+sqlite.prepare("UPDATE memberships SET status='active' WHERE owner=?").run(owner);assert.equal((await c.creditBalance(owner)).included,988);
+const window=monthlyWindow(start,end);sqlite.prepare("UPDATE wallets SET included=2,expires=?,cycle='old' WHERE owner=?").run(window.start,owner);assert.equal((await c.creditBalance(owner)).included,1000);
+const session={id:'cs_test',metadata:{purpose:'fivegen_credits',pack:'starter',owner},mode:'payment',payment_status:'paid',currency:'usd',amount_total:1500,payment_intent:'pi_test'};
+await assert.rejects(()=>c.recordCreditPurchase({...session,amount_total:1}),e=>e.status===409);
+await Promise.all([c.recordCreditPurchase(session),c.recordCreditPurchase(session)]);assert.equal((await c.creditBalance(owner)).purchased,1010);
+charge.amount_refunded=750;await c.reverseCreditPurchase('ch_test');await c.reverseCreditPurchase('ch_test');assert.equal((await c.creditBalance(owner)).purchased,510);
+charge.dispute={status:'needs_response'};await c.reverseCreditPurchase('ch_test');assert.equal((await c.creditBalance(owner)).purchased,10);
+charge.dispute={status:'won'};await c.reverseCreditPurchase('ch_test');assert.equal((await c.creditBalance(owner)).purchased,510);
+await c.recordCreditPurchase(session);assert.equal((await c.creditBalance(owner)).purchased,510);
+sqlite.prepare('UPDATE wallets SET purchased=-1 WHERE owner=?').run(owner);await assert.rejects(()=>c.reserveCredits(owner,'debt','text',10),e=>e.status===402);
+await c.reserveAIBudget(9e6);await assert.rejects(()=>c.reserveAIBudget(2e6),e=>e.status===429);
+sqlite.prepare("INSERT INTO providers (owner,config) VALUES ('__fivegen_platform__',?)").run(JSON.stringify({paused:true,dailyBudget:100}));await assert.rejects(()=>c.reserveAIBudget(1),e=>e.status===503);
+assert.equal(commissionAmount(4900,'free'),490);assert.equal(commissionAmount(4900,'pro'),147);assert.equal(commissionAmount(0,'free'),0);assert.equal(commissionRate('free'),10);
+assert.deepEqual(monthlyWindow(Date.UTC(2026,0,31),Date.UTC(2027,0,31),Date.UTC(2026,1,28)),{start:Date.UTC(2026,1,28),end:Date.UTC(2026,2,31)});
+assert.deepEqual(monthlyWindow(Date.UTC(2024,0,31),Date.UTC(2025,0,31),Date.UTC(2024,1,29)),{start:Date.UTC(2024,1,29),end:Date.UTC(2024,2,31)});
+sqlite.close();delete globalThis.__creditTest;
+console.log('Passed: actual credit SQL, concurrent spending, idempotent refunds/top-ups, refund and dispute reversals, monthly/annual grants, expiry, downgrade, budget cap, fee rounding, and leap-month windows.');

@@ -7,6 +7,8 @@ import {
   ownedProduct,
   sameOrigin,
 } from "@/lib/server";
+import {reserveCredits,refundCredits,reserveAIBudget} from "@/lib/credits";
+import {creditPolicy} from "@/lib/credit-policy";
 import { providerKey, providerSettings } from "@/lib/ai";
 export async function GET(
   _req: Request,
@@ -48,7 +50,7 @@ export async function POST(
     const db = database();
     const active = await db
       .prepare(
-        "SELECT COUNT(*) as n FROM assets WHERE owner=? AND status IN ('queued','running')",
+        "SELECT COUNT(*) as n FROM assets WHERE owner=? AND status IN ('submitting','queued','running')",
       )
       .bind(u.userId)
       .first<{ n: number }>();
@@ -60,6 +62,8 @@ export async function POST(
     const key = await providerKey(u.userId, "fal");
     const { config } = await providerSettings(u.userId);
     id = crypto.randomUUID();
+    await reserveCredits(u.userId,id,d.kind,creditPolicy[d.kind]);
+    await reserveAIBudget(d.kind==="image"?60000:700000);
     await db
       .prepare(
         "INSERT INTO assets (id,owner,product_id,kind,name,prompt,status,created_at) VALUES (?,?,?,?,?,?,?,?)",
@@ -93,9 +97,7 @@ export async function POST(
     const result = (await r.json()) as any;
     if (!r.ok)
       throw new ApiError(
-        typeof result.detail === "string"
-          ? result.detail
-          : "Media provider could not start generation. Check your key and account credits.",
+        "Media generation is temporarily unavailable. Please try again later.",
         502,
       );
     if (!result.request_id || !result.status_url || !result.response_url)
@@ -117,6 +119,7 @@ export async function POST(
       .run();
     return Response.json({ id, status: "queued" });
   } catch (e) {
+    if (id)await refundCredits(id);
     if (id)
       await database()
         .prepare("UPDATE assets SET status=?,error=? WHERE id=?")

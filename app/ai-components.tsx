@@ -43,7 +43,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import type { Product } from "@/lib/product";
+import {money,type Product} from "@/lib/product";
+import {CreditsPanel} from "./credits-panel";
+import type {CreditBalance} from "@/lib/credit-policy";
 import type { ProviderConfig } from "@/lib/ai";
 async function request<T>(
   url: string,
@@ -62,285 +64,23 @@ async function request<T>(
 type Settings = {
   config: ProviderConfig;
   connected: { openai: boolean; anthropic: boolean; fal: boolean };
-  secure: boolean;
+  secure: boolean;admin:boolean;credits:CreditBalance;costs:{text:number;image:number;video:number};
 };
-export function AIProviders({
-  signedIn,
-  onUpdate,
-}: {
-  signedIn: boolean;
-  onUpdate: () => void;
-}) {
-  const [s, setS] = useState<Settings>({
-    config: {
-      textProvider: "openai",
-      textModel: "gpt-5.4",
-      imageModel: "fal-ai/flux-pro/v1.1-ultra",
-      videoModel: "fal-ai/kling-video/v2.6/pro/text-to-video",
-    },
-    connected: { openai: false, anthropic: false, fal: false },
-    secure: false,
-  });
-  const [keys, setKeys] = useState({ openai: "", anthropic: "", fal: "" });
-  const [busy, setBusy] = useState(false);
-  const [show, setShow] = useState(false);
-  const [error, setError] = useState("");
-  const load = useCallback(async () => {
-    if (!signedIn) return;
-    try {
-      setS(await request<Settings>("/api/providers"));
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }, [signedIn]);
-  useEffect(() => {
-    void load();
-  }, [load]);
-  async function save(remove?: "openai" | "anthropic" | "fal") {
-    if (!signedIn) {
-      location.href = "/signin-with-chatgpt?return_to=/";
-      return;
-    }
-    setBusy(true);
-    setError("");
-    try {
-      await request("/api/providers", "PUT", {
-        config: s.config,
-        ...keys,
-        remove,
-      });
-      setKeys({ openai: "", anthropic: "", fal: "" });
-      await load();
-      onUpdate();
-      toast.success(
-        remove ? "Provider key removed" : "AI providers saved securely",
-      );
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <>
-      <section className="ai-intro panel">
-        <span className="ai-intro-icon">
-          <Sparkles size={27} />
-        </span>
-        <div>
-          <h2>Your intelligence. Your creative team.</h2>
-          <p>
-            Connect the models you trust. FiveGen turns them into one
-            product-making workflow.
-          </p>
-        </div>
-        <span className="secure-badge">
-          <LockKeyhole size={13} />
-          Encrypted key storage
-        </span>
-      </section>
-      {error && (
-        <div className="error-banner" role="alert">
-          {error}
-        </div>
-      )}
-      <div className="provider-grid">
-        <section className="panel provider-card">
-          <div className="provider-card-top">
-            <span className="provider-number">01</span>
-            <span className="eyebrow">THE THINKING & WRITING</span>
-          </div>
-          <h2>Product intelligence</h2>
-          <p>
-            Strategy, complete product content, useful files, sales pages,
-            launch emails, and social campaigns.
-          </p>
-          <div className="form-stack">
-            <label>
-              Content provider
-              <Select
-                value={s.config.textProvider}
-                onValueChange={(v) =>
-                  setS({
-                    ...s,
-                    config: {
-                      ...s.config,
-                      textProvider: v as "openai" | "anthropic",
-                      textModel:
-                        v === "openai" ? "gpt-5.4" : "claude-sonnet-4-6",
-                    },
-                  })
-                }
-              >
-                <SelectTrigger className="provider-select">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="openai">OpenAI</SelectItem>
-                  <SelectItem value="anthropic">Anthropic · Claude</SelectItem>
-                </SelectContent>
-              </Select>
-            </label>
-            <label>
-              Model
-              <input
-                value={s.config.textModel}
-                onChange={(e) =>
-                  setS({
-                    ...s,
-                    config: { ...s.config, textModel: e.target.value },
-                  })
-                }
-              />
-              <small>
-                Use a model available to your API account. You can change this
-                at any time.
-              </small>
-            </label>
-            {(["openai", "anthropic"] as const).map((p) => (
-              <div className="key-field" key={p}>
-                <label>
-                  {p === "openai" ? "OpenAI" : "Anthropic"} API key{" "}
-                  <span
-                    className={s.connected[p] ? "key-connected" : "key-empty"}
-                  >
-                    {s.connected[p] ? "Saved" : "Not connected"}
-                  </span>
-                  <div className="key-input">
-                    <input
-                      autoComplete="new-password"
-                      type={show ? "text" : "password"}
-                      placeholder={
-                        s.connected[p]
-                          ? "Enter a new key to replace the saved key"
-                          : p === "openai"
-                            ? "sk-…"
-                            : "sk-ant-…"
-                      }
-                      value={keys[p]}
-                      onChange={(e) =>
-                        setKeys({ ...keys, [p]: e.target.value })
-                      }
-                    />
-                    <button
-                      aria-label={show ? "Hide keys" : "Show keys"}
-                      onClick={() => setShow(!show)}
-                    >
-                      {show ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                </label>
-                {s.connected[p] && (
-                  <button
-                    className="remove-key"
-                    disabled={busy}
-                    onClick={() => void save(p)}
-                  >
-                    Remove saved key
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-        <section className="panel provider-card">
-          <div className="provider-card-top">
-            <span className="provider-number">02</span>
-            <span className="eyebrow">THE LOOK & THE MOTION</span>
-          </div>
-          <h2>Image & video studio</h2>
-          <p>
-            Original campaign visuals, product images, and short promotional
-            videos through fal.ai.
-          </p>
-          <div className="media-provider-summary">
-            <div>
-              <span className="type-icon purple">
-                <ImagePlus size={21} />
-              </span>
-              <div>
-                <strong>FLUX 1.1 Pro Ultra</strong>
-                <small>High-resolution campaign images</small>
-              </div>
-            </div>
-            <div>
-              <span className="type-icon peach">
-                <Film size={21} />
-              </span>
-              <div>
-                <strong>Kling 2.6 Pro</strong>
-                <small>5-second video clips with generated audio</small>
-              </div>
-            </div>
-          </div>
-          <label>
-            fal.ai API key{" "}
-            <span className={s.connected.fal ? "key-connected" : "key-empty"}>
-              {s.connected.fal ? "Saved" : "Not connected"}
-            </span>
-            <div className="key-input">
-              <input
-                autoComplete="new-password"
-                type={show ? "text" : "password"}
-                placeholder={
-                  s.connected.fal
-                    ? "Enter a new key to replace the saved key"
-                    : "Paste your fal.ai API key"
-                }
-                value={keys.fal}
-                onChange={(e) => setKeys({ ...keys, fal: e.target.value })}
-              />
-              <button
-                aria-label={show ? "Hide key" : "Show key"}
-                onClick={() => setShow(!show)}
-              >
-                {show ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </label>
-          {s.connected.fal && (
-            <button
-              className="remove-key"
-              disabled={busy}
-              onClick={() => void save("fal")}
-            >
-              Remove saved key
-            </button>
-          )}
-          <div className="provider-note">
-            <ShieldCheck size={20} />
-            <p>
-              Keys are encrypted before storage and used only by the server.
-              Generation uses your provider account’s credits.
-            </p>
-          </div>
-          <a
-            className="text-link"
-            href="https://fal.ai/dashboard/keys"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Get your fal.ai key
-            <ArrowRight size={14} />
-          </a>
-        </section>
-      </div>
-      <div className="provider-save-bar">
-        <span>
-          <KeyRound size={16} />
-          Your saved keys are never sent back to the browser.
-        </span>
-        <button
-          className="button primary"
-          disabled={busy}
-          onClick={() => void save()}
-        >
-          {busy ? <Loader2 className="spin" size={16} /> : <Check size={16} />}
-          Save AI providers
-        </button>
-      </div>
-    </>
-  );
+export function AIProviders({signedIn,onUpdate}:{signedIn:boolean;onUpdate:()=>void}){
+  const [s,setS]=useState<Settings|null>(null),[keys,setKeys]=useState({openai:"",anthropic:"",fal:""}),[busy,setBusy]=useState(false),[error,setError]=useState("");
+  const [metrics,setMetrics]=useState<{fees:number;creditSales:number;subscriptions:number;todayBudgetUsed:number;accounts:number}|null>(null);
+  async function load(){if(!signedIn)return;try{const settings=await request<Settings>("/api/providers");setS(settings);if(settings.admin)setMetrics(await request("/api/admin"));}catch(e){setError((e as Error).message);}}
+  useEffect(()=>{void load();},[signedIn]);
+  async function save(remove?:"openai"|"anthropic"|"fal"){if(!s)return;setBusy(true);setError("");try{await request("/api/providers","PUT",{config:s.config,...keys,remove});setKeys({openai:"",anthropic:"",fal:""});await load();onUpdate();toast.success("Platform AI settings saved");}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+  return <>{s?.admin&&<a href="#platform-ai" className="button secondary"><ShieldCheck size={16}/>Manage platform AI</a>}<CreditsPanel signedIn={signedIn}/>{error&&<p className="error-banner" role="alert">{error}</p>}{s?.admin&&<section id="platform-ai" className="panel admin-ai"><div className="panel-heading"><div><span className="eyebrow">SUPER ADMIN ONLY</span><h2>Platform AI & revenue</h2><p>Master credentials power all customer accounts. Keys are encrypted and never returned to the browser.</p></div><ShieldCheck size={24}/></div>
+    <div className="credit-balances">{[["Sales commissions",metrics?money(metrics.fees):"—"],["Credit sales",metrics?money(metrics.creditSales):"—"],["Pro subscriptions",metrics?money(metrics.subscriptions):"—"]].map(([label,value])=><div key={label}><span>{label}</span><strong>{value}</strong><small>Recorded gross receipts · before refunds and costs</small></div>)}</div>
+    <div className="form-two"><label>Content provider<Select value={s.config.textProvider} onValueChange={v=>setS({...s,config:{...s.config,textProvider:v as "openai"|"anthropic",textModel:v==="openai"?"gpt-4.1-mini":"claude-haiku-4-5"}})}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="openai">OpenAI · GPT-4.1 mini · 10 credits/step</SelectItem><SelectItem value="anthropic">Anthropic · Haiku 4.5 · 30 credits/step</SelectItem></SelectContent></Select></label><label>Daily AI spending cap · USD<input type="number" min={1} max={10000} value={s.config.dailyBudget} onChange={e=>setS({...s,config:{...s.config,dailyBudget:Number(e.target.value)}})}/></label></div>
+    <p className="field-help">Today’s conservative cost reservations: $ {metrics?.todayBudgetUsed.toFixed(2)||"0.00"}. This cap includes failed calls and protects platform spending; reconcile actual usage with provider invoices.</p>
+    <div className="admin-key-grid">{(["openai","anthropic","fal"] as const).map(key=><label key={key}>{key==="fal"?"fal.ai master key":key==="openai"?"OpenAI master key":"Anthropic master key"}<span className="field-help">{s.connected[key]?"Connected · leave blank to keep":"Not connected"}</span><input type="password" autoComplete="new-password" value={keys[key]} placeholder="Paste master API key" onChange={e=>setKeys({...keys,[key]:e.target.value})}/>{s.connected[key]&&<button className="text-link" disabled={busy} onClick={()=>void save(key)}>Remove stored key</button>}</label>)}</div>
+    <label className="admin-pause"><input type="checkbox" checked={s.config.paused} onChange={e=>setS({...s,config:{...s.config,paused:e.target.checked}})}/>Pause all new AI generation</label>
+    <button className="button primary" disabled={busy||!s.secure} onClick={()=>void save()}>{busy?<Loader2 className="spin" size={16}/>:<ShieldCheck size={16}/>}Save platform settings</button>{!s.secure&&<p className="field-help">Encrypted credential storage needs to be configured on the server.</p>}
+    <details className="credit-history"><summary>Pricing and margin assumptions</summary><p>Pro: $29/month or $290/year with 1,000 monthly credits. Credit packs: $15 / 1,000, $35 / 2,500, $75 / 6,000. Free commissions: 10%; Pro: 3%. The most expensive included credit is budgeted at $0.005 of provider cost, so 1,000 fully used credits cost up to $5 at the checked rates.</p><p>At an illustrative 2.9% + $0.30 card fee, monthly Pro retains about $22.86 before Billing fees, infrastructure, support, refunds, tax and acquisition. This is contribution, not guaranteed profit. Free includes 1,200 one-time text credits: budget up to $6 acquisition cost per fully used allowance. A $60 Free-plan sale produces $6 commission. Review rates before changing models.</p><p>Sources: <a href="https://developers.openai.com/api/docs/models/gpt-4.1-mini" target="_blank" rel="noreferrer">OpenAI pricing</a> · <a href="https://fal.ai/models/fal-ai/flux-pro/v1.1-ultra" target="_blank" rel="noreferrer">fal images</a> · <a href="https://fal.ai/models/fal-ai/kling-video/v2.6/pro/text-to-video" target="_blank" rel="noreferrer">fal video</a> · <a href="https://stripe.com/pricing" target="_blank" rel="noreferrer">Stripe fees</a></p></details>
+  </section>}</>;
 }
 type Job = {
   stage: number;
@@ -349,6 +89,7 @@ type Job = {
   updated_at: number;
 };
 export function GenerationProgress({
+  textCost=10,
   product,
   onProduct,
   onComplete,
@@ -357,6 +98,7 @@ export function GenerationProgress({
   onBeforeGenerate,
   onRunningChange,
 }: {
+  textCost?:number;
   product: Product;
   onProduct: (p: Product) => void;
   onComplete: () => void;
@@ -473,7 +215,7 @@ export function GenerationProgress({
               ? "Review your content, explore your supporting files, and generate your marketing visuals."
               : running
                 ? "Each completed step is saved. You can pause after the current step."
-                : aiReady ? "Create complete content and a launch campaign using your connected provider." : "Add your expertise here, or connect AI to generate a complete product."}
+                : aiReady ? `Content uses ${textCost} credits per completed step; up to ${textCost*12} for a complete product.` : "Add your expertise here, or view your AI credits to generate a complete product."}
           </p>
         </div>
         <div className="generation-actions">
@@ -492,7 +234,7 @@ export function GenerationProgress({
             <>
               <button className="button primary" onClick={() => aiReady ? void run() : onSetup()}>
                 <Play size={14} />
-                {!aiReady ? "Connect AI" : job ? "Resume generation" : "Generate with AI"}
+                {!aiReady ? "AI status & credits" : job ? "Resume generation" : "Generate with AI"}
               </button>
               {job && (
                 <button
@@ -543,7 +285,8 @@ type Asset = {
 };
 export function MediaStudio({ product, onSetup }: { product: Product; onSetup: () => void }) {
   const [mediaReady, setMediaReady] = useState<boolean | null>(null);
-  useEffect(() => { void request<Settings>("/api/providers").then((settings) => setMediaReady(settings.connected.fal)).catch(() => setMediaReady(false)); }, []);
+  const [balance,setBalance]=useState(0);
+  useEffect(() => { void request<Settings>("/api/providers").then((settings) => {setMediaReady(settings.connected.fal&&!settings.config.paused);setBalance(settings.credits.media);}).catch(() => setMediaReady(false)); }, []);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [kind, setKind] = useState<"image" | "video">("image");
   const [aspect, setAspect] = useState("1:1");
@@ -561,6 +304,7 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
         `/api/products/${product.id}/assets`,
       );
       setAssets(d.assets);
+      const c=await request<{balance:CreditBalance}>("/api/credits");setBalance(c.balance.media);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -608,6 +352,7 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
     }
   }
   async function campaign() {
+    if(balance<196){setError("This campaign needs 196 credits. Add credits first.");return;}
     setBusy(true);
     setError("");
     try {
@@ -636,8 +381,8 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
     }
   }
   return (
-    <div className="media-studio">
-      {mediaReady === false && <div className="checkout-setup media-setup"><ImagePlus size={21}/><div><strong>Connect your image & video provider</strong><p>Add your fal.ai key to generate marketing assets. Your product stays saved.</p></div><button className="button primary" onClick={onSetup}>Connect provider <ArrowRight size={15}/></button></div>}
+    <div className="media-studio"><div className="media-credit-bar"><span><Sparkles size={16}/> {balance.toLocaleString()} image/video credits</span><button className="button secondary" onClick={onSetup}>Add credits <ArrowRight size={15}/></button></div>
+      {mediaReady === false && <div className="checkout-setup media-setup"><ImagePlus size={21}/><div><strong>Your FiveGen media studio</strong><p>Image and video generation opens when the administrator connects the platform AI. Your product stays saved.</p></div><button className="button primary" onClick={onSetup}>View AI & credits <ArrowRight size={15}/></button></div>}
       <section className="media-create panel">
         <div className="panel-heading">
           <div>
@@ -699,11 +444,11 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
               {kind === "image"
                 ? "FLUX 1.1 Pro Ultra"
                 : "Kling 2.6 Pro · 5 seconds"}
-              <small>Uses your fal.ai credits</small>
+              <small>{kind === "image" ? "12 credits per image" : "160 credits · includes audio"}</small>
             </span>
             <button
               className="button primary"
-              disabled={busy || prompt.length < 15 || !mediaReady}
+              disabled={busy || prompt.length < 15 || !mediaReady || balance<(kind==="image"?12:160)}
               onClick={() => void generate()}
             >
               {busy ? (
@@ -721,7 +466,7 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
           <Layers3 size={24} />
         </span>
         <div>
-          <h3>A whole campaign, in one go.</h3>
+          <h3>A whole campaign · 196 credits.</h3>
           <p>
             A square post, a story creative, a website banner, and a 5-second
             promo video.
@@ -733,7 +478,7 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
           onClick={() => mediaReady ? void campaign() : onSetup()}
         >
           <WandSparkles size={16} />
-          {mediaReady === false ? "Connect provider" : "Generate campaign"}
+          {mediaReady === false ? "AI status & credits" : "Generate campaign · 196 credits"}
         </button>
       </section>
       {error && (

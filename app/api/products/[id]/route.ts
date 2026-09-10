@@ -33,6 +33,7 @@ export async function PATCH(
     const { id } = await params;
     const existing = productFromRow(await ownedProduct(id, u.userId));
     const data = updateSchema.parse(await req.json());
+    if(data.whopUrl)throw new ApiError("Whop checkout is paused until commission-aware payments are connected. Use Stripe checkout.",409);
     const commerce=data.commerce||existing.commerce||defaultCommerce();
     const commerceChanged=JSON.stringify(commerce)!==JSON.stringify(existing.commerce);
     if(commerceChanged && advancedCommerce(commerce))await requirePro(u.userId);

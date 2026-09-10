@@ -20,8 +20,8 @@ export async function syncMembership(subscription:Record<string,any>){
   if(existing?.subscription_id && existing.subscription_id!==subscription.id && !["active","trialing"].includes(subscription.status))return;
   const item=subscription.items?.data?.[0];
   const end=Number(item?.current_period_end||subscription.current_period_end||0);
-  await database().prepare("INSERT INTO memberships (owner,customer_id,subscription_id,status,interval,period_end,cancel_at_period_end,updated_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(owner) DO UPDATE SET customer_id=excluded.customer_id,subscription_id=excluded.subscription_id,status=excluded.status,interval=excluded.interval,period_end=excluded.period_end,cancel_at_period_end=excluded.cancel_at_period_end,updated_at=excluded.updated_at")
-    .bind(owner,String(subscription.customer),subscription.id,subscription.status,item?.price?.recurring?.interval||"month",end,subscription.cancel_at_period_end?1:0,Date.now()).run();
+  await database().prepare("INSERT INTO memberships (owner,customer_id,subscription_id,status,interval,period_start,period_end,cancel_at_period_end,updated_at) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(owner) DO UPDATE SET customer_id=excluded.customer_id,subscription_id=excluded.subscription_id,status=excluded.status,interval=excluded.interval,period_start=excluded.period_start,period_end=excluded.period_end,cancel_at_period_end=excluded.cancel_at_period_end,updated_at=excluded.updated_at")
+    .bind(owner,String(subscription.customer),subscription.id,subscription.status,item?.price?.recurring?.interval||"month",Number(item?.current_period_start||subscription.current_period_start||subscription.start_date||0),end,subscription.cancel_at_period_end?1:0,Date.now()).run();
 }
 export async function reconcileMembership(owner:string,sessionId:string){
   if(!/^cs_[a-zA-Z0-9_]+$/.test(sessionId))throw new ApiError("Invalid billing reference.");

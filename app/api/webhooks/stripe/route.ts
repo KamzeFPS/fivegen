@@ -1,5 +1,6 @@
-import { binding, failure, ApiError, stripe } from "@/lib/server";
-import { recordPayment, recordRenewal } from "@/lib/payments";
+import { binding, database, failure, ApiError, stripe } from "@/lib/server";
+import { recordPayment, recordRenewal, updateRenewalCommission } from "@/lib/payments";
+import {recordCreditPurchase,reverseCreditPurchase} from "@/lib/credits";
 import { syncMembership } from "@/lib/billing";
 export async function POST(req: Request) {
   try {
@@ -38,6 +39,17 @@ export async function POST(req: Request) {
     if (!valid) throw new ApiError("Invalid signature.", 400);
     const event = JSON.parse(body);
     const object=event.data.object;
+    if(!event.account && event.type==="charge.refunded")await reverseCreditPurchase(object.id);
+    if(!event.account && ["charge.dispute.created","charge.dispute.closed"].includes(event.type))await reverseCreditPurchase(String(object.charge));
+    if(!event.account && event.type==="invoice.paid"){
+      const subId=object.parent?.subscription_details?.subscription||object.subscription;
+      if(subId){const sub=await stripe(`subscriptions/${subId}`);if(sub.metadata?.purpose==="fivegen_pro"&&object.status==="paid"&&object.currency==="usd"){
+        await syncMembership(sub);
+        await database().prepare("INSERT OR IGNORE INTO platform_receipts (id,owner,amount,created_at) VALUES (?,?,?,?)").bind(object.id,sub.metadata.owner,Number(object.amount_paid),Date.now()).run();
+      }}
+    }
+    if(!event.account && ["checkout.session.completed","checkout.session.async_payment_succeeded"].includes(event.type) && object.metadata?.purpose==="fivegen_credits" && object.payment_status==="paid")await recordCreditPurchase(object);
+    if(event.account && event.type==="invoice.created")await updateRenewalCommission(object,String(event.account));
     if(!event.account && event.type.startsWith("customer.subscription.") && object.metadata?.purpose==="fivegen_pro"){
       await syncMembership(await stripe(`subscriptions/${object.id}`));
     }
