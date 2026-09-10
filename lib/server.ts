@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
 import type { Product } from "./product";
+import { readCommerce } from "./commerce";
 export function binding(name: string): string {
   return String(
     (env as unknown as Record<string, unknown>)[name] ||
@@ -60,6 +61,7 @@ export function productFromRow(r: Record<string, unknown>): Product {
     content: JSON.parse(String(r.content)),
     status: r.status as Product["status"],
     whopUrl: r.whop_url as string | null,
+    commerce: readCommerce(r.commerce),
     createdAt: Number(r.created_at),
     updatedAt: Number(r.updated_at),
   };

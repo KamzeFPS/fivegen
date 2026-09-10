@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./studio-design.css";
 import "./flow-design.css";
+import "./sales-design.css";
 
 export const metadata: Metadata = {
   title: "FiveGen — Your next idea, made real",

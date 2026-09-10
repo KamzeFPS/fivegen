@@ -4,6 +4,9 @@ import { Brand, Cover } from "@/app/ui-brand";
 import { Check, Layers3 } from "lucide-react";
 import { money } from "@/lib/product";
 import Purchase from "./purchase";
+import { quoteProduct } from "@/lib/offers-server";
+import { planFor } from "@/lib/billing";
+import { defaultCommerce } from "@/lib/commerce";
 export const dynamic = "force-dynamic";
 export default async function ProductPage({
   params,
@@ -19,6 +22,9 @@ export default async function ProductPage({
     .first();
   if (!row) notFound();
   const p = productFromRow(row);
+  const pro=(await planFor(String(row.owner))).tier==="pro";
+  const c=pro?p.commerce!:defaultCommerce();
+  const quote=await quoteProduct(slug).then(q=>q.quote).catch(()=>null);
   const available =
     p.price === 0 || !!(row.stripe_account && binding("STRIPE_SECRET_KEY"));
   return (
@@ -42,17 +48,16 @@ export default async function ProductPage({
           </span>
           <h1>{p.title}</h1>
           <p>{p.description}</p>
-          <div className="store-price">
-            {p.price === 0 ? "Free" : money(p.price * 100)}
-            <span>
-              {p.price > 0 ? "One-time purchase" : "Made to be shared"}
-            </span>
-          </div>
           <Purchase
             slug={p.slug}
             price={p.price}
             available={available}
             whopUrl={p.whopUrl}
+            billing={p.commerce?.billing||"once"}
+            hasCode={!!c.deal.code}
+            volume={c.deal.type==="volume"}
+            initialQuote={quote}
+            endsAt={c.deal.endsAt}
           />
           <ul className="store-benefits">
             {p.content.benefits.map((b, i) => (

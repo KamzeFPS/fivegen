@@ -8,6 +8,13 @@
       "when": 1789052661914,
       "tag": "0000_smart_marvel_apes",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1789061250794,
+      "tag": "0001_next_living_mummy",
+      "breakpoints": true
     }
   ]
 }

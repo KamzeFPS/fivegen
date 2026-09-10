@@ -14,6 +14,7 @@ export const products = sqliteTable(
     content: text("content").notNull(),
     status: text("status").notNull().default("draft"),
     whopUrl: text("whop_url"),
+    commerce: text("commerce").notNull().default("{}"),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },
@@ -25,6 +26,22 @@ export const sellers = sqliteTable("sellers", {
   stripeAccount: text("stripe_account"),
   createdAt: integer("created_at").notNull(),
 });
+export const memberships = sqliteTable("memberships", {
+  owner: text("owner").primaryKey(),
+  customerId: text("customer_id"),
+  subscriptionId: text("subscription_id").unique(),
+  status: text("status").notNull().default("free"),
+  interval: text("interval"),
+  periodEnd: integer("period_end"),
+  cancelAtPeriodEnd: integer("cancel_at_period_end").notNull().default(0),
+  updatedAt: integer("updated_at").notNull(),
+});
+export const checkoutIntents = sqliteTable("checkout_intents", {
+  id: text("id").primaryKey(), owner: text("owner").notNull(), productId: text("product_id").notNull(),
+  account: text("account").notNull(), amount: integer("amount").notNull(), mode: text("mode").notNull(),
+  items: text("items").notNull(), quantity: integer("quantity").notNull().default(1),
+  sessionId: text("session_id").unique(), createdAt: integer("created_at").notNull(),
+});
 export const orders = sqliteTable(
   "orders",
   {
@@ -35,6 +52,10 @@ export const orders = sqliteTable(
     amount: integer("amount").notNull(),
     provider: text("provider").notNull(),
     token: text("token").notNull().unique(),
+    items: text("items").notNull().default("[]"),
+    subscriptionId: text("subscription_id"),
+    customerId: text("customer_id"),
+    stripeAccount: text("stripe_account"),
     createdAt: integer("created_at").notNull(),
   },
   (t) => [index("idx_orders_owner_date").on(t.owner, t.createdAt)],

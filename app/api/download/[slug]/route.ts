@@ -1,5 +1,6 @@
 import { ApiError, database, failure, productFromRow } from "@/lib/server";
 import { productBundle } from "@/lib/bundle";
+import { assertSubscriptionAccess, orderItems } from "@/lib/payments";
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ slug: string }> },
@@ -15,15 +16,16 @@ export async function GET(
     if (Number(p.price) > 0 || p.status !== "published") {
       const order = token
         ? await database()
-            .prepare("SELECT id FROM orders WHERE token=? AND product_id=?")
-            .bind(token, p.id)
+            .prepare("SELECT * FROM orders WHERE token=?")
+            .bind(token)
             .first()
         : null;
-      if (!order)
+      if (!order || (order.product_id!==p.id && !orderItems(order).some(i=>i.id===p.id)))
         throw new ApiError(
           "A verified purchase is required to download this product.",
           403,
         );
+      await assertSubscriptionAccess(order);
     }
     const product = productFromRow(p);
     return new Response(productBundle(product, false), {

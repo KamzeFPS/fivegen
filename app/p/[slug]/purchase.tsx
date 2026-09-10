@@ -1,101 +1,23 @@
 "use client";
-import { useEffect, useState } from "react";
-import {
-  ArrowDownToLine,
-  ArrowUpRight,
-  LockKeyhole,
-  Loader2,
-} from "lucide-react";
-export default function Purchase({
-  slug,
-  price,
-  available,
-  whopUrl,
-}: {
-  slug: string;
-  price: number;
-  available: boolean;
-  whopUrl?: string | null;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    void fetch(`/api/visits`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slug }),
-    }).catch(() => {});
-  }, [slug]);
-  async function buy() {
-    setBusy(true);
-    setError("");
-    try {
-      const r = await fetch("/api/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug }),
-      });
-      const d = (await r.json()) as { url: string; error?: string };
-      if (!r.ok) throw new Error(d.error);
-      window.location.href = d.url;
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <>
-      <div className="purchase-buttons">
-        {available && (
-          <button
-            className="button primary full"
-            disabled={busy}
-            onClick={() => void buy()}
-          >
-            {busy ? (
-              <Loader2 className="spin" size={17} />
-            ) : price === 0 ? (
-              <ArrowDownToLine size={17} />
-            ) : (
-              <LockKeyhole size={16} />
-            )}{" "}
-            {price === 0 ? "Get your free copy" : "Get instant access"}
-            <ArrowUpRight size={17} />
-          </button>
-        )}
-        {whopUrl && (
-          <a
-            className={`button ${available ? "secondary" : "primary"} full`}
-            href={whopUrl}
-            rel="noreferrer"
-          >
-            Buy on Whop
-            <ArrowUpRight size={17} />
-          </a>
-        )}
-        {!available && !whopUrl && (
-          <div className="store-message">
-            This product is coming soon. The creator is still setting up
-            checkout.
-          </div>
-        )}
-      </div>
-      {(available || whopUrl) && (
-        <div className="secure-note">
-          <LockKeyhole size={12} />
-          {price === 0
-            ? "Downloadable digital product"
-            : whopUrl && !available
-              ? "Secure checkout and delivery by Whop"
-              : "Secure checkout by Stripe"}
-        </div>
-      )}
-      {error && (
-        <p role="alert" className="store-message error">
-          {error}
-        </p>
-      )}
-    </>
-  );
+import { useEffect,useRef,useState } from "react";
+import { ArrowUpRight, Check, Gift, Loader2, LockKeyhole } from "lucide-react";
+import type { Commerce,Quote } from "@/lib/commerce";
+import { money } from "@/lib/product";
+export default function Purchase({slug,price,available,whopUrl,billing="once",hasCode=false,volume=false,initialQuote=null,cta,endsAt=""}:{slug:string;price:number;available:boolean;whopUrl?:string|null;billing?:Commerce["billing"];hasCode?:boolean;volume?:boolean;initialQuote?:Quote|null;cta?:string;endsAt?:string}){
+  const [busy,setBusy]=useState(false),[quoting,setQuoting]=useState(false),[error,setError]=useState(""),[quote,setQuote]=useState(initialQuote),[quantity,setQuantity]=useState(1),[addUpsell,setAddUpsell]=useState(false),[code,setCode]=useState(""),[appliedCode,setAppliedCode]=useState("");
+  const requestId=useRef(0);
+  useEffect(()=>{void fetch("/api/visits",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({slug})}).catch(()=>{});},[slug]);
+  useEffect(()=>{const current=++requestId.current;setQuoting(true);setError("");fetch("/api/quote",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({slug,quantity,addUpsell,code:appliedCode})}).then(async r=>{const d=await r.json() as Quote&{error?:string};if(!r.ok)throw new Error(d.error);if(current===requestId.current)setQuote(d);}).catch(e=>{if(current===requestId.current){setError(e.message);setQuote(null);}}).finally(()=>{if(current===requestId.current)setQuoting(false);});return()=>{requestId.current++;};},[slug,quantity,addUpsell,appliedCode]);
+  const buy=async()=>{setBusy(true);setError("");try{const r=await fetch("/api/checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({slug,quantity,addUpsell,code:appliedCode,expectedTotal:quote?.total})});const d=await r.json() as {url:string;error?:string};if(!r.ok)throw new Error(d.error);location.href=d.url;}catch(e){setError((e as Error).message);}finally{setBusy(false);}};
+  const total=quote?.total??Math.round(price*100),ready=(available||total===0)&&!!quote;
+  return <div className="offer-checkout">{quote?.deal&&<span className="offer-badge"><Gift size={14}/>{quote.deal}{quote.savings>0&&` · Save ${money(quote.savings)}`}</span>}<div className="offer-total"><strong>{total===0?"Free":money(total)}</strong>{quote&&quote.original>total&&<del>{money(quote.original)}</del>}<span>{billing==="once"?"One-time purchase":`every ${billing==="month"?"month":"year"}`}</span></div>
+    {quote?.includedTitle&&<div className="included-product"><Check size={15}/>Includes {quote.includedTitle}</div>}
+    {volume&&<label className="license-quantity">Number of licenses<input aria-label="Number of licenses" type="number" min={1} max={100} value={quantity} onChange={e=>setQuantity(Math.max(1,Math.min(100,Number(e.target.value)||1)))}/></label>}
+    {hasCode&&<div className="promotion-entry"><label className="sr-only" htmlFor={`code-${slug}`}>Promotion code</label><input id={`code-${slug}`} placeholder="Promotion code" maxLength={30} value={code} onChange={e=>setCode(e.target.value)}/><button className="button secondary" disabled={quoting||busy} onClick={()=>setAppliedCode(code.trim().toUpperCase())}>{appliedCode===code.trim().toUpperCase()&&appliedCode?"Applied":"Apply"}</button>{appliedCode&&<button className="text-link" onClick={()=>{setAppliedCode("");setCode("");}}>Remove</button>}</div>}
+    {quote?.upsell&&<label className={`checkout-upsell ${addUpsell?"selected":""}`}><input type="checkbox" checked={addUpsell} onChange={e=>setAddUpsell(e.target.checked)}/><span><strong>{quote.upsell.headline}</strong><small>{quote.upsell.description||quote.upsell.title}</small><b>+ {money(quote.upsell.amount)} · {quote.upsell.title}</b></span></label>}
+    <div className="purchase-buttons"><button className="button primary full" disabled={busy||quoting||!ready||!!error} onClick={()=>void buy()}>{busy||quoting?<Loader2 size={17} className="spin"/>:<LockKeyhole size={16}/>} {busy?"Opening checkout…":quoting?"Updating offer…":cta||(total===0?"Get your free copy":billing==="once"?"Get instant access":"Subscribe & get access")}<ArrowUpRight size={16}/></button>{!available&&total>0&&<p className="field-help">The creator is still setting up Stripe checkout.</p>}{whopUrl&&<><a className={`button secondary full`} href={whopUrl} rel="noreferrer">Buy on Whop <ArrowUpRight size={16}/></a><small className="field-help">Whop uses its own pricing, offers, and delivery.</small></>}</div>
+    {billing!=="once"&&<p className="subscription-terms">{money(total)} charged every {billing==="month"?"month":"year"} until canceled. Manage or cancel using the link on your access page. Downloads and updates require an active subscription.</p>}
+    {endsAt&&quote?.deal&&<small className="offer-expiry">Offer ends {new Date(endsAt).toISOString().replace("T"," ").slice(0,16)} UTC.</small>}
+    {error&&<p role="alert" className="store-message error">{error}</p>}<div className="secure-note"><LockKeyhole size={12}/>{total===0?"Instant digital delivery":"Secure checkout by Stripe"}</div>
+  </div>;
 }

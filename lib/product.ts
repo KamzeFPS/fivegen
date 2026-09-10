@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Commerce } from "./commerce";
 export const formats = [
   "Guide",
   "Mini course",
@@ -49,6 +50,7 @@ export type Product = Brief & {
   status: "draft" | "published";
   content: ProductContent;
   whopUrl?: string | null;
+  commerce?: Commerce;
   createdAt: number;
   updatedAt: number;
 };

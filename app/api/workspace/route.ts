@@ -9,6 +9,7 @@ import {
   stripe,
 } from "@/lib/server";
 import { providerSettings } from "@/lib/ai";
+import { planFor } from "@/lib/billing";
 export async function GET() {
   try {
     const user = await identity();
@@ -22,7 +23,7 @@ export async function GET() {
         .all(),
       db
         .prepare(
-          "SELECT o.*,p.title FROM orders o LEFT JOIN products p ON o.product_id=p.id WHERE o.owner=? ORDER BY o.created_at DESC LIMIT 10000",
+          "SELECT o.*,p.title FROM orders o LEFT JOIN products p ON o.product_id=p.id WHERE o.owner=? AND o.provider<>'free' ORDER BY o.created_at DESC LIMIT 10000",
         )
         .bind(user.userId)
         .all(),
@@ -46,6 +47,7 @@ export async function GET() {
       }
     }
     return Response.json({
+      plan: await planFor(user.userId),
       products: p.results.map(productFromRow),
       orders: o.results.map((r) => ({
         id: r.id,

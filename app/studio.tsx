@@ -11,6 +11,7 @@ import {
   ChevronRight,
   CircleHelp,
   CreditCard,
+  Crown,
   ExternalLink,
   Eye,
   FileText,
@@ -86,6 +87,8 @@ import {
 } from "./ai-components";
 import { Brand, Cover } from "./ui-brand";
 import { CreateProductFlow, GrowingTextarea, ProductPreview, PublishReview } from "./product-flow";
+import { BillingPage, SalesTools } from "./sales-tools";
+import { freePlan, type PlanInfo } from "@/lib/plans";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription } from "@/components/ui/alert-dialog";
 import {
   Area,
@@ -115,8 +118,10 @@ type View =
   | "Customers"
   | "Payments"
   | "Settings"
+  | "Plan & billing"
   | "AI providers";
 type Workspace = {
+  plan: PlanInfo;
   products: Product[];
   orders: Order[];
   visits: { createdAt: number }[];
@@ -125,6 +130,7 @@ type Workspace = {
   stripeReady?: boolean;
 };
 const empty: Workspace = {
+  plan: freePlan,
   products: [],
   orders: [],
   visits: [],
@@ -287,6 +293,7 @@ export default function Studio({
       }
     }
     if (new URLSearchParams(location.search).has("stripe")) setView("Payments");
+    if (new URLSearchParams(location.search).has("billing")) setView("Plan & billing");
   }, [user]);
   const commitNavigation = (v: View) => {
     setView(v);
@@ -309,6 +316,7 @@ export default function Studio({
     return false;
   };
   function startCreate(t?: Brief) {
+    if(user && workspace.plan.used>=workspace.plan.limit){navigate("Plan & billing");toast.info("You’ve reached your plan’s product limit.");return;}
     guardNavigation(() => {
     setCreationError("");
     if (!t && (brief.title || brief.description || brief.audience)) {
@@ -678,6 +686,7 @@ export default function Studio({
               [
                 { name: "Payments", icon: CreditCard },
                 { name: "AI providers", icon: Sparkles },
+                { name: "Plan & billing", icon: Crown },
                 { name: "Settings", icon: Settings2 },
               ] as const
             ).map(({ name, icon: Icon }) => (
@@ -784,12 +793,13 @@ export default function Studio({
                   <TabsTrigger value="storefront">
                     2. Storefront
                   </TabsTrigger>
-                  <TabsTrigger value="launch">3. Launch kit</TabsTrigger>
-                  <TabsTrigger value="files">4. Files</TabsTrigger>
-                  <TabsTrigger value="media">5. Marketing</TabsTrigger>
+                  <TabsTrigger value="sales">3. Sales & funnel</TabsTrigger>
+                  <TabsTrigger value="launch">4. Launch kit</TabsTrigger>
+                  <TabsTrigger value="files">5. Files</TabsTrigger>
+                  <TabsTrigger value="media">6. Marketing</TabsTrigger>
                 </TabsList>
               </Tabs>
-              {editTab === "media" ? (
+              {editTab === "sales" ? <fieldset className="sales-tools-fieldset" disabled={busy||generating}><SalesTools product={editor} products={workspace.products} plan={workspace.plan} onChange={setEditor} onUpgrade={() => { guardNavigation(()=>{setReturnProduct(editor);commitNavigation("Plan & billing");}); }}/></fieldset> : editTab === "media" ? (
                 <MediaStudio product={editor} onSetup={() => void setupFromEditor("AI providers")} />
               ) : editTab === "files" ? (
                 <ProductFiles product={editor} />
@@ -1074,7 +1084,7 @@ export default function Studio({
                   </aside>
                 </div>
               )}
-              <div className="editor-step-footer"><span>{["Review your content, then shape your storefront.", "Set a price and connect checkout before you share.", "Your campaign copy is ready to edit and export.", "Review what your customers will receive.", "Ready to share your product?"][["content","storefront","launch","files","media"].indexOf(editTab)]}</span><button className="button primary" disabled={busy || generating} onClick={() => { const next = ["content","storefront","launch","files","media"][["content","storefront","launch","files","media"].indexOf(editTab) + 1]; if (next) { setEditTab(next); window.scrollTo({top:0,behavior:"instant"}); } else setPublishReview(true); }}>{({content:"Continue to storefront",storefront:"Continue to launch kit",launch:"Review product files",files:"Open marketing studio",media:"Review & publish"} as Record<string,string>)[editTab]}<ArrowRight size={16}/></button></div>
+              <div className="editor-step-footer"><span>{({content:"Review your content, then shape your storefront.",storefront:"Set a price and connect checkout before you share.",sales:"Save your offer and page settings before sharing.",launch:"Your campaign copy is ready to edit and export.",files:"Review what your customers will receive.",media:"Ready to share your product?"} as Record<string,string>)[editTab]}</span><button className="button primary" disabled={busy || generating} onClick={() => { const next=({content:"storefront",storefront:workspace.plan.tier==="pro"?"sales":"launch",sales:"launch",launch:"files",files:"media"} as Record<string,string>)[editTab]; if (next) { setEditTab(next); window.scrollTo({top:0,behavior:"instant"}); } else setPublishReview(true); }}>{({content:"Continue to storefront",storefront:workspace.plan.tier==="pro"?"Build your offer":"Continue to launch kit",sales:"Continue to launch kit",launch:"Review product files",files:"Open marketing studio",media:"Review & publish"} as Record<string,string>)[editTab]}<ArrowRight size={16}/></button></div>
             </>
           ) : (
             <>
@@ -1111,6 +1121,7 @@ export default function Studio({
                           "A closer look at how your products are performing.",
                         Customers: "The people who believe in what you make.",
                         Payments: "Get paid for what you know.",
+                        "Plan & billing": "The right tools for your next stage.",
                         Settings: "Make this space feel like yours.",
                         "AI providers":
                           "A complete creative team, powered by your favorite models.",
@@ -1763,6 +1774,7 @@ export default function Studio({
               {view === "AI providers" && (
                 <AIProviders signedIn={!!user} onUpdate={() => void reload()} />
               )}
+              {view === "Plan & billing" && <BillingPage plan={workspace.plan} onRefresh={() => void reload()} signedIn={!!user}/>}
               {view === "Settings" && (
                 <div className="settings-layout">
                   <section className="panel settings-card">

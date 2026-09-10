@@ -8,18 +8,16 @@ import {
   sameOrigin,
 } from "@/lib/server";
 import { providerSettings } from "@/lib/ai";
+import { planFor } from "@/lib/billing";
 export async function POST(req: Request) {
   try {
     sameOrigin(req);
     const u = await identity();
     const brief = briefSchema.parse(await req.json());
     const db = database();
-    const count = await db
-      .prepare("SELECT COUNT(*) as n FROM products WHERE owner=?")
-      .bind(u.userId)
-      .first<{ n: number }>();
-    if ((count?.n || 0) >= 200)
-      throw new ApiError("This workspace has reached its 200-product limit.");
+    const plan = await planFor(u.userId);
+    if (plan.used >= plan.limit)
+      throw new ApiError(`Your ${plan.tier === "free" ? "Free" : "Pro"} plan includes ${plan.limit} products.${plan.tier === "free" ? " Upgrade to Pro for 100 products." : " Your existing products remain available."}`, 403);
     const ai = await providerSettings(u.userId);
     const enabled = ai.connected[ai.config.textProvider];
     const id = crypto.randomUUID();
@@ -28,7 +26,7 @@ export async function POST(req: Request) {
     const statements = [
       db
         .prepare(
-          "INSERT INTO products (id,owner,slug,title,description,audience,format,price,color,content,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+          "INSERT INTO products (id,owner,slug,title,description,audience,format,price,color,content,status,created_at,updated_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM products WHERE owner=?) < ?",
         )
         .bind(
           id,
@@ -44,21 +42,24 @@ export async function POST(req: Request) {
           "draft",
           now,
           now,
+          u.userId,
+          plan.limit,
         ),
     ];
     if (enabled)
       statements.push(
         db
           .prepare(
-            "INSERT INTO generation (product_id,owner,brief,stage,status,lease,updated_at) VALUES (?,?,?,-1,?,0,?)",
+            "INSERT INTO generation (product_id,owner,brief,stage,status,lease,updated_at) SELECT ?,?,?,-1,?,0,? WHERE EXISTS (SELECT 1 FROM products WHERE id=?)",
           )
-          .bind(id, u.userId, JSON.stringify(brief), "queued", now),
+          .bind(id, u.userId, JSON.stringify(brief), "queued", now, id),
       );
     await db.batch(statements);
     const row = await db
       .prepare("SELECT * FROM products WHERE id=?")
       .bind(id)
       .first();
+    if (!row) throw new ApiError("Your product limit has been reached. Upgrade your plan to keep creating.",403);
     return Response.json({
       product: productFromRow(row!),
       mode: enabled ? "ai" : "starter",

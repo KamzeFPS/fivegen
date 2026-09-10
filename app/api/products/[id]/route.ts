@@ -1,5 +1,8 @@
 import { z } from "zod";
 import { briefSchema, contentSchema } from "@/lib/product";
+import { advancedCommerce, commerceSchema, defaultCommerce } from "@/lib/commerce";
+import { requirePro } from "@/lib/billing";
+import { validateRelated } from "@/lib/offers-server";
 import {
   ApiError,
   database,
@@ -18,6 +21,7 @@ const updateSchema = briefSchema.extend({
   status: z.enum(["draft", "published"]),
   content: contentSchema,
   whopUrl: z.string().max(1500).nullable().optional(),
+  commerce: commerceSchema.optional(),
 });
 export async function PATCH(
   req: Request,
@@ -27,8 +31,13 @@ export async function PATCH(
     sameOrigin(req);
     const u = await identity();
     const { id } = await params;
-    await ownedProduct(id, u.userId);
+    const existing = productFromRow(await ownedProduct(id, u.userId));
     const data = updateSchema.parse(await req.json());
+    const commerce=data.commerce||existing.commerce||defaultCommerce();
+    const commerceChanged=JSON.stringify(commerce)!==JSON.stringify(existing.commerce);
+    if(commerceChanged && advancedCommerce(commerce))await requirePro(u.userId);
+    if(commerceChanged)await validateRelated(u.userId,id,commerce);
+    if(commerce.billing!=="once" && data.price<0.5)throw new ApiError("Subscriptions need a price of at least $0.50.");
     const job = await database()
       .prepare("SELECT status FROM generation WHERE product_id=?")
       .bind(id)
@@ -62,7 +71,7 @@ export async function PATCH(
       );
     await database()
       .prepare(
-        "UPDATE products SET slug=?,title=?,description=?,audience=?,format=?,price=?,color=?,content=?,status=?,whop_url=?,updated_at=? WHERE id=? AND owner=?",
+        "UPDATE products SET slug=?,title=?,description=?,audience=?,format=?,price=?,color=?,content=?,status=?,whop_url=?,commerce=?,updated_at=? WHERE id=? AND owner=?",
       )
       .bind(
         data.slug,
@@ -75,6 +84,7 @@ export async function PATCH(
         JSON.stringify(data.content),
         data.status,
         data.whopUrl || null,
+        JSON.stringify(commerce),
         Date.now(),
         id,
         u.userId,
