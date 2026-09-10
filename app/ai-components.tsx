@@ -412,7 +412,9 @@ export function GenerationProgress({
       .then((d) => {
         if (!mounted.current) return;
         setJob(d.job);
-        if (d.job && ["queued"].includes(d.job.status)) void run();
+        // Only a newly created job starts automatically. Reopening a paused
+        // or partially completed product always requires an explicit resume.
+        if (d.job?.status === "queued" && d.job.stage === -1) void run();
         else if (d.job?.status === "running")
           setError(
             "A generation request is still processing. Wait a moment, then resume.",
