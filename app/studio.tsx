@@ -195,6 +195,8 @@ export default function Studio({
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [create, setCreate] = useState(false);
+  const [quickIdea, setQuickIdea] = useState("");
+  const [quickFormat, setQuickFormat] = useState<Brief["format"]>("Guide");
   const [brief, setBrief] = useState<Brief>({
     ...templates[0],
     title: "",
@@ -210,6 +212,9 @@ export default function Studio({
   const [publish, setPublish] = useState<Product | null>(null);
   const [help, setHelp] = useState(false);
   const [settingsName, setSettingsName] = useState("My studio");
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [view, editor?.id]);
   const reload = useCallback(async () => {
     if (!user) return;
     setError("");
@@ -531,7 +536,7 @@ export default function Studio({
   );
   return (
     <SidebarProvider
-      style={{ "--sidebar-width": "232px" } as React.CSSProperties}
+      style={{ "--sidebar-width": "224px" } as React.CSSProperties}
     >
       <Sidebar className="folio-sidebar">
         <SidebarHeader className="sidebar-head">
@@ -566,7 +571,7 @@ export default function Studio({
                   className="nav-button"
                 >
                   <Icon size={19} />
-                  <span>{name}</span>
+                  <span>{name === "Overview" ? "Studio" : name}</span>
                   {name === "My products" && (
                     <span className="nav-count">
                       {demo ? 3 : workspace.products.length}
@@ -604,10 +609,10 @@ export default function Studio({
             <span className="note-icon">
               <Sparkles size={19} />
             </span>
-            <strong>Big ideas start small.</strong>
-            <p>Your next product could be your best one yet.</p>
-            <button onClick={() => startCreate()}>
-              Make something great <ArrowUpRight size={15} />
+            <strong>Your creative engine</strong>
+            <p>Connect your models. Bring your ideas to life.</p>
+            <button onClick={() => navigate("AI providers")}>
+              Manage AI providers <ArrowUpRight size={15} />
             </button>
           </div>
         </SidebarContent>
@@ -640,9 +645,9 @@ export default function Studio({
         <header className="topbar">
           <div className="breadcrumbs">
             <SidebarTrigger className="mobile-menu" />
-            <span>Workspace</span>
+            <span>FiveGen Studio</span>
             <ChevronRight size={13} />
-            <strong>{editor ? "Product editor" : view}</strong>
+            <strong>{editor ? "Product editor" : view === "Overview" ? "Create & manage" : view}</strong>
           </div>
           <div className="topbar-actions">
             <span className="sample-switch">
@@ -666,7 +671,7 @@ export default function Studio({
             </span>
           </div>
         </header>
-        <main className="workspace-main" key={editor?.id || view}>
+        <main className={`workspace-main ${view === "Overview" && !editor ? "studio-home" : ""}`} key={editor?.id || view}>
           {error && (
             <div role="alert" className="error-banner">
               {error}
@@ -1048,19 +1053,18 @@ export default function Studio({
                 <div>
                   <div className="eyebrow">
                     {view === "Overview"
-                      ? "YOUR CREATIVE BUSINESS, AT A GLANCE"
+                      ? "FIVEGEN / CREATIVE WORKSPACE"
                       : view === "Templates"
-                        ? "A LITTLE INSPIRATION GOES A LONG WAY"
+                        ? "THE STARTING POINT"
                         : "YOUR CREATOR WORKSPACE"}
                   </div>
                   <h1>
                     {view === "Overview" ? (
                       <>
-                        Welcome to your studio
-                        <span className="orange-text">.</span>
+                        Your next creation starts here<span className="orange-text">.</span>
                       </>
                     ) : view === "Templates" ? (
-                      "Start with a spark."
+                      "Find your starting point."
                     ) : (
                       view
                     )}
@@ -1069,7 +1073,7 @@ export default function Studio({
                     {
                       {
                         Overview:
-                          "A little creativity. A lot of possibility. Let’s build what’s next.",
+                          "Create the product. Build the campaign. Make it yours.",
                         "My products":
                           "Everything you’ve created, all in one place.",
                         Templates:
@@ -1119,8 +1123,7 @@ export default function Studio({
               </div>
               {demo && (
                 <div className="demo-note">
-                  <span>EXAMPLE WORKSPACE</span>You’re exploring sample data.
-                  Your real sales will appear when you start selling.
+                  <span>DEMO WORKSPACE</span>Sample products and sales. Your workspace starts fresh.
                   <button onClick={() => setDemo(false)}>
                     View my workspace <ArrowRight size={14} />
                   </button>
@@ -1140,61 +1143,42 @@ export default function Studio({
                 </div>
               )}
               {view === "Overview" && (
-                <section className="create-banner">
-                  <div className="banner-copy">
-                    <span className="banner-eyebrow">
-                      <Sparkles size={14} />
-                      FROM A LITTLE IDEA TO YOUR NEXT BIG THING
-                    </span>
-                    <h2>
-                      You have the knowledge.
-                      <br />
-                      Let’s make it a product.
-                    </h2>
-                    <p>
-                      Guides, courses, templates, and more. Create something
-                      <br className="desktop-break" /> worth sharing, in a space
-                      designed for you.
-                    </p>
-                    <button
-                      className="button dark"
-                      onClick={() => startCreate()}
-                    >
-                      <Sparkles size={16} />
-                      Create your next product
-                      <ArrowRight size={16} />
-                    </button>
+                <section className="creation-deck" aria-label="Create a digital product">
+                  <div className="creation-stage">
+                    <div className="stage-shade" />
+                    <div className="stage-content">
+                      <span className="stage-label"><Sparkles size={14} /> THE CREATION STUDIO</span>
+                      <h2>One idea.<br /><span>Endless possibilities.</span></h2>
+                      <p>Your expertise, transformed into something worth owning.</p>
+                      <form className="idea-composer" onSubmit={(event) => {
+                        event.preventDefault();
+                        startCreate({ ...templates[0], title: "", audience: "", description: quickIdea.trim(), format: quickFormat });
+                        setStep(1);
+                      }}>
+                        <label className="sr-only" htmlFor="quick-idea">Describe the product you want to create</label>
+                        <textarea id="quick-idea" value={quickIdea} onChange={(event) => setQuickIdea(event.target.value)} maxLength={12000} placeholder="Describe your next digital product…" rows={2} />
+                        <div className="composer-bottom">
+                          <Select value={quickFormat} onValueChange={(value) => setQuickFormat(value as Brief["format"])}>
+                            <SelectTrigger className="composer-format" aria-label="Product format"><SelectValue /></SelectTrigger>
+                            <SelectContent>{formats.map((format) => <SelectItem key={format} value={format}>{format}</SelectItem>)}</SelectContent>
+                          </Select>
+                          <button type="submit" className="button primary"><Sparkles size={16} /> Create product <ArrowUpRight size={16} /></button>
+                        </div>
+                      </form>
+                      <div className="stage-footnote"><span>YOUR IDEA</span><span>PRODUCT</span><span>CAMPAIGN</span><span>STOREFRONT</span></div>
+                    </div>
+                    <span className="stage-art-label">FIVEGEN ORIGINAL / 001</span>
                   </div>
-                  <div className="banner-types">
-                    <button onClick={() => startCreate({ ...templates[5] })}>
-                      <span className="type-icon peach">
-                        <BookOpen size={22} />
-                      </span>
-                      <span>
-                        <strong>Guides & ebooks</strong>
-                        <small>Your expertise, beautifully packaged.</small>
-                      </span>
-                      <ArrowUpRight size={19} />
+                  <div className="creation-shortcuts">
+                    <button className="shortcut-card shortcut-blue" onClick={() => startCreate({ ...templates[5] })}>
+                      <span className="shortcut-art" aria-hidden="true" />
+                      <span className="shortcut-top"><BookOpen size={18} /><span>01 / KNOWLEDGE</span></span>
+                      <span className="shortcut-bottom"><span><strong>Guides & ebooks</strong><small>Package your expertise</small></span><span className="shortcut-arrow"><ArrowUpRight size={19} /></span></span>
                     </button>
-                    <button onClick={() => startCreate({ ...templates[0] })}>
-                      <span className="type-icon purple">
-                        <Layers3 size={22} />
-                      </span>
-                      <span>
-                        <strong>Templates & toolkits</strong>
-                        <small>A head start someone will thank you for.</small>
-                      </span>
-                      <ArrowUpRight size={19} />
-                    </button>
-                    <button onClick={() => startCreate({ ...templates[1] })}>
-                      <span className="type-icon mint">
-                        <Zap size={22} />
-                      </span>
-                      <span>
-                        <strong>Courses & challenges</strong>
-                        <small>Small lessons. Lasting impact.</small>
-                      </span>
-                      <ArrowUpRight size={19} />
+                    <button className="shortcut-card shortcut-chrome" onClick={() => startCreate({ ...templates[0] })}>
+                      <span className="shortcut-art" aria-hidden="true" />
+                      <span className="shortcut-top"><Layers3 size={18} /><span>02 / SYSTEMS</span></span>
+                      <span className="shortcut-bottom"><span><strong>Templates & toolkits</strong><small>Create a better starting point</small></span><span className="shortcut-arrow"><ArrowUpRight size={19} /></span></span>
                     </button>
                   </div>
                 </section>
@@ -1270,7 +1254,7 @@ export default function Studio({
                       <div className="panel-heading">
                         <div>
                           <h2>Revenue overview</h2>
-                          <p>Your ideas are going places.</p>
+                          <p>Sales performance over time</p>
                         </div>
                         <span className="chart-key">
                           <i />
@@ -1302,19 +1286,19 @@ export default function Studio({
                               >
                                 <stop
                                   offset="0%"
-                                  stopColor="#f36a3c"
+                                  stopColor="#dbff73"
                                   stopOpacity={0.2}
                                 />
                                 <stop
                                   offset="95%"
-                                  stopColor="#f36a3c"
+                                  stopColor="#dbff73"
                                   stopOpacity={0.005}
                                 />
                               </linearGradient>
                             </defs>
                             <CartesianGrid
                               vertical={false}
-                              stroke="#efefef"
+                              stroke="#2b2b30"
                               strokeDasharray="4 5"
                             />
                             <XAxis
@@ -1322,13 +1306,13 @@ export default function Studio({
                               axisLine={false}
                               tickLine={false}
                               minTickGap={44}
-                              tick={{ fill: "#92928f", fontSize: 12 }}
+                              tick={{ fill: "#9595a1", fontSize: 12 }}
                               dy={10}
                             />
                             <YAxis
                               axisLine={false}
                               tickLine={false}
-                              tick={{ fill: "#92928f", fontSize: 12 }}
+                              tick={{ fill: "#9595a1", fontSize: 12 }}
                               tickFormatter={(v) =>
                                 v >= 1000 ? `$${v / 1000}k` : `$${v}`
                               }
@@ -1336,7 +1320,9 @@ export default function Studio({
                             />
                             <Tooltip
                               contentStyle={{
-                                border: "1px solid #eee",
+                                border: "1px solid #3a3a40",
+                                background: "#202024",
+                                color: "#f3f3f5",
                                 borderRadius: 12,
                                 fontSize: 13,
                               }}
@@ -1348,7 +1334,7 @@ export default function Studio({
                             <Area
                               type="monotone"
                               dataKey="revenue"
-                              stroke="#f16b42"
+                              stroke="#dbff73"
                               fill="url(#revenueGradient)"
                               strokeWidth={2.5}
                               animationDuration={900}
@@ -1367,7 +1353,7 @@ export default function Studio({
                       <div className="panel-heading">
                         <div>
                           <h2>Recent sales</h2>
-                          <p>Good things, coming in.</p>
+                          <p>Your latest transactions</p>
                         </div>
                         <button
                           className="icon-button"
@@ -2166,7 +2152,7 @@ export default function Studio({
           </button>
         </DialogContent>
       </Dialog>
-      <Toaster position="bottom-right" richColors closeButton />
+      <Toaster theme="dark" position="bottom-right" richColors closeButton />
     </SidebarProvider>
   );
 }

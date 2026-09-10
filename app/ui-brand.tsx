@@ -6,7 +6,7 @@ export function Brand() {
       <span className="brand-symbol">
         <Layers3 size={22} strokeWidth={2.5} />
       </span>
-      FiveGen<span className="brand-period">.</span>
+      FiveGen
     </span>
   );
 }
@@ -19,6 +19,7 @@ export function Cover({
 }) {
   return (
     <div className={`product-cover ${product.color} ${large ? "large" : ""}`}>
+      <div className="cover-art" aria-hidden="true" />
       <div className="cover-top">
         <span>FIVEGEN STUDIO</span>
         <ArrowUpRight size={17} />
@@ -26,9 +27,7 @@ export function Cover({
       <div className="cover-title">{product.title}</div>
       <div className="cover-bottom">
         <span>{product.format.toUpperCase()}</span>
-        <span className="cover-orbit" aria-hidden="true">
-          ✳
-        </span>
+        <span className="cover-edition">FG / EDITION 01</span>
       </div>
     </div>
   );
