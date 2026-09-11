@@ -96,6 +96,7 @@ export const providers = sqliteTable("providers", {
   config: text("config").notNull().default("{}"),
 });
 export const generation = sqliteTable("generation", {
+  runId: text("run_id"),
   productId: text("product_id").primaryKey(),
   owner: text("owner").notNull(),
   brief: text("brief").notNull(),
@@ -107,7 +108,7 @@ export const generation = sqliteTable("generation", {
   updatedAt: integer("updated_at").notNull(),
 });
 export const wallets=sqliteTable("wallets",{
-  owner:text("owner").primaryKey(),starter:integer("starter").notNull().default(1200),included:integer("included").notNull().default(0),purchased:integer("purchased").notNull().default(0),cycle:text("cycle").notNull().default(""),expires:integer("expires").notNull().default(0),
+  owner:text("owner").primaryKey(),starter:integer("starter").notNull().default(0),included:integer("included").notNull().default(0),purchased:integer("purchased").notNull().default(0),cycle:text("cycle").notNull().default(""),expires:integer("expires").notNull().default(0),
 });
 export const creditUsage=sqliteTable("credit_usage",{
   id:text("id").primaryKey(),owner:text("owner").notNull(),operation:text("operation").notNull(),cost:integer("cost").notNull(),state:text("state").notNull(),starterUsed:integer("starter_used").notNull(),includedUsed:integer("included_used").notNull(),purchasedUsed:integer("purchased_used").notNull(),cycle:text("cycle").notNull(),createdAt:integer("created_at").notNull(),
@@ -116,6 +117,12 @@ export const creditPurchases=sqliteTable("credit_purchases",{
   id:text("id").primaryKey(),owner:text("owner").notNull(),credits:integer("credits").notNull(),amount:integer("amount").notNull(),paymentIntent:text("payment_intent"),state:text("state").notNull().default("pending"),reversed:integer("reversed").notNull().default(0),createdAt:integer("created_at").notNull(),
 });
 export const platformReceipts=sqliteTable("platform_receipts",{id:text("id").primaryKey(),owner:text("owner").notNull(),amount:integer("amount").notNull(),createdAt:integer("created_at").notNull()});
+export const aiProductRuns=sqliteTable('ai_product_runs',{
+ id:text('id').primaryKey(),owner:text('owner').notNull(),productId:text('product_id').notNull(),period:text('period').notNull(),mode:text('mode').notNull(),state:text('state').notNull(),createdAt:integer('created_at').notNull(),
+},t=>[index('idx_ai_runs_month').on(t.owner,t.period)]);
+export const termsAcceptances=sqliteTable('terms_acceptances',{
+ id:text('id').primaryKey(),owner:text('owner').notNull(),version:text('version').notNull(),email:text('email').notNull(),acceptedAt:integer('accepted_at').notNull(),
+},t=>[index('idx_terms_owner_version').on(t.owner,t.version)]);
 export const aiBudget=sqliteTable("ai_budget",{day:text("day").primaryKey(),reservedMicros:integer("reserved_micros").notNull().default(0)});
 export const assets = sqliteTable(
   "assets",

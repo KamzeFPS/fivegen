@@ -11,6 +11,7 @@ import {
   sameOrigin,
 } from "@/lib/server";
 import {reserveCredits,refundCredits} from "@/lib/credits";
+import {claimProductRun,releaseUnstartedRun,productAllowance} from "@/lib/product-allowance";
 import {textCredits} from "@/lib/credit-policy";
 import {providerSettings} from "@/lib/ai";
 import { textGeneration, productSystem } from "@/lib/ai";
@@ -24,11 +25,12 @@ export async function GET(
     await ownedProduct(id, u.userId);
     const job = await database()
       .prepare(
-        "SELECT stage,status,error,updated_at FROM generation WHERE product_id=? AND owner=?",
+        "SELECT stage,status,error,updated_at,run_id FROM generation WHERE product_id=? AND owner=?",
       )
       .bind(id, u.userId)
       .first();
-    return Response.json({ job });
+    const run=job?.run_id?await database().prepare("SELECT mode FROM ai_product_runs WHERE id=? AND state<>'released'").bind(job.run_id).first():null;
+    return Response.json({ job, mode:run?.mode||null, allowance:await productAllowance(u.userId) });
   } catch (e) {
     return failure(e);
   }
@@ -68,9 +70,10 @@ export async function POST(
   let id = "",
     owner = "",
     locked = false;
-  let creditId="";
+  let creditId="",runId="";
   try {
     sameOrigin(req);
+    const input=z.object({allowCredits:z.boolean().default(false),maxStepCredits:z.number().int().min(0).max(160).optional()}).parse(await req.json().catch(()=>({})));
     const u = await identity();
     owner = u.userId;
     id = (await params).id;
@@ -109,9 +112,10 @@ export async function POST(
         409,
       );
     locked = true;
-    creditId=crypto.randomUUID();
     const ai=await providerSettings();
-    await reserveCredits(owner,creditId,"text",textCredits(ai.config.textProvider));
+    const run=await claimProductRun(owner,id,job!.run_id?String(job!.run_id):null,input.allowCredits);
+    runId=run.id;
+    if(run.mode==='credits'){const cost=textCredits(ai.config.textProvider);if(input.maxStepCredits!==undefined&&cost>input.maxStepCredits)throw new ApiError('The AI price changed. Review the updated credit cost before continuing.',402);creditId=crypto.randomUUID();await reserveCredits(owner,creditId,"text",cost);}
     const brief = briefSchema.parse(JSON.parse(String(job!.brief)));
     const siblings=await db.prepare("SELECT title,description FROM products WHERE owner=? AND id<>? ORDER BY created_at DESC LIMIT 12").bind(owner,id).all();
     const context = JSON.stringify(brief)+"\n"+generationDirection(brief,id)+"\nAvoid duplicating these existing products: "+JSON.stringify(siblings.results);
@@ -196,6 +200,7 @@ export async function POST(
         )
         .bind(stage + 1, done ? "completed" : "queued", Date.now(), id, owner),
       db.prepare("UPDATE credit_usage SET state='completed' WHERE id=? AND state='reserved'").bind(creditId),
+      db.prepare("UPDATE ai_product_runs SET state=? WHERE id=?").bind(done?'completed':'active',runId),
     ]);
     locked = false;
     return Response.json({
@@ -203,9 +208,11 @@ export async function POST(
       done,
       stage: stage + 1,
       total: p.content.sections.length + 1,
+      mode:run.mode,
     });
   } catch (e) {
     if(creditId)await refundCredits(creditId);
+    if(runId)await releaseUnstartedRun(runId);
     if (locked)
       await database()
         .prepare(

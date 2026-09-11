@@ -1,13 +1,13 @@
 import { env } from "cloudflare:workers";
 import { ApiError,database,failure,identity,ownedProduct,sameOrigin } from "@/lib/server";
 import { productAccess } from "@/lib/access";
-import { planFor } from "@/lib/billing";
+
 export async function GET(req:Request,{params}:{params:Promise<{id:string}>}){try{
  const {id}=await params,a=await database().prepare("SELECT * FROM uploads WHERE id=? AND status='completed'").bind(id).first();if(!a)throw new ApiError("File not found.",404);
  const p=await database().prepare("SELECT * FROM products WHERE id=?").bind(a.product_id).first();if(!p)throw new ApiError("Product not found.",404);
  const q=new URL(req.url).searchParams;
  const funnel=JSON.parse(String(p.commerce||"{}")).funnel;
- const publicVideo=p.status==="published"&&funnel?.enabled&&String(a.mime).startsWith('video/')&&funnel.blocks?.some((b:any)=>b.visible&&b.kind==="video"&&b.image===`/api/uploads/${id}`)&&(await planFor(String(p.owner))).tier==='pro';
+ const publicVideo=p.status==="published"&&funnel?.enabled&&String(a.mime).startsWith('video/')&&funnel.blocks?.some((b:any)=>b.visible&&b.kind==="video"&&b.image===`/api/uploads/${id}`);
  if(!publicVideo)await productAccess(p,q.get("token")||undefined);
  const bucket=(env as unknown as {BUCKET:R2Bucket}).BUCKET,size=Number(a.size);let range:{offset:number;length:number}|undefined;
  if(req.headers.has("range")){const m=/^bytes=(\d*)-(\d*)$/.exec(req.headers.get("range")!);if(!m||(!m[1]&&!m[2]))return new Response(null,{status:416,headers:{"Content-Range":`bytes */${size}`}});const start=m[1]?Number(m[1]):Math.max(0,size-Number(m[2])),end=m[1]?(m[2]?Number(m[2]):size-1):size-1;if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start>=size||end<start)return new Response(null,{status:416,headers:{"Content-Range":`bytes */${size}`}});range={offset:start,length:Math.min(end,size-1)-start+1};}

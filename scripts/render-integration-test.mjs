@@ -94,7 +94,14 @@ try {
   const spoof = await fetch(base + '/api/workspace', { headers: { 'oai-authenticated-user-id': owner,
     'oai-authenticated-user-email': 'admin@example.test', cookie: '__sites_local_auth=1', 'x-forwarded-host': 'evil.example', 'x-forwarded-proto': 'https' } });
   assert.equal(spoof.status, 401);
+  await json('/api/workspace','GET',undefined,true,428);
+  await json('/api/terms','POST',{accepted:false,version:'2026-09-11-credits'},true,400);
+  await json('/api/terms','POST',{accepted:true,version:'old'},true,400);
+  await json('/api/terms','POST',{accepted:true,version:'2026-09-11-credits'});
+  assert.equal((await json('/api/terms')).accepted,true);
   await json('/api/admin', 'GET', undefined, true, 403);
+  assert.equal((await fetch(base+'/terms')).status,200);
+  await json('/api/billing','POST',{action:'upgrade'},true,410);
   const workspace = await json('/api/workspace'); assert.equal(workspace.products.length, 0);
   await json('/api/products', 'POST', { title: 'Unavailable AI', description: 'This request must not turn into a generic starter product.',
     audience: 'Local test audience', format: 'Guide', color: 'orange', price: 0 }, true, 503);

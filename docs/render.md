@@ -26,7 +26,7 @@ If the page responds with 421 and the body `Unrecognized host` while `/healthz` 
 - AI creation requires a configured, unpaused provider. Unavailable AI returns an error without creating a product or consuming a product slot.
 - Manual creation is an explicit choice and creates one empty section without consuming AI credits. Blank sections and empty supporting files cannot be published. AI outlines stay incomplete until their content is written.
 - `STRIPE_MODE=live` requires a live Stripe secret for payment requests. Signed test webhooks are rejected by the live configuration. A separate staging deployment with its own database and `STRIPE_MODE=test` should be used for Stripe tests; test and live billing data must not share a database.
-- Paid product checkout requires a configured sales webhook and a connected account with charges and payouts enabled. Pro and credit checkout require the platform billing webhook. Missing setup produces actionable errors rather than simulated success.
+- Paid product checkout requires a configured sales webhook and a connected account with charges and payouts enabled. Credit purchases require the platform billing webhook. Missing setup produces actionable errors rather than simulated success.
 
 ## Enable payments and AI
 

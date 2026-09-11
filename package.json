@@ -17,7 +17,8 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "test:journey": "node scripts/journey-integration-test.mjs",
-    "test:referrals": "node scripts/referral-test.mjs"
+    "test:referrals": "node scripts/referral-test.mjs",
+    "test:credits": "node scripts/credits-test.mjs && node scripts/generation-credit-test.mjs && node scripts/commission-test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

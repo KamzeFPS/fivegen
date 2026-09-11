@@ -43,7 +43,11 @@ export async function requireChatGPTUser(
   returnTo: string,
 ): Promise<ChatGPTUser> {
   const user = await getChatGPTUser();
-  if (user) return user;
+  if (user) {
+    const {acceptedTerms}=await import('@/lib/terms');
+    if(!await acceptedTerms(user.userId))redirect('/welcome?return_to='+encodeURIComponent(safeRelativeReturnPath(returnTo)));
+    return user;
+  }
 
   redirect(chatGPTSignInPath(returnTo));
 }
@@ -58,7 +62,7 @@ export function chatGPTSignOutPath(returnTo = "/"): string {
   return `${SIGN_OUT_PATH}?return_to=${encodeURIComponent(safeReturnTo)}`;
 }
 
-function safeRelativeReturnPath(value: string): string {
+export function safeRelativeReturnPath(value: string): string {
   if (!value.startsWith("/") || value.startsWith("//")) return "/";
 
   let url: URL;

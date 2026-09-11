@@ -1,12 +1,11 @@
 import { env } from "cloudflare:workers";
 import { ApiError,database,failure,identity,ownedProduct,sameOrigin } from "@/lib/server";
-import { requirePro } from "@/lib/billing";
 import { storageLimit,uploadLimit } from "@/lib/experience";
 export async function GET(_req:Request,{params}:{params:Promise<{id:string}>}){try{const u=await identity(),{id}=await params;await ownedProduct(id,u.userId);const rows=await database().prepare("SELECT id,name,mime,size,created_at FROM uploads WHERE product_id=? AND owner=? AND status='completed' ORDER BY created_at DESC").bind(id,u.userId).all();return Response.json({uploads:rows.results});}catch(e){return failure(e);}}
 export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
   let uploadId="",key="";const bucket=(env as unknown as {BUCKET:R2Bucket}).BUCKET;
   try{
-    sameOrigin(req);const u=await identity(),{id}=await params;await ownedProduct(id,u.userId);await requirePro(u.userId);
+    sameOrigin(req);const u=await identity(),{id}=await params;await ownedProduct(id,u.userId);
     const mime=(req.headers.get("content-type")||"").split(";")[0],size=Number(req.headers.get("x-file-size")),name=(new URL(req.url).searchParams.get("name")||"Upload").slice(0,150);
     if(!["video/mp4","video/webm","application/pdf","image/jpeg","image/png","image/webp","text/plain","text/csv"].includes(mime))throw new ApiError("Upload an MP4, WebM, PDF, image, text or CSV file.");
     if(!Number.isSafeInteger(size)||size<1||size>uploadLimit||!req.body)throw new ApiError("Files must be between 1 byte and 100 MB.",413);

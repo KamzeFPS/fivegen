@@ -86,7 +86,7 @@ import {
 } from "./ai-components";
 import { Brand, Cover } from "./ui-brand";
 import { CreateProductFlow, GrowingTextarea, ProductPreview, PublishReview } from "./product-flow";
-import { BillingPage, SalesTools } from "./sales-tools";
+import { SalesTools } from "./sales-tools";
 import {DeliveryPanel} from "./delivery-panel";
 import {CRMPanel} from "./crm-panel";
 import {ReferralPanel} from "./referral-panel";
@@ -124,12 +124,12 @@ type View =
   | "Partners"
   | "Payments"
   | "Settings"
-  | "Plan & billing"
   | "AI & credits"
   | "Connect AI";
 type Workspace = {
   plan: PlanInfo;
   admin?:boolean; textCost?:number;
+  credits?:{products:{remaining:number}};
   products: Product[];
   orders: Order[];
   visits: { createdAt: number }[];
@@ -275,7 +275,7 @@ export default function Studio({
       }
     }
     if (new URLSearchParams(location.search).has("stripe")||new URLSearchParams(location.search).has("payments")) setView("Payments");
-    if (new URLSearchParams(location.search).has("billing")) setView("Plan & billing");
+    if (new URLSearchParams(location.search).has("billing")) setView("AI & credits");
     if (new URLSearchParams(location.search).has("connect")) setView("Connect AI");
   }, [user]);
   const commitNavigation = (v: View) => {
@@ -285,7 +285,7 @@ export default function Studio({
     setEditor(null);
   };
   const navigate = (v: View) => guardNavigation(() => commitNavigation(v));
-  async function setupFromEditor(view: "AI & credits" | "Payments" | "Plan & billing") {
+  async function setupFromEditor(view: "AI & credits" | "Payments") {
     if (!editor) return;
     const product = dirty ? await save(editor) : editor;
     if (!product) return;
@@ -299,7 +299,6 @@ export default function Studio({
     return false;
   };
   function startCreate(t?: Brief) {
-    if(user && workspace.plan.used>=workspace.plan.limit){navigate("Plan & billing");toast.info("You’ve reached your plan’s product limit.");return;}
     guardNavigation(() => {
     setCreationError("");
     if (!t && (brief.title || brief.description || brief.audience)) {
@@ -618,7 +617,6 @@ export default function Studio({
                 { name: "Payments", icon: CreditCard },
                 { name: "AI & credits", icon: Sparkles },
                 { name: "Connect AI", icon: Link2 },
-                { name: "Plan & billing", icon: Crown },
                 { name: "Settings", icon: Settings2 },
               ] as const
             ).map(({ name, icon: Icon }) => (
@@ -726,7 +724,7 @@ export default function Studio({
                   <TabsTrigger value="media">Marketing</TabsTrigger>
                 </TabsList>
               </Tabs>
-              {editTab === "delivery" ? <fieldset className="sales-tools-fieldset" disabled={busy||generating}><DeliveryPanel product={editor} onChange={setEditor} pro={workspace.plan.tier==="pro"} onUpgrade={()=>void setupFromEditor("Plan & billing")} onSave={async()=>!!(await save(editor))}/></fieldset> : editTab === "sales" ? <fieldset className="sales-tools-fieldset" disabled={busy||generating}><SalesTools product={editor} products={workspace.products} plan={workspace.plan} onChange={setEditor} onUpgrade={() => { guardNavigation(()=>{setReturnProduct(editor);commitNavigation("Plan & billing");}); }}/></fieldset> : editTab === "media" ? (
+              {editTab === "delivery" ? <fieldset className="sales-tools-fieldset" disabled={busy||generating}><DeliveryPanel product={editor} onChange={setEditor} onSave={async()=>!!(await save(editor))}/></fieldset> : editTab === "sales" ? <fieldset className="sales-tools-fieldset" disabled={busy||generating}><SalesTools product={editor} products={workspace.products} onChange={setEditor}/></fieldset> : editTab === "media" ? (
                 <MediaStudio product={editor} onSetup={() => void setupFromEditor("AI & credits")} />
               ) : editTab === "files" ? (
                 <><FileWorkbench product={editor} onChange={setEditor}/><ProductFiles product={editor}/></>
@@ -878,7 +876,7 @@ export default function Studio({
                           </label>
                         </div>
                         <div className="checkout-setup"><CreditCard size={20}/><div><strong>{workspace.stripeReady ? "Stripe checkout connected" : "Connect your checkout"}</strong><p>{workspace.stripeReady ? "Paid purchases unlock the product automatically." : "Connect Stripe to accept payments and automatically collect your plan’s commission."}</p></div><button type="button" className="button secondary" onClick={() => void setupFromEditor("Payments")}>{workspace.stripeReady ? "Manage" : "Connect Stripe"}<ArrowUpRight size={14}/></button></div>
-                        <div className="sales-note">FiveGen commission: {workspace.plan.tier==="pro"?"3%":"10%"} of each paid sale, plus Stripe processing fees.</div>
+                        <div className="sales-note">Selling fees are explained in our <a href="/terms#selling-fees" target="_blank" rel="noreferrer">Terms & Conditions</a>. Stripe processing fees apply.</div>
                         <label>
                           What customers get
                           <textarea
@@ -996,7 +994,7 @@ export default function Studio({
                   </aside>
                 </div>
               )}
-              <div className="editor-step-footer"><span>{({content:"Build the product, then shape how customers receive it.",delivery:"Attach your lessons and set up the customer experience.",storefront:"Set a price and connect checkout before you share.",sales:"Save your offer and page settings before sharing.",launch:"Your campaign copy is ready to edit and export.",files:"Review what your customers will receive.",media:"Ready to share your product?"} as Record<string,string>)[editTab]}</span><button className="button primary" disabled={busy || generating} onClick={async () => { if(dirty&&!(await save(editor)))return; const next=({content:"delivery",delivery:"storefront",storefront:workspace.plan.tier==="pro"?"sales":"launch",sales:"launch",launch:"files",files:"media"} as Record<string,string>)[editTab]; if (next) { setEditTab(next); window.scrollTo({top:0,behavior:"instant"}); } else setPublishReview(true); }}>{({content:"Set up delivery",delivery:"Continue to storefront",storefront:workspace.plan.tier==="pro"?"Build your offer":"Continue to launch kit",sales:"Continue to launch kit",launch:"Review product files",files:"Open marketing studio",media:"Review & publish"} as Record<string,string>)[editTab]}<ArrowRight size={16}/></button></div>
+              <div className="editor-step-footer"><span>{({content:"Build the product, then shape how customers receive it.",delivery:"Attach your lessons and set up the customer experience.",storefront:"Set a price and connect checkout before you share.",sales:"Save your offer and page settings before sharing.",launch:"Your campaign copy is ready to edit and export.",files:"Review what your customers will receive.",media:"Ready to share your product?"} as Record<string,string>)[editTab]}</span><button className="button primary" disabled={busy || generating} onClick={async () => { if(dirty&&!(await save(editor)))return; const next=({content:"delivery",delivery:"storefront",storefront:"sales",sales:"launch",launch:"files",files:"media"} as Record<string,string>)[editTab]; if (next) { setEditTab(next); window.scrollTo({top:0,behavior:"instant"}); } else setPublishReview(true); }}>{({content:"Set up delivery",delivery:"Continue to storefront",storefront:"Build your offer",sales:"Continue to launch kit",launch:"Review product files",files:"Open marketing studio",media:"Review & publish"} as Record<string,string>)[editTab]}<ArrowRight size={16}/></button></div>
             </>
           ) : (
             <>
@@ -1035,7 +1033,7 @@ export default function Studio({
                         CRM:"Follow leads, bookings, attendance, and sales.",
                         Partners:"Invite good people. Share the upside.",
                         Payments: "Get paid for what you know.",
-                        "Plan & billing": "The right tools for your next stage.",
+
                         "Connect AI": "Create and manage your products from the assistants you already use.",
                         Settings: "Make this space feel like yours.",
                         "AI & credits":
@@ -1462,7 +1460,7 @@ export default function Studio({
                 </>
               )}
               {view === "CRM" && (user?<CRMPanel/>:<button className="button primary" onClick={requireUser}>Sign in to view your CRM</button>)}
-              {view === "Partners" && (user?<ReferralPanel embedded products={workspace.products} pro={workspace.plan.tier==="pro"} onUpgrade={()=>navigate("Plan & billing")}/>:<button className="button primary" onClick={requireUser}>Sign in to manage partners</button>)}
+              {view === "Partners" && (user?<ReferralPanel embedded products={workspace.products}/>:<button className="button primary" onClick={requireUser}>Sign in to manage partners</button>)}
               {view === "Customers" && (
                 <section className="panel">
                   <div className="panel-heading">
@@ -1568,7 +1566,7 @@ export default function Studio({
                         </li>
                       </ul>
                       <div className="sales-note">
-                        Your plan: {workspace.plan.tier === "pro" ? "3%" : "10%"} FiveGen commission, plus Stripe processing fees.
+                        Review our <a href="/terms#selling-fees" target="_blank" rel="noreferrer">selling terms</a>. Stripe processing fees apply.
                       </div>
                       <button
                         className="button dark full"
@@ -1619,7 +1617,6 @@ export default function Studio({
               {view === "AI & credits" && (
                 <AIProviders signedIn={!!user} onUpdate={() => void reload()} />
               )}
-              {view === "Plan & billing" && <BillingPage plan={workspace.plan} onRefresh={() => void reload()} signedIn={!!user}/>}
               {view === "Connect AI" && <ConnectionsPanel signedIn={!!user}/>}
               {view === "Settings" && (
                 <div className="settings-layout">
@@ -1715,11 +1712,11 @@ export default function Studio({
               <span className="footer-logo">✳</span> A little idea can go a long
               way.
             </span>
-            <span>Made for makers. Built with FiveGen.</span>
+            <span><a href="/terms" target="_blank" rel="noreferrer">Terms & Conditions</a> · Built with FiveGen.</span>
           </footer>
         </main>
       </SidebarInset>
-      <CreateProductFlow textCost={workspace.textCost||10} open={create} onOpenChange={setCreate} brief={brief} onBriefChange={setBrief} step={step} onStepChange={setStep} busy={busy} aiReady={workspace.capabilities.ai} signedIn={!!user} error={creationError} generationMode={generationMode} onModeChange={setGenerationMode} onCreate={() => void generate(generationMode)} onConnectAI={() => { if (!user) { sessionStorage.setItem("folio-unsaved-brief", JSON.stringify(brief)); sessionStorage.setItem("fivegen-brief-destination", "AI & credits"); sessionStorage.setItem("fivegen-generation-mode", generationMode); } setCreate(false); setResumeBrief(true); commitNavigation("AI & credits"); }} />
+      <CreateProductFlow remainingProducts={workspace.credits?.products.remaining} textCost={workspace.textCost||10} open={create} onOpenChange={setCreate} brief={brief} onBriefChange={setBrief} step={step} onStepChange={setStep} busy={busy} aiReady={workspace.capabilities.ai} signedIn={!!user} error={creationError} generationMode={generationMode} onModeChange={setGenerationMode} onCreate={() => void generate(generationMode)} onConnectAI={() => { if (!user) { sessionStorage.setItem("folio-unsaved-brief", JSON.stringify(brief)); sessionStorage.setItem("fivegen-brief-destination", "AI & credits"); sessionStorage.setItem("fivegen-generation-mode", generationMode); } setCreate(false); setResumeBrief(true); commitNavigation("AI & credits"); }} />
       {editor && <>
         <ProductPreview product={editor} open={preview} onOpenChange={setPreview} />
         <PublishReview product={editor} open={publishReview} onOpenChange={setPublishReview} busy={busy} paymentsReady={!!workspace.stripeReady} onPayments={() => { setEditTab("storefront"); setPublishReview(false); }} onPublish={() => void publishProduct(editor)} />

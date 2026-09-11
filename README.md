@@ -5,33 +5,41 @@ FiveGen is a full-stack creator workspace for generating, editing, publishing, a
 ## What works
 
 - Authenticated, account-scoped product storage in Cloudflare D1; public storefront routes at `/p/{slug}`.
-- OpenAI Responses and Anthropic Messages adapters with selectable models and encrypted per-account API keys.
+- OpenAI Responses and Anthropic Messages adapters with encrypted, administrator-managed master API keys.
 - Resumable staged generation: product architecture, individual finished sections, supporting files, sales copy, launch emails, social posts, and image/video creative direction.
 - Creator-provided language, quality/depth, custom instructions, and arbitrary product briefs. Custom products can produce text, Markdown, CSV, HTML tools, JSON, JavaScript, CSS, and Python resources. Generated code is downloaded, never executed on the server.
 - Individual section refinement with optimistic concurrency protection.
 - fal.ai FLUX 1.1 Pro Ultra image generation and Kling 2.6 Pro five-second video generation with native audio. Queue IDs persist; assets are copied to private R2 storage on completion. A campaign button queues three image formats and one video.
 - HTML guide export (print to PDF), Markdown, a ZIP product bundle, and individual supporting-file downloads. Generated media downloads separately from the asset library.
 - Stripe Connect Standard onboarding, connected-account checkout, signed webhook verification, idempotent sale recording, and purchase-gated ZIP delivery.
-- Stripe is the sole payment provider for product storefronts, funnels, subscriptions, and credit purchases.
-- Revenue totals, charts, date ranges, customer records, and CSV export derived from recorded Stripe orders. Sample data is clearly labeled and separate from persisted sales. Gross revenue is not net of fees or refunds.
+- Stripe is the sole payment provider for product storefronts, funnels, customer subscriptions, and one-time credit purchases. FiveGen does not sell platform plans.
+- Revenue totals, charts, date ranges, customer records, and CSV export derived from recorded Stripe orders. Gross revenue is not net of fees or refunds.
+
+## Workspace access and AI billing
+
+All product, funnel, deal, delivery, booking, CRM, and referral tools are available to every account. Manual products are unlimited. Each verified account receives three complete AI product runs per UTC calendar month. Additional runs use credits per completed step; image/video generation and individual rewrites always use purchased credits. Credits are purchased once, never automatically replenished, and do not expire. Old paid-plan monthly grants have been retired; migration 0006 preserves valid unspent included credits as purchased balance.
+
+Creators must explicitly accept the current Terms & Conditions at `/welcome`. The version and verified identity are recorded server-side. Selling terms are disclosed at `/terms#selling-fees`.
+
+Regression checks: `npm run test:credits`, `npm run test:journey`, and the Render runtime/integration checks.
 
 ## Activation
 
 For the Render deployment target and root `render.yaml`, see [Render setup](docs/render.md). It includes its own production server, persistent storage, and Google sign-in; it starts with a fresh database.
 
 1. `CREDENTIAL_ENCRYPTION_KEY` must be a stable random server secret. It is already configured for this Site and in the ignored local environment. Do not rotate it without migrating encrypted keys.
-2. Sign in and open **AI providers**. Add an OpenAI or Anthropic API key for content, and a fal.ai API key for images and videos. The keys are encrypted with AES-GCM and account-bound additional data, and never returned from the settings API.
+2. Sign in and open **AI & credits** using the configured super-admin account. Add an OpenAI or Anthropic API key for content, and a fal.ai API key for images and videos. The keys are encrypted with AES-GCM and account-bound additional data, and never returned from the settings API.
 3. For payments, the platform owner must configure `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in the hosted Site environment. Configure a **connected-account** Stripe webhook at `/api/webhooks/stripe` for `checkout.session.completed` and `checkout.session.async_payment_succeeded`. Each creator then uses **Payments → Connect Stripe**. Use test credentials and verify a purchase before switching to live payments.
 4. The default product URL is `/p/{slug}`. For `product.yourdomain.com`, supply a domain you own, configure wildcard DNS and hosting, and set the server environment `PRODUCT_DOMAIN`. The middleware rewrites recognized product subdomains. Wildcard domain provisioning has not been performed.
 5. Product storefronts are externally shareable only when the Site's access permits public visitors. The creator workspace and write APIs require sign-in and enforce ownership independently of Site visibility.
 
 ## Scope and operational limits
 
-No AI keys or payment account credentials were supplied during implementation, so real model outputs, media quality, billing, and live purchases have not been end-to-end tested. The app fails clearly on missing credentials; structured starter content is explicitly labeled and does not pretend to be an AI result. Output quality depends on the brief, selected model, and editorial review.
+Real AI output quality and live payments require configured providers and an activated Stripe account. The app fails clearly on missing credentials; manual drafts do not pretend to be AI results. Output quality depends on the brief, selected model, and editorial review.
 
 Text generation proceeds while the product editor is open, saves after every stage, and can be resumed after a refresh or failure. In-flight requests have a lease to prevent concurrent runs. Media processing runs at the provider; reopening the asset library resumes status collection. This is not an always-running background job service. Provider keys are required for subsequent polling.
 
-This implementation does not provide native proprietary formats, rendered PPTX/DOCX, actual Notion databases, long-form video editing, automatic tax/accounting, subscriptions, refund reconciliation, or a billing plan for the FiveGen platform. Custom generated HTML tools and code should be reviewed and tested before resale. No guaranteed outcome or revenue is implied.
+This implementation does not provide native proprietary formats, rendered PPTX/DOCX, actual Notion databases, long-form video editing, or automatic tax/accounting. Customer product subscriptions remain available; FiveGen platform subscriptions have been retired. Custom generated HTML tools and code should be reviewed and tested before resale. No guaranteed outcome or revenue is implied.
 
 ## Validation
 

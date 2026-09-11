@@ -4,6 +4,7 @@ import type { Product } from "./product";
 import { readCommerce } from "./commerce";
 import { readExperience } from "./experience";
 import { mcpIdentity } from "./mcp-context";
+import {acceptedTerms} from './terms';
 export function binding(name: string): string {
   return String(
     (env as unknown as Record<string, unknown>)[name] ||
@@ -19,10 +20,11 @@ export function database() {
     );
   return db;
 }
-export async function identity() {
+export async function identity(options:{allowUnaccepted?:boolean}={}) {
   const user = mcpIdentity.getStore() || await getChatGPTUser();
   if (!user)
     throw new ApiError("Sign in to save and publish your products.", 401);
+  if(!options.allowUnaccepted&&!await acceptedTerms(user.userId))throw new ApiError('Review and accept the updated Terms & Conditions at /welcome before continuing.',428);
   return user;
 }
 export class ApiError extends Error {

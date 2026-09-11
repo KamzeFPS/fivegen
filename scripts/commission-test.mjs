@@ -14,17 +14,17 @@ const dependencies={checkoutReferral:async()=>null,captureLead:async()=>{},recor
 async function module(path,keys){globalThis.__commissionTest=dependencies;const source=fs.readFileSync(path,'utf8').replace(/^import .*;\r?\n/gm,'');const code=`const {${keys.join(',')}}=globalThis.__commissionTest;\n`+ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;return import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));}
 const route=await module('app/api/checkout/route.ts',Object.keys(dependencies));
 const call=expectedTotal=>route.POST(new Request('http://localhost/api/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:'test',expectedTotal})}));
-assert.equal((await call(4900)).status,200);assert.equal(forms.at(-1).fields['payment_intent_data[application_fee_amount]'],'490');assert.equal(forms.at(-1).account,'acct_test');
-tier='pro';assert.equal((await call(4900)).status,200);assert.equal(forms.at(-1).fields['payment_intent_data[application_fee_amount]'],'147');
-const intent=db.prepare('SELECT * FROM checkout_intents ORDER BY rowid DESC LIMIT 1').get();assert.equal(intent.platform_fee,147);
+assert.equal((await call(4900)).status,200);assert.equal(forms.at(-1).fields['payment_intent_data[application_fee_amount]'],'245');assert.equal(forms.at(-1).account,'acct_test');
+tier='pro';assert.equal((await call(4900)).status,200);assert.equal(forms.at(-1).fields['payment_intent_data[application_fee_amount]'],'245');
+const intent=db.prepare('SELECT * FROM checkout_intents ORDER BY rowid DESC LIMIT 1').get();assert.equal(intent.platform_fee,245);
 assert.equal((await call(1)).status,409);
-billing='month';assert.equal((await call(4900)).status,200);assert.equal(forms.at(-1).fields['subscription_data[application_fee_percent]'],'3');assert.ok(!('payment_intent_data[application_fee_amount]' in forms.at(-1).fields));
+billing='month';assert.equal((await call(4900)).status,200);assert.equal(forms.at(-1).fields['subscription_data[application_fee_percent]'],'5');assert.ok(!('payment_intent_data[application_fee_amount]' in forms.at(-1).fields));
 const payments=await module('lib/payments.ts',['ApiError','database','stripe','commissionAmount','commissionRate','planFor','recordReferral','captureLead']);
 const session={id:intent.session_id,metadata:{order_ref:intent.id,owner:intent.owner,product_id:intent.product_id},payment_status:'paid',mode:'payment',currency:'usd',amount_total:4900,customer_details:{email:'buyer@example.test'}};
-await payments.recordPayment(session,'acct_test');await payments.recordPayment(session,'acct_test');assert.equal(db.prepare('SELECT COUNT(*) n FROM orders').get().n,1);assert.equal(db.prepare('SELECT platform_fee FROM orders').get().platform_fee,147);
+await payments.recordPayment(session,'acct_test');await payments.recordPayment(session,'acct_test');assert.equal(db.prepare('SELECT COUNT(*) n FROM orders').get().n,1);assert.equal(db.prepare('SELECT platform_fee FROM orders').get().platform_fee,245);
 await assert.rejects(()=>payments.recordPayment({...session,amount_total:10},'acct_test'),e=>e.status===409);
 db.prepare("INSERT INTO sellers (owner,name,stripe_account,created_at) VALUES ('creator','Test','acct_test',0)").run();
-tier='free';await payments.updateRenewalCommission({id:'in_test',status:'draft',billing_reason:'subscription_cycle',subscription:'sub_test',total:4900},'acct_test');assert.equal(forms.at(-1).fields.application_fee_amount,'490');assert.equal(forms.at(-2).fields.application_fee_percent,'10');
-tier='pro';await payments.updateRenewalCommission({id:'in_test',status:'draft',billing_reason:'subscription_cycle',subscription:'sub_test',total:4900},'acct_test');assert.equal(forms.at(-1).fields.application_fee_amount,'147');
+tier='free';await payments.updateRenewalCommission({id:'in_test',status:'draft',billing_reason:'subscription_cycle',subscription:'sub_test',total:4900},'acct_test');assert.equal(forms.at(-1).fields.application_fee_amount,'245');assert.equal(forms.at(-2).fields.application_fee_percent,'5');
+tier='pro';await payments.updateRenewalCommission({id:'in_test',status:'draft',billing_reason:'subscription_cycle',subscription:'sub_test',total:4900},'acct_test');assert.equal(forms.at(-1).fields.application_fee_amount,'245');
 db.close();delete globalThis.__commissionTest;
-console.log('Passed: actual Checkout field generation for 10%/3% fees, subscription percentage, captured fee records, duplicate payment events, tamper checks, and renewal fee changes. Stripe transport mocked; no charges made.');
+console.log('Passed: actual Checkout field generation for flat 5% fees for every account, subscription percentage, captured fee records, duplicate payment events, tamper checks, and renewal fee changes. Stripe transport mocked; no charges made.');

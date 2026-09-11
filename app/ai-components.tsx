@@ -73,13 +73,13 @@ export function AIProviders({signedIn,onUpdate}:{signedIn:boolean;onUpdate:()=>v
   useEffect(()=>{void load();},[signedIn]);
   async function save(remove?:"openai"|"anthropic"|"fal"|"resend"){if(!s)return;setBusy(true);setError("");try{await request("/api/providers","PUT",{config:s.config,...keys,remove});setKeys({openai:"",anthropic:"",fal:"",resend:""});await load();onUpdate();toast.success("Platform AI settings saved");}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
   return <>{s?.admin&&<a href="#platform-ai" className="button secondary"><ShieldCheck size={16}/>Manage platform AI</a>}<CreditsPanel signedIn={signedIn}/>{error&&<p className="error-banner" role="alert">{error}</p>}{s?.admin&&<section id="platform-ai" className="panel admin-ai"><div className="panel-heading"><div><span className="eyebrow">SUPER ADMIN ONLY</span><h2>Platform AI & revenue</h2><p>Master credentials power all customer accounts. Keys are encrypted and never returned to the browser.</p></div><ShieldCheck size={24}/></div>
-    <div className="credit-balances">{[["Sales commissions",metrics?money(metrics.fees):"—"],["Credit sales",metrics?money(metrics.creditSales):"—"],["Pro subscriptions",metrics?money(metrics.subscriptions):"—"]].map(([label,value])=><div key={label}><span>{label}</span><strong>{value}</strong><small>Recorded gross receipts · before refunds and costs</small></div>)}</div>
+    <div className="credit-balances">{[["Sales commissions",metrics?money(metrics.fees):"—"],["Credit sales",metrics?money(metrics.creditSales):"—"]].map(([label,value])=><div key={label}><span>{label}</span><strong>{value}</strong><small>Recorded gross receipts · before refunds and costs</small></div>)}</div>
     <div className="form-two"><label>Content provider<Select value={s.config.textProvider} onValueChange={v=>setS({...s,config:{...s.config,textProvider:v as "openai"|"anthropic",textModel:v==="openai"?"gpt-4.1-mini":"claude-haiku-4-5"}})}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="openai">OpenAI · GPT-4.1 mini · 10 credits/step</SelectItem><SelectItem value="anthropic">Anthropic · Haiku 4.5 · 30 credits/step</SelectItem></SelectContent></Select></label><label>Daily AI spending cap · USD<input type="number" min={1} max={10000} value={s.config.dailyBudget} onChange={e=>setS({...s,config:{...s.config,dailyBudget:Number(e.target.value)}})}/></label></div>
     <p className="field-help">Today’s conservative cost reservations: $ {metrics?.todayBudgetUsed.toFixed(2)||"0.00"}. This cap includes failed calls and protects platform spending; reconcile actual usage with provider invoices.</p>
     <div className="admin-key-grid">{(["openai","anthropic","fal","resend"] as const).map(key=><label key={key}>{key==="resend"?"Resend email key":key==="fal"?"fal.ai master key":key==="openai"?"OpenAI master key":"Anthropic master key"}<span className="field-help">{s.connected[key]?"Connected · leave blank to keep":"Not connected"}</span><input type="password" autoComplete="new-password" value={keys[key]} placeholder="Paste master API key" onChange={e=>setKeys({...keys,[key]:e.target.value})}/>{s.connected[key]&&<button className="text-link" disabled={busy} onClick={()=>void save(key)}>Remove stored key</button>}</label>)}</div>
     <label>Invitation & booking sender email<input type="email" value={s.config.emailFrom||""} placeholder="hello@fivegen.ai" onChange={e=>setS({...s,config:{...s.config,emailFrom:e.target.value}})}/><small>Verify this sender’s domain in Resend. Invitations only send when an owner chooses Send invitation.</small></label><label className="admin-pause"><input type="checkbox" checked={s.config.paused} onChange={e=>setS({...s,config:{...s.config,paused:e.target.checked}})}/>Pause all new AI generation</label>
     <button className="button primary" disabled={busy||!s.secure} onClick={()=>void save()}>{busy?<Loader2 className="spin" size={16}/>:<ShieldCheck size={16}/>}Save platform settings</button>{!s.secure&&<p className="field-help">Encrypted credential storage needs to be configured on the server.</p>}
-    <details className="credit-history"><summary>Pricing and margin assumptions</summary><p>Pro: $29/month or $290/year with 1,000 monthly credits. Credit packs: $15 / 1,000, $35 / 2,500, $75 / 6,000. Free commissions: 10%; Pro: 3%. The most expensive included credit is budgeted at $0.005 of provider cost, so 1,000 fully used credits cost up to $5 at the checked rates.</p><p>At an illustrative 2.9% + $0.30 card fee, monthly Pro retains about $22.86 before Billing fees, infrastructure, support, refunds, tax and acquisition. This is contribution, not guaranteed profit. Free includes 1,200 one-time text credits: budget up to $6 acquisition cost per fully used allowance. A $60 Free-plan sale produces $6 commission. Review rates before changing models.</p><p>Sources: <a href="https://developers.openai.com/api/docs/models/gpt-4.1-mini" target="_blank" rel="noreferrer">OpenAI pricing</a> · <a href="https://fal.ai/models/fal-ai/flux-pro/v1.1-ultra" target="_blank" rel="noreferrer">fal images</a> · <a href="https://fal.ai/models/fal-ai/kling-video/v2.6/pro/text-to-video" target="_blank" rel="noreferrer">fal video</a> · <a href="https://stripe.com/pricing" target="_blank" rel="noreferrer">Stripe fees</a></p></details>
+    <details className="credit-history"><summary>Credit pricing and capacity</summary><p>One-time packs: $15 for 1,000 credits, $35 for 2,500, or $75 for 6,000. Three complete AI product runs per account are included each UTC month. The daily AI spending cap applies to all generation; monitor usage and provider costs as your audience grows.</p><p>There are no paid platform plans. Images, videos, and individual rewrites use purchased credits. AI products beyond the monthly allowance use credits per completed step.</p></details>
   </section>}</>;
 }
 type Job = {
@@ -116,11 +116,17 @@ export function GenerationProgress({
   const inProgress = useRef(false);
   const productRef = useRef(product);
   productRef.current = product;
-  async function run() {
+  const [creditConfirm,setCreditConfirm]=useState(false),[confirmedCost,setConfirmedCost]=useState(textCost),[allowance,setAllowance]=useState<{remaining:number}|null>(null),[paymentMode,setPaymentMode]=useState<string|null>(null);
+  async function run(allowCredits=false) {
     if (inProgress.current) return;
     if (!aiReady) { onSetup(); return; }
     inProgress.current = true;
     try {
+      const status=await request<{mode:string|null;allowance:{remaining:number}}>(`/api/products/${product.id}/generate`);
+      setAllowance(status.allowance);setPaymentMode(status.mode);
+      if(status.mode==='credits'||(status.mode!=='included'&&status.allowance.remaining===0)){
+        if(!allowCredits){const pricing=await request<{costs:{text:number}}>('/api/credits');setConfirmedCost(pricing.costs.text);setCreditConfirm(true);return;}
+      }
       if (!(await onBeforeGenerate())) return;
       stop.current = false;
       setRunning(true);
@@ -132,7 +138,7 @@ export function GenerationProgress({
           done: boolean;
           stage: number;
           total: number;
-        }>(`/api/products/${product.id}/generate`, "POST", {});
+        }>(`/api/products/${product.id}/generate`, "POST", {allowCredits,maxStepCredits:confirmedCost});
         if (!mounted.current) break;
         onProduct(d.product);
         setJob({
@@ -161,10 +167,11 @@ export function GenerationProgress({
   useEffect(() => {
     mounted.current = true;
     stop.current = false;
-    void request<{ job: Job | null }>(`/api/products/${product.id}/generate`)
+    void request<{ job: Job | null;mode:string|null;allowance:{remaining:number} }>(`/api/products/${product.id}/generate`)
       .then((d) => {
         if (!mounted.current) return;
         setJob(d.job);
+        setAllowance(d.allowance);setPaymentMode(d.mode);
         // Only a newly created job starts automatically. Reopening a paused
         // or partially completed product always requires an explicit resume.
         if (d.job?.status === "queued" && d.job.stage === -1) void run();
@@ -215,7 +222,7 @@ export function GenerationProgress({
               ? "Review your content, explore your supporting files, and generate your marketing visuals."
               : running
                 ? "Each completed step is saved. You can pause after the current step."
-                : aiReady ? `Content uses ${textCost} credits per completed step; up to ${textCost*12} for a complete product.` : "Add your expertise here, or view your AI credits to generate a complete product."}
+                : aiReady ? paymentMode==='included' ? 'This complete product is included in your monthly allowance. Resume at no credit cost.' : allowance&&allowance.remaining>0 ? `${allowance.remaining} of 3 included AI products remaining this month. Images and videos use separate credits.` : `Your next AI product uses ${textCost} credits per step. Review the cost before starting.` : "Add your expertise here, or view your AI credits to generate a complete product."}
           </p>
         </div>
         <div className="generation-actions">
@@ -266,6 +273,7 @@ export function GenerationProgress({
       {job && !completed && (
         <Progress className="generation-meter" value={percent} />
       )}
+      <AlertDialog open={creditConfirm} onOpenChange={setCreditConfirm}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Create with your credits?</AlertDialogTitle><AlertDialogDescription>This generation uses {confirmedCost} credits per completed step, up to {confirmedCost*(job&&job.stage>=0?Math.max(0,product.content.sections.length+1-job.stage):32)} credits for the remaining product. Most full products take 5–12 steps; longer formats can take 32. You can pause between steps. Failed steps return credits, and images and videos are separate.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep editing myself</AlertDialogCancel><AlertDialogAction onClick={()=>void run(true)}>Use credits & generate</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       {error && (
         <p role="alert" className="generation-error">
           {error}

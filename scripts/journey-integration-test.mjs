@@ -72,8 +72,8 @@ try {
     db.prepare('INSERT INTO render_sessions VALUES (?,?,?,?,?)').run(digest(token),id,email,name,now+3600000);
     identities[name]='fivegen-local-session='+token;
   }
-  db.prepare("INSERT INTO memberships (owner,status,period_end,updated_at) VALUES (?,'active',?,?)").run(owner,Math.floor(now/1000)+86400,now);
   await launch();
+  for(const session of Object.values(identities))await json('/api/terms','POST',{accepted:true,version:'2026-09-11-credits'},session);
   const products=[];
   const examples=[
     ['Guide','Scope a Design Proposal','A practical scope worksheet for independent designers.','Write deliverables, exclusions, two review rounds, and your decision maker.'],
@@ -175,9 +175,13 @@ try {
   await json('/api/referrals','PATCH',{action:'revoke',id:invitation.id},identities.partner,404);
   await json('/api/referrals','PATCH',{action:'revoke',id:invitation.id});assert.equal((await fetch(accepted.url,{redirect:'manual'})).status,404);
   const free=await json('/api/products','POST',{title:'Free creator guide',description:'A finished guide for testing the free-plan boundary.',audience:'Independent professionals',format:'Guide',price:0,generationMode:'manual'},identities.outsider);
-  await upload(free.product,videoBytes,'video/mp4',identities.outsider,403);
-  await json('/api/referrals','POST',{productId:free.product.id,email:'partner@example.test',percent:20},identities.outsider,403);
+  await upload(free.product,videoBytes,'video/mp4',identities.outsider,201);
+  await json('/api/referrals','POST',{productId:free.product.id,email:'partner@example.test',percent:20},identities.outsider,201);
+  for(let i=0;i<12;i++)await json('/api/products','POST',{title:'Unlimited manual draft '+i,description:'A manually written product with unlimited access.',audience:'Independent creators',format:'Guide',price:0,generationMode:'manual'},identities.outsider);
+  const allowance=(await json('/api/credits','GET',undefined,identities.outsider)).balance;
+  assert.equal(allowance.products.remaining,3);assert.equal(allowance.total,0);
+  assert.equal((await json('/api/workspace','GET',undefined,identities.outsider)).products.length,13);
   await stop();await launch();assert.equal((await json('/api/learn/'+course.slug,'GET',undefined,identities.buyer)).progress.length,1);
   assert.equal((await fetch(base+'/api/uploads/'+video.id,{headers:{cookie:identities.buyer}})).status,200);
-  console.log('Passed: eight distinct product formats, saved edits, template filenames, free checkout identity, member-only delivery and progress, video range/private access, VSL privacy, free-guide consent/deduplication, private discussions, booking/cancellation/attendance, CRM isolation, referral acceptance/revocation, Free-plan gates, and restart persistence. Isolated fixtures; no AI generation, email, charges, or transfers.');
+  console.log('Passed: eight distinct product formats, saved edits, template filenames, free checkout identity, member-only delivery and progress, video range/private access, VSL privacy, free-guide consent/deduplication, private discussions, booking/cancellation/attendance, CRM isolation, referral acceptance/revocation, unlimited products and all features without a plan, and restart persistence. Isolated fixtures; no AI generation, email, charges, or transfers.');
 } finally {await stop();storage?.close();rmSync(root,{recursive:true,force:true});}

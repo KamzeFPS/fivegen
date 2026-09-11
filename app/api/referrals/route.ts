@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { ApiError,database,failure,identity,ownedProduct,sameOrigin } from "@/lib/server";
-import { requirePro } from "@/lib/billing";
 import { emailReady,sendEmail } from "@/lib/messaging";
 import { hashInvitation,payReferral } from "@/lib/referrals";
 export async function GET(){try{const u=await identity(),db=database();const [invites,partnerships,commissions]=await Promise.all([
@@ -9,7 +8,7 @@ export async function GET(){try{const u=await identity(),db=database();const [in
  db.prepare("SELECT c.id,c.amount,c.percent,c.state,c.available_at,c.created_at,c.transfer_id,c.partner,p.title,r.email FROM referral_commissions c JOIN products p ON p.id=c.product_id JOIN referral_invites r ON r.id=c.invite_id WHERE c.owner=? OR c.partner=? ORDER BY c.created_at DESC LIMIT 1000").bind(u.userId,u.userId).all(),
  ]);return Response.json({invites:invites.results,partnerships:partnerships.results,commissions:commissions.results,userId:u.userId,emailReady:await emailReady()},{headers:{"Cache-Control":"private, no-store"}});}catch(e){return failure(e);}}
 export async function POST(req:Request){try{
- sameOrigin(req);const u=await identity(),d=z.object({productId:z.string().uuid(),email:z.string().trim().email().max(200),percent:z.number().min(1).max(80),send:z.boolean().default(true)}).parse(await req.json());await requirePro(u.userId);const p=await ownedProduct(d.productId,u.userId),email=d.email.toLowerCase();if(email===u.email.toLowerCase())throw new ApiError("Invite a partner using their own email address.");
+ sameOrigin(req);const u=await identity(),d=z.object({productId:z.string().uuid(),email:z.string().trim().email().max(200),percent:z.number().min(1).max(80),send:z.boolean().default(true)}).parse(await req.json());const p=await ownedProduct(d.productId,u.userId),email=d.email.toLowerCase();if(email===u.email.toLowerCase())throw new ApiError("Invite a partner using their own email address.");
  const db=database(),existing=await db.prepare("SELECT id FROM referral_invites WHERE product_id=? AND email=? AND status<>'revoked'").bind(d.productId,email).first();if(existing)throw new ApiError("This email already has an invitation. Revoke it before changing the agreed percentage.",409);
  const count=await db.prepare("SELECT COUNT(*) n FROM referral_invites WHERE owner=? AND created_at>?").bind(u.userId,Date.now()-3600000).first();if(Number(count?.n)>=30)throw new ApiError("You can send up to 30 partner invitations per hour.",429);
  const id=crypto.randomUUID(),token=crypto.randomUUID()+crypto.randomUUID(),code=crypto.randomUUID().replace(/-/g,'');
@@ -19,7 +18,7 @@ export async function POST(req:Request){try{
 }catch(e){return failure(e);}}
 export async function PATCH(req:Request){try{sameOrigin(req);const u=await identity(),d=z.discriminatedUnion('action',[z.object({action:z.literal('refresh'),id:z.string().uuid()}),z.object({action:z.literal('revoke'),id:z.string().uuid()}),z.object({action:z.literal('payout'),id:z.string().max(150)}),z.object({action:z.literal('accept'),token:z.string().min(50).max(150)})]).parse(await req.json());
  if(d.action==='refresh'){
- await requirePro(u.userId);const r=await database().prepare("SELECT r.*,p.title FROM referral_invites r JOIN products p ON p.id=r.product_id WHERE r.id=? AND r.owner=? AND r.status='pending'").bind(d.id,u.userId).first();if(!r)throw new ApiError('Only pending invitations can be replaced.',409);if(Date.now()-Number(r.created_at)<60000)throw new ApiError('Wait a minute before replacing this invitation link.',429);
+ const r=await database().prepare("SELECT r.*,p.title FROM referral_invites r JOIN products p ON p.id=r.product_id WHERE r.id=? AND r.owner=? AND r.status='pending'").bind(d.id,u.userId).first();if(!r)throw new ApiError('Only pending invitations can be replaced.',409);if(Date.now()-Number(r.created_at)<60000)throw new ApiError('Wait a minute before replacing this invitation link.',429);
  const token=crypto.randomUUID()+crypto.randomUUID(),url=new URL(req.url).origin+'/invite/'+token;
  const changed=await database().prepare("UPDATE referral_invites SET token_hash=?,expires_at=?,created_at=? WHERE id=? AND status='pending'").bind(await hashInvitation(token),Date.now()+14*86400000,Date.now(),r.id).run();if(!changed.meta.changes)throw new ApiError('This invitation was just accepted. Refresh your partners.',409);
  const sent=await sendEmail(String(r.email),'Your updated invitation: '+r.title,'You are invited to promote '+r.title+' with '+Number(r.percent)/100+'% commission on each customer’s first paid product purchase. Renewals, refunds, disputes and self-referrals are excluded. Eligible earnings have a 14-day hold. Accept using your invited email: '+url,'referral-refresh/'+token);

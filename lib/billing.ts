@@ -1,5 +1,5 @@
 import { ApiError, binding, database, stripe, stripeConfigured } from "./server";
-import { plans, type PlanInfo } from "./plans";
+import { type PlanInfo } from "./plans";
 
 export async function planFor(owner:string):Promise<PlanInfo>{
   const db=database();
@@ -7,13 +7,15 @@ export async function planFor(owner:string):Promise<PlanInfo>{
     db.prepare("SELECT * FROM memberships WHERE owner=?").bind(owner).first(),
     db.prepare("SELECT COUNT(*) as n FROM products WHERE owner=?").bind(owner).first<{n:number}>(),
   ]);
-  const active=!!row && ["active","trialing"].includes(String(row.status)) && Number(row.period_end)*1000>Date.now();
-  const tier=active?"pro":"free";
-  return {tier,limit:plans[tier].limit,used:count?.n||0,status:String(row?.status||"free"),interval:row?.interval as "month"|"year"|null||null,renewsAt:row?.period_end?Number(row.period_end)*1000:null,cancelAtPeriodEnd:!!row?.cancel_at_period_end,billingReady:stripeConfigured()&&!!binding("STRIPE_BILLING_WEBHOOK_SECRET"),hasCustomer:!!row?.customer_id};
+  return {tier:"free",limit:null,used:count?.n||0,status:String(row?.status||"free"),interval:row?.interval as "month"|"year"|null||null,renewsAt:row?.period_end?Number(row.period_end)*1000:null,cancelAtPeriodEnd:!!row?.cancel_at_period_end,billingReady:stripeConfigured()&&!!binding("STRIPE_BILLING_WEBHOOK_SECRET"),hasCustomer:!!row?.customer_id};
 }
-export async function requirePro(owner:string){const p=await planFor(owner);if(p.tier!=="pro")throw new ApiError("Upgrade to FiveGen Pro to use video uploads, communities, bookings, partners, funnels, deals, and subscriptions.",403);return p;}
 export async function syncMembership(subscription:Record<string,any>){
   if(subscription.metadata?.purpose!=="fivegen_pro" || !subscription.metadata?.owner) return;
+  // Retired platform plans must never renew, including an old checkout that
+  // completes after this release. Customer product subscriptions are separate.
+  if(['active','trialing','past_due','unpaid'].includes(subscription.status)&&!subscription.cancel_at_period_end){
+    subscription=await stripe(`subscriptions/${subscription.id}`,new URLSearchParams({cancel_at_period_end:'true'}));
+  }
   const owner=String(subscription.metadata.owner);
   const existing=await database().prepare("SELECT subscription_id FROM memberships WHERE owner=?").bind(owner).first();
   // Ignore cancellation events for an older subscription after a replacement.

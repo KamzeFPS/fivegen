@@ -8,7 +8,7 @@ import {
   sameOrigin,
 } from "@/lib/server";
 import { providerSettings } from "@/lib/ai";
-import { planFor } from "@/lib/billing";
+
 import {readExperience} from "@/lib/experience";
 import { z } from "zod";
 export async function POST(req: Request) {
@@ -18,9 +18,6 @@ export async function POST(req: Request) {
     const input = briefSchema.extend({generationMode:z.enum(["auto","manual"]).default("auto")}).parse(await req.json());
     const brief = briefSchema.parse(input);
     const db = database();
-    const plan = await planFor(u.userId);
-    if (plan.used >= plan.limit)
-      throw new ApiError(`Your ${plan.tier === "free" ? "Free" : "Pro"} plan includes ${plan.limit} products.${plan.tier === "free" ? " Upgrade to Pro for 100 products." : " Your existing products remain available."}`, 403);
     const ai = await providerSettings(u.userId);
     const enabled = input.generationMode !== "manual" && ai.connected[ai.config.textProvider]&&!ai.config.paused;
     if (input.generationMode !== "manual" && !enabled)
@@ -31,7 +28,7 @@ export async function POST(req: Request) {
     const statements = [
       db
         .prepare(
-          "INSERT INTO products (id,owner,slug,title,description,audience,format,price,color,content,status,created_at,updated_at,experience) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM products WHERE owner=?) < ?",
+          "INSERT INTO products (id,owner,slug,title,description,audience,format,price,color,content,status,created_at,updated_at,experience) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         )
         .bind(
           id,
@@ -47,9 +44,7 @@ export async function POST(req: Request) {
           "draft",
           now,
           now,
-          JSON.stringify(readExperience(plan.tier==="pro"?{community:{enabled:brief.format==="Community"},booking:{enabled:brief.format==="Coaching session"}}:{})),
-          u.userId,
-          plan.limit,
+          JSON.stringify(readExperience({community:{enabled:brief.format==="Community"},booking:{enabled:brief.format==="Coaching session"}})),
         ),
     ];
     if (enabled)
@@ -65,7 +60,7 @@ export async function POST(req: Request) {
       .prepare("SELECT * FROM products WHERE id=?")
       .bind(id)
       .first();
-    if (!row) throw new ApiError("Your product limit has been reached. Upgrade your plan to keep creating.",403);
+    if (!row) throw new ApiError("Your draft could not be saved. Please try again.",403);
     return Response.json({
       product: productFromRow(row!),
       mode: enabled ? "ai" : "manual",

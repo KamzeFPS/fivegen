@@ -6,8 +6,7 @@ export async function quoteProduct(slug:string,quantity=1,code="",addUpsell=fals
   if(!row)throw new ApiError("This product is unavailable.",404);
   const product=productFromRow(row),plan=await planFor(String(row.owner));
   const stored=product.commerce||defaultCommerce();
-  if(stored.billing!=="once" && plan.tier!=="pro")throw new ApiError("This subscription is temporarily unavailable. Please contact the creator.",409);
-  const commerce=plan.tier==="pro"?stored:defaultCommerce();
+  const commerce=stored;
   const related:OfferProduct[]=[];
   for(const id of new Set([commerce.deal.productId,commerce.upsell.productId].filter(Boolean))){
     const p=await database().prepare("SELECT * FROM products WHERE id=? AND owner=? AND status='published'").bind(id,row.owner).first();

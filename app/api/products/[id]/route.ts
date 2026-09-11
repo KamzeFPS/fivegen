@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { briefSchema, contentSchema, publishContentError } from "@/lib/product";
 import { advancedCommerce, commerceSchema, defaultCommerce } from "@/lib/commerce";
-import { requirePro } from "@/lib/billing";
 import { validateRelated } from "@/lib/offers-server";
 import {
   ApiError,
@@ -39,7 +38,6 @@ export async function PATCH(
     if (data.status === "published" && contentError) throw new ApiError(contentError, 409);
     const commerce=data.commerce||existing.commerce||defaultCommerce();
     const experience=data.experience||existing.experience||experienceSchema.parse({});
-    if(JSON.stringify(experience)!==JSON.stringify(existing.experience)&&(experience.booking.enabled||experience.community.enabled))await requirePro(u.userId);
     const uploadIds=[...new Set([...data.content.sections.map(s=>s.videoId),experience.booking.confirmationVideoId,...commerce.funnel.blocks.map(b=>b.image.startsWith("/api/uploads/")?b.image.split("/").pop():null)].filter(Boolean))];
     for(const uploadId of uploadIds){const a=await database().prepare("SELECT id,mime FROM uploads WHERE id=? AND product_id=? AND owner=? AND status='completed'").bind(uploadId,id,u.userId).first();if(!a)throw new ApiError("A linked file is unavailable or belongs to another product. Upload it here first.",409);const usedAsVideo=data.content.sections.some(s=>s.videoId===uploadId)||experience.booking.confirmationVideoId===uploadId||commerce.funnel.blocks.some(b=>b.kind==='video'&&b.image===`/api/uploads/${uploadId}`);if(usedAsVideo&&!String(a.mime).startsWith('video/'))throw new ApiError("Choose an MP4 or WebM recording for your video.",409);}
     if(data.status==='published'){
@@ -53,7 +51,6 @@ export async function PATCH(
       if(commerce.funnel.kind==="free_guide"){const target=commerce.funnel.leadProductId;if(!target&&data.price!==0)throw new ApiError("Choose a published free guide to deliver from this funnel.",409);if(target){const guide=await database().prepare("SELECT id FROM products WHERE id=? AND owner=? AND price=0 AND status='published'").bind(target,u.userId).first();if(!guide)throw new ApiError("Your lead magnet must be a published free product.",409);}}
     }
     const commerceChanged=JSON.stringify(commerce)!==JSON.stringify(existing.commerce);
-    if(commerceChanged && advancedCommerce(commerce))await requirePro(u.userId);
     if(commerceChanged)await validateRelated(u.userId,id,commerce);
     if(commerce.billing!=="once" && data.price<0.5)throw new ApiError("Subscriptions need a price of at least $0.50.");
     const job = await database()

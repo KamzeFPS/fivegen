@@ -10,7 +10,7 @@ export async function POST(req:Request){try{
   sameOrigin(req);const s=selectionSchema.extend({expectedTotal:z.number().int().min(0).optional(),email:z.string().trim().email().max(200).optional(),name:z.string().trim().max(100).default("")}).parse(await req.json());
   const {row,quote,plan}=await quoteProduct(s.slug,s.quantity,s.code,s.addUpsell);
   const platformFee=commissionAmount(quote.total,plan.tier);
-  const referral=plan.tier==="pro"?await checkoutReferral(req,String(row.id),String(row.owner),quote.items[0].amount):null;
+  const referral=await checkoutReferral(req,String(row.id),String(row.owner),quote.items[0].amount);
   const referralFee=Number(referral?.fee||0),fee=platformFee+referralFee;
   if(quote.total===0&&!s.email)throw new ApiError("Enter your email to save access to your classroom, community or booking.");
   if(s.expectedTotal!==undefined&&s.expectedTotal!==quote.total)throw new ApiError("This offer changed. Refresh the page to review the current price before checkout.",409);

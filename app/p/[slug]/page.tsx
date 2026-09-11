@@ -5,7 +5,7 @@ import { Check, Layers3 } from "lucide-react";
 import { money } from "@/lib/product";
 import Purchase from "./purchase";
 import { quoteProduct } from "@/lib/offers-server";
-import { planFor } from "@/lib/billing";
+
 import { defaultCommerce } from "@/lib/commerce";
 export const dynamic = "force-dynamic";
 export default async function ProductPage({
@@ -22,8 +22,8 @@ export default async function ProductPage({
     .first();
   if (!row) notFound();
   const p = productFromRow(row);
-  const pro=(await planFor(String(row.owner))).tier==="pro";
-  const c=pro?p.commerce!:defaultCommerce();
+
+  const c=p.commerce!;
   const quote=await quoteProduct(slug).then(q=>q.quote).catch(()=>null);
   const available =
     p.price === 0 || !!(row.stripe_account && stripeConfigured() && binding("STRIPE_WEBHOOK_SECRET"));
