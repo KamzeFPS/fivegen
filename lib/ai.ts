@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ApiError, binding, database } from "./server";
 import {reserveAIBudget} from "./credits";
 export const providerSchema = z.object({
+  emailFrom:z.string().max(200).default("").refine(v=>!v||/^[^<>\s]+@[^<>\s]+\.[^<>\s]+$/.test(v), "Enter a verified sender email address."),
   dailyBudget:z.number().min(1).max(10000).default(10),
   paused:z.boolean().default(false),
   textProvider: z.enum(["openai", "anthropic"]).default("openai"),
@@ -72,18 +73,19 @@ export async function providerSettings(_owner?: string) {
       openai: !!row?.openai || !!binding("OPENAI_API_KEY"),
       anthropic: !!row?.anthropic || !!binding("ANTHROPIC_API_KEY"),
       fal: !!row?.fal || !!binding("FAL_KEY"),
+      resend: !!row?.resend || !!binding("RESEND_API_KEY"),
     },
     secure: !!binding("CREDENTIAL_ENCRYPTION_KEY"),
   };
 }
 export async function providerKey(
   owner: string,
-  provider: "openai" | "anthropic" | "fal",
+  provider: "openai" | "anthropic" | "fal" | "resend",
 ) {
   const s = await providerSettings(owner);
   const val = s.row?.[provider];
   if (val) return unseal(String(val), MASTER_OWNER);
-  const runtime=binding(provider==="fal"?"FAL_KEY":provider==="openai"?"OPENAI_API_KEY":"ANTHROPIC_API_KEY");
+  const runtime=binding(provider==="resend"?"RESEND_API_KEY":provider==="fal"?"FAL_KEY":provider==="openai"?"OPENAI_API_KEY":"ANTHROPIC_API_KEY");
   if(runtime)return runtime;
   throw new ApiError(
     "FiveGen AI is being configured by the administrator. Your saved work is safe.",

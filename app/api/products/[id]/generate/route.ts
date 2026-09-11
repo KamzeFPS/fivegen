@@ -1,3 +1,4 @@
+import {generationDirection} from "@/lib/product-recipes";
 import { z } from "zod";
 import { briefSchema, contentSchema, fileSchema } from "@/lib/product";
 import {
@@ -112,7 +113,8 @@ export async function POST(
     const ai=await providerSettings();
     await reserveCredits(owner,creditId,"text",textCredits(ai.config.textProvider));
     const brief = briefSchema.parse(JSON.parse(String(job!.brief)));
-    const context = JSON.stringify(brief);
+    const siblings=await db.prepare("SELECT title,description FROM products WHERE owner=? AND id<>? ORDER BY created_at DESC LIMIT 12").bind(owner,id).all();
+    const context = JSON.stringify(brief)+"\n"+generationDirection(brief,id)+"\nAvoid duplicating these existing products: "+JSON.stringify(siblings.results);
     const stage = Number(job!.stage);
     if (stage === -1) {
       const d = z
@@ -125,20 +127,22 @@ export async function POST(
               }),
             )
             .min(3)
-            .max(10),
+            .max(30),
           benefits: z.array(z.string().max(300)).min(3).max(8),
         })
         .parse(
           await textGeneration(
             owner,
             productSystem,
-            `Design the complete architecture of this digital product. Creator brief: ${context}. The format can be any digital product, including guides, lesson systems, spreadsheets, calculators, scripts, checklists, business systems, or creative resources. Choose 4–8 substantive sections that actually fit the requested deliverable. Return JSON: {"sections":[{"title":"...","objective":"Detailed contents and intended outcomes"}],"benefits":["..."]}. No vague filler.`,
+            `Design the complete architecture of this digital product. Creator brief: ${context}. The format can be any digital product, including guides, lesson systems, spreadsheets, calculators, scripts, checklists, business systems, or creative resources. Follow the format-specific architecture above. For challenges use exactly the requested number of days. For coaching use three resources: preparation, the agenda for ONE human-delivered session, and follow-up. For template kits use 3–6 tools. Otherwise choose 4–8 substantive units that fit the deliverable. Return JSON: {"sections":[{"title":"...","objective":"Detailed contents and intended outcomes"}],"benefits":["..."]}. No vague filler.`,
             5000,
           ),
         );
+      if(brief.format==='Challenge'&&d.sections.length!==(brief.duration||7))throw new ApiError('The generated plan did not match your requested number of days. Retry to correct the outline.',502);
       p.content = {
         ...p.content,
         sections: d.sections.map((s) => ({
+          id:crypto.randomUUID(),
           title: s.title,
           body: "",
           objective: s.objective,
@@ -148,12 +152,12 @@ export async function POST(
     } else if (stage < p.content.sections.length) {
       const s = p.content.sections[stage];
       const d = z
-        .object({ body: z.string().min(800).max(18000) })
+        .object({ body: z.string().min(300).max(18000) })
         .parse(
           await textGeneration(
             owner,
             productSystem,
-            `Write the finished, publication-ready content for section ${stage + 1} of this product. Brief: ${context}. Full table of contents: ${p.content.sections.map((s) => s.title).join("; ")}. This section: ${JSON.stringify(s)}. Previous section summary: ${stage > 0 ? p.content.sections[stage - 1].body.slice(-1800) : "Introduction"}. Return JSON {"body":"Complete section content with clear paragraph breaks"}. Aim for ${brief.quality === "balanced" ? "400–650" : "700–1100"} useful words. Include concrete examples, step-by-step applications, common mistakes, and a relevant exercise or usable template. For software/tool products, explain usage and exact requirements; code deliverables will follow in the final step. Do not tell the creator to write the content. Produce it.`,
+            `Write the finished, publication-ready content for section ${stage + 1} of this product. Brief: ${context}. Full table of contents: ${p.content.sections.map((s) => s.title).join("; ")}. This section: ${JSON.stringify(s)}. Previous section summary: ${stage > 0 ? p.content.sections[stage - 1].body.slice(-1800) : "Introduction"}. Return JSON {"body":"Complete section content with clear paragraph breaks"}. Match the unit to the format. A challenge day or template instruction can be 150–350 useful words; a course lesson should be focused and practice-based; a guide or playbook can be ${brief.quality === "balanced" ? "400–650" : "700–1100"} words. Include concrete examples, step-by-step applications, common mistakes, and a relevant exercise or usable template. For software/tool products, explain usage and exact requirements; code deliverables will follow in the final step. Do not tell the creator to write the content. Produce it.`,
             brief.quality === "balanced" ? 6500 : 10000,
           ),
         );

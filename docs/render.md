@@ -55,3 +55,7 @@ Stripe credentials for local use belong only in ignored `.env.render.local`, not
 The default `npm run dev` and `npm run build` continue to use the existing Sites/Cloudflare target. Both targets share source and the `dist` output directory; run the appropriate build before starting a target. The Render start command checks a build marker to prevent starting a Worker artifact accidentally.
 
 References: [Render Blueprint fields](https://render.com/docs/blueprint-spec), [persistent disk restrictions](https://render.com/docs/disks), [Google OpenID Connect setup](https://developers.google.com/identity/openid-connect/openid-connect).
+
+## Customer experience release
+
+See [customer-experience.md](customer-experience.md) for course uploads, communities, booking and free-guide funnels, CRM metrics, referral terms, and Resend setup. Add `charge.refunded` and `charge.dispute.created` to the connected-account sales webhook before enabling referral partnerships. Optional server settings: `RESEND_API_KEY` and `EMAIL_FROM`; the sender must be verified with Resend.

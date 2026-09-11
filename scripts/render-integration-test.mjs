@@ -139,7 +139,7 @@ try {
   const persistedImage = await fetch(base + '/api/assets/' + assetId + '/file', { headers: { cookie } });
   assert.equal(await persistedImage.text(), 'private image bytes');
   product = (await json('/api/products/' + product.id, 'PATCH', { ...product, price: 0 })).product;
-  const free = await json('/api/checkout', 'POST', { slug: product.slug }, false);
+  const free = await json('/api/checkout', 'POST', { slug: product.slug, email: 'buyer@example.test' }, false);
   const purchase = new URL(free.url);
   assert.equal(purchase.origin, base);
   const delivery = await fetch(base + '/api/download/' + product.slug + '?token=' + purchase.searchParams.get('token'));

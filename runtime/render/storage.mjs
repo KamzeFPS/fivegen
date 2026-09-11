@@ -100,11 +100,13 @@ export function createStorage(directory, migrations = resolve('drizzle')) {
         return { key, size };
       } finally { await rm(temporary, { force: true }); }
     },
-    async get(key) {
+    async delete(key) { await rm(objectPath(key), { force: true }); },
+    async get(key, options) {
       const file = objectPath(key);
       try {
         const info = await stat(file);
-        return { size: info.size, body: Readable.toWeb(createReadStream(file)) };
+        const range = options?.range;
+        return { size: info.size, body: Readable.toWeb(createReadStream(file, range ? { start: range.offset, end: Math.min(info.size - 1, range.offset + range.length - 1) } : undefined)) };
       } catch (error) { if (error.code === 'ENOENT') return null; throw error; }
     },
   };

@@ -87,6 +87,11 @@ import {
 import { Brand, Cover } from "./ui-brand";
 import { CreateProductFlow, GrowingTextarea, ProductPreview, PublishReview } from "./product-flow";
 import { BillingPage, SalesTools } from "./sales-tools";
+import {DeliveryPanel} from "./delivery-panel";
+import {CRMPanel} from "./crm-panel";
+import {ReferralPanel} from "./referral-panel";
+import {FileWorkbench} from "./file-workbench";
+import {recipeFor} from "@/lib/product-recipes";
 import { ConnectionsPanel } from "./connections-panel";
 import { freePlan, type PlanInfo } from "@/lib/plans";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription } from "@/components/ui/alert-dialog";
@@ -115,6 +120,8 @@ type View =
   | "Templates"
   | "Analytics"
   | "Customers"
+  | "CRM"
+  | "Partners"
   | "Payments"
   | "Settings"
   | "Plan & billing"
@@ -143,7 +150,8 @@ const nav = [
   { name: "My products", icon: Layers3 },
   { name: "Templates", icon: WandSparkles },
   { name: "Analytics", icon: TrendingUp },
-  { name: "Customers", icon: Users },
+  { name: "CRM", icon: Users },
+  { name: "Partners", icon: Link2 },
 ] as const;
 async function api<T>(url: string, method = "GET", body?: unknown): Promise<T> {
   const r = await fetch(url, {
@@ -266,7 +274,7 @@ export default function Studio({
         sessionStorage.removeItem("fivegen-generation-mode");
       }
     }
-    if (new URLSearchParams(location.search).has("stripe")) setView("Payments");
+    if (new URLSearchParams(location.search).has("stripe")||new URLSearchParams(location.search).has("payments")) setView("Payments");
     if (new URLSearchParams(location.search).has("billing")) setView("Plan & billing");
     if (new URLSearchParams(location.search).has("connect")) setView("Connect AI");
   }, [user]);
@@ -277,7 +285,7 @@ export default function Studio({
     setEditor(null);
   };
   const navigate = (v: View) => guardNavigation(() => commitNavigation(v));
-  async function setupFromEditor(view: "AI & credits" | "Payments") {
+  async function setupFromEditor(view: "AI & credits" | "Payments" | "Plan & billing") {
     if (!editor) return;
     const product = dirty ? await save(editor) : editor;
     if (!product) return;
@@ -693,7 +701,8 @@ export default function Studio({
                   <button className="button primary" disabled={busy || generating} onClick={() => setPublishReview(true)}><Globe size={16} />{editor.status === "published" ? "Publish changes" : "Publish"}</button>
                 </div>
               </div>
-              <GenerationProgress
+              {editTab==='content'&&<div className="product-path"><span className="eyebrow">{recipeFor(editor.format).label.toUpperCase()}</span><div>{recipeFor(editor.format).deliverables.map(item=><span key={item}><Check size={14}/>{item}</span>)}</div></div>}
+              <div hidden={editTab!=='content'&&!generating}><GenerationProgress
                 key={editor.id}
                 product={editor}
                 onProduct={receiveProduct}
@@ -703,36 +712,37 @@ export default function Studio({
                 onBeforeGenerate={async () => !dirty || !!(await save(editor))}
                 onRunningChange={setGenerating}
                 onComplete={() => void reload()}
-              />
+              /></div>
               <Tabs value={editTab} onValueChange={setEditTab}>
                 <TabsList className="editor-tabs">
-                  <TabsTrigger value="content">1. Content</TabsTrigger>
+                  <TabsTrigger value="content">Build</TabsTrigger>
+                  <TabsTrigger value="delivery">Delivery</TabsTrigger>
                   <TabsTrigger value="storefront">
-                    2. Storefront
+                    Storefront
                   </TabsTrigger>
-                  <TabsTrigger value="sales">3. Sales & funnel</TabsTrigger>
-                  <TabsTrigger value="launch">4. Launch kit</TabsTrigger>
-                  <TabsTrigger value="files">5. Files</TabsTrigger>
-                  <TabsTrigger value="media">6. Marketing</TabsTrigger>
+                  <TabsTrigger value="sales">Sales & funnel</TabsTrigger>
+                  <TabsTrigger value="launch">Launch kit</TabsTrigger>
+                  <TabsTrigger value="files">Product files</TabsTrigger>
+                  <TabsTrigger value="media">Marketing</TabsTrigger>
                 </TabsList>
               </Tabs>
-              {editTab === "sales" ? <fieldset className="sales-tools-fieldset" disabled={busy||generating}><SalesTools product={editor} products={workspace.products} plan={workspace.plan} onChange={setEditor} onUpgrade={() => { guardNavigation(()=>{setReturnProduct(editor);commitNavigation("Plan & billing");}); }}/></fieldset> : editTab === "media" ? (
+              {editTab === "delivery" ? <fieldset className="sales-tools-fieldset" disabled={busy||generating}><DeliveryPanel product={editor} onChange={setEditor} pro={workspace.plan.tier==="pro"} onUpgrade={()=>void setupFromEditor("Plan & billing")} onSave={async()=>!!(await save(editor))}/></fieldset> : editTab === "sales" ? <fieldset className="sales-tools-fieldset" disabled={busy||generating}><SalesTools product={editor} products={workspace.products} plan={workspace.plan} onChange={setEditor} onUpgrade={() => { guardNavigation(()=>{setReturnProduct(editor);commitNavigation("Plan & billing");}); }}/></fieldset> : editTab === "media" ? (
                 <MediaStudio product={editor} onSetup={() => void setupFromEditor("AI & credits")} />
               ) : editTab === "files" ? (
-                <ProductFiles product={editor} />
+                <><FileWorkbench product={editor} onChange={setEditor}/><ProductFiles product={editor}/></>
               ) : (
                 <div className="editor-layout">
                   {" "}
-                  <fieldset className="panel editor-panel" disabled={generating}>
+                  <fieldset className="panel editor-panel" disabled={generating||busy}>
                     {editTab === "content" ? (
                       <>
                         <div className="chapter-toolbar">
-                          <div className="chapter-select"><label htmlFor="chapter-select">Section {section + 1} of {editor.content.sections.length}</label><Select value={String(section)} onValueChange={(value) => setSection(Number(value))}><SelectTrigger id="chapter-select"><SelectValue /></SelectTrigger><SelectContent>{editor.content.sections.map((item,index) => <SelectItem key={index} value={String(index)}>{index + 1}. {item.title}</SelectItem>)}</SelectContent></Select></div>
-                          <div className="chapter-actions"><button className="icon-button" disabled={section === 0} aria-label="Previous section" onClick={() => setSection(section - 1)}><ArrowLeft size={17}/></button><button className="icon-button" disabled={section >= editor.content.sections.length - 1} aria-label="Next section" onClick={() => setSection(section + 1)}><ArrowRight size={17}/></button><button className="button secondary" disabled={generating || editor.content.sections.length >= 30} onClick={() => { setEditor({...editor, content:{...editor.content, sections:[...editor.content.sections,{title:"New section",body:"Add your knowledge here."}]}}); setSection(editor.content.sections.length); }}><Plus size={16}/><span>Add section</span></button></div>
+                          <div className="chapter-select"><label htmlFor="chapter-select">{recipeFor(editor.format).unit} {section + 1} of {editor.content.sections.length}</label><Select value={String(section)} onValueChange={(value) => setSection(Number(value))}><SelectTrigger id="chapter-select"><SelectValue /></SelectTrigger><SelectContent>{editor.content.sections.map((item,index) => <SelectItem key={index} value={String(index)}>{index + 1}. {item.title}</SelectItem>)}</SelectContent></Select></div>
+                          <div className="chapter-actions"><button className="icon-button" disabled={section === 0} aria-label="Previous section" onClick={() => setSection(section - 1)}><ArrowLeft size={17}/></button><button className="icon-button" disabled={section >= editor.content.sections.length - 1} aria-label="Next section" onClick={() => setSection(section + 1)}><ArrowRight size={17}/></button><button className="button secondary" disabled={generating || editor.content.sections.length >= 30} onClick={() => { setEditor({...editor, content:{...editor.content, sections:[...editor.content.sections,{id:crypto.randomUUID(),title:`New ${recipeFor(editor.format).unit.toLowerCase()}`,body:""}]}}); setSection(editor.content.sections.length); }}><Plus size={16}/><span>Add {recipeFor(editor.format).unit.toLowerCase()}</span></button></div>
                         </div>
-                        <div className="content-editor">
+                        <div className="content-editor"><div className="section-structure-actions"><button type="button" className="text-link" disabled={section===0} onClick={()=>{const sections=[...editor.content.sections];[sections[section-1],sections[section]]=[sections[section],sections[section-1]];setEditor({...editor,content:{...editor.content,sections}});setSection(section-1);}}>Move up</button><button type="button" className="text-link" disabled={section===editor.content.sections.length-1} onClick={()=>{const sections=[...editor.content.sections];[sections[section],sections[section+1]]=[sections[section+1],sections[section]];setEditor({...editor,content:{...editor.content,sections}});setSection(section+1);}}>Move down</button><button type="button" className="text-link" disabled={editor.content.sections.length<=1} onClick={()=>{const before=editor;setEditor({...editor,content:{...editor.content,sections:editor.content.sections.filter((_,i)=>i!==section)}});setSection(Math.max(0,section-1));toast.success("Section removed",{action:{label:"Undo",onClick:()=>setEditor(before)}});}}>Remove {recipeFor(editor.format).unit.toLowerCase()}</button></div>
                           <label>
-                            Section title
+                            {recipeFor(editor.format).unit} title
                             <input
                               value={
                                 editor.content.sections[section]?.title || ""
@@ -986,7 +996,7 @@ export default function Studio({
                   </aside>
                 </div>
               )}
-              <div className="editor-step-footer"><span>{({content:"Review your content, then shape your storefront.",storefront:"Set a price and connect checkout before you share.",sales:"Save your offer and page settings before sharing.",launch:"Your campaign copy is ready to edit and export.",files:"Review what your customers will receive.",media:"Ready to share your product?"} as Record<string,string>)[editTab]}</span><button className="button primary" disabled={busy || generating} onClick={() => { const next=({content:"storefront",storefront:workspace.plan.tier==="pro"?"sales":"launch",sales:"launch",launch:"files",files:"media"} as Record<string,string>)[editTab]; if (next) { setEditTab(next); window.scrollTo({top:0,behavior:"instant"}); } else setPublishReview(true); }}>{({content:"Continue to storefront",storefront:workspace.plan.tier==="pro"?"Build your offer":"Continue to launch kit",sales:"Continue to launch kit",launch:"Review product files",files:"Open marketing studio",media:"Review & publish"} as Record<string,string>)[editTab]}<ArrowRight size={16}/></button></div>
+              <div className="editor-step-footer"><span>{({content:"Build the product, then shape how customers receive it.",delivery:"Attach your lessons and set up the customer experience.",storefront:"Set a price and connect checkout before you share.",sales:"Save your offer and page settings before sharing.",launch:"Your campaign copy is ready to edit and export.",files:"Review what your customers will receive.",media:"Ready to share your product?"} as Record<string,string>)[editTab]}</span><button className="button primary" disabled={busy || generating} onClick={async () => { if(dirty&&!(await save(editor)))return; const next=({content:"delivery",delivery:"storefront",storefront:workspace.plan.tier==="pro"?"sales":"launch",sales:"launch",launch:"files",files:"media"} as Record<string,string>)[editTab]; if (next) { setEditTab(next); window.scrollTo({top:0,behavior:"instant"}); } else setPublishReview(true); }}>{({content:"Set up delivery",delivery:"Continue to storefront",storefront:workspace.plan.tier==="pro"?"Build your offer":"Continue to launch kit",sales:"Continue to launch kit",launch:"Review product files",files:"Open marketing studio",media:"Review & publish"} as Record<string,string>)[editTab]}<ArrowRight size={16}/></button></div>
             </>
           ) : (
             <>
@@ -1022,6 +1032,8 @@ export default function Studio({
                         Analytics:
                           "A closer look at how your products are performing.",
                         Customers: "The people who believe in what you make.",
+                        CRM:"Follow leads, bookings, attendance, and sales.",
+                        Partners:"Invite good people. Share the upside.",
                         Payments: "Get paid for what you know.",
                         "Plan & billing": "The right tools for your next stage.",
                         "Connect AI": "Create and manage your products from the assistants you already use.",
@@ -1449,6 +1461,8 @@ export default function Studio({
                   </div>
                 </>
               )}
+              {view === "CRM" && (user?<CRMPanel/>:<button className="button primary" onClick={requireUser}>Sign in to view your CRM</button>)}
+              {view === "Partners" && (user?<ReferralPanel embedded products={workspace.products} pro={workspace.plan.tier==="pro"} onUpgrade={()=>navigate("Plan & billing")}/>:<button className="button primary" onClick={requireUser}>Sign in to manage partners</button>)}
               {view === "Customers" && (
                 <section className="panel">
                   <div className="panel-heading">
@@ -1741,8 +1755,12 @@ export default function Studio({
                   <Layers3 size={17} />
                 </button>
               </div>
+              {publish.commerce?.funnel.enabled&&<>
+                <div className="share-link"><Link2 size={17}/><span>{typeof location!=="undefined"?location.host:""}/f/{publish.slug}</span><button className="icon-button" aria-label="Copy funnel link" onClick={()=>void navigator.clipboard.writeText(`${location.origin}/f/${publish.slug}`).then(()=>toast.success("Funnel link copied")).catch(()=>toast.error("Could not copy the link. Select the displayed address to copy it."))}><Layers3 size={17}/></button></div>
+                <a className="button primary full" href={`/f/${publish.slug}`} target="_blank" rel="noreferrer">Open your funnel<ArrowUpRight size={17}/></a>
+              </>}
               <a
-                className="button primary full"
+                className={`button ${publish.commerce?.funnel.enabled?'secondary':'primary'} full`}
                 href={`/p/${publish.slug}`}
                 target="_blank"
                 rel="noreferrer"

@@ -2,6 +2,7 @@ import { binding, database, failure, ApiError, stripe, assertStripeMode } from "
 import { recordPayment, recordRenewal, updateRenewalCommission } from "@/lib/payments";
 import {recordCreditPurchase,reverseCreditPurchase} from "@/lib/credits";
 import { syncMembership } from "@/lib/billing";
+import {handleReferralCharge} from "@/lib/referrals";
 export async function POST(req: Request) {
   try {
     const secrets = [binding("STRIPE_WEBHOOK_SECRET"),binding("STRIPE_BILLING_WEBHOOK_SECRET")].filter(Boolean);
@@ -40,6 +41,8 @@ export async function POST(req: Request) {
     const event = JSON.parse(body);
     assertStripeMode(event.livemode);
     const object=event.data.object;
+    if(event.account&&event.type==="charge.refunded")await handleReferralCharge(object,String(event.account));
+    if(event.account&&event.type==="charge.dispute.created"){const charge=await stripe(`charges/${object.charge}`,undefined,String(event.account));await handleReferralCharge(charge,String(event.account));}
     if(!event.account && event.type==="charge.refunded")await reverseCreditPurchase(object.id);
     if(!event.account && ["charge.dispute.created","charge.dispute.closed"].includes(event.type))await reverseCreditPurchase(String(object.charge));
     if(!event.account && event.type==="invoice.paid"){

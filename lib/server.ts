@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
 import type { Product } from "./product";
 import { readCommerce } from "./commerce";
+import { readExperience } from "./experience";
 import { mcpIdentity } from "./mcp-context";
 export function binding(name: string): string {
   return String(
@@ -62,6 +63,7 @@ export function productFromRow(r: Record<string, unknown>): Product {
     content: JSON.parse(String(r.content)),
     status: r.status as Product["status"],
     commerce: readCommerce(r.commerce),
+    experience: readExperience(r.experience),
     createdAt: Number(r.created_at),
     updatedAt: Number(r.updated_at),
   };
@@ -97,6 +99,7 @@ export async function stripe(
   path: string,
   body?: URLSearchParams,
   account?: string,
+  idempotencyKey?: string,
 ): Promise<Record<string, any>> {
   const key = binding("STRIPE_SECRET_KEY");
   if (!stripeConfigured())
@@ -110,6 +113,7 @@ export async function stripe(
       Authorization: `Bearer ${key}`,
       ...(body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
       ...(account ? { "Stripe-Account": account } : {}),
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
     },
     body: body?.toString(),
     signal: AbortSignal.timeout(30000),

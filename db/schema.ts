@@ -26,6 +26,7 @@ export const products = sqliteTable(
     content: text("content").notNull(),
     status: text("status").notNull().default("draft"),
     commerce: text("commerce").notNull().default("{}"),
+    experience: text("experience").notNull().default("{}"),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },
@@ -54,6 +55,8 @@ export const checkoutIntents = sqliteTable("checkout_intents", {
   items: text("items").notNull(), quantity: integer("quantity").notNull().default(1),
   platformFee: integer("platform_fee").notNull().default(0),
   sessionId: text("session_id").unique(), createdAt: integer("created_at").notNull(),
+  referralId: text("referral_id"), referralFee: integer("referral_fee").notNull().default(0),
+  email: text("email").notNull().default(""),
 });
 export const orders = sqliteTable(
   "orders",
@@ -89,6 +92,7 @@ export const providers = sqliteTable("providers", {
   openai: text("openai"),
   anthropic: text("anthropic"),
   fal: text("fal"),
+  resend: text("resend"),
   config: text("config").notNull().default("{}"),
 });
 export const generation = sqliteTable("generation", {
@@ -130,3 +134,28 @@ export const assets = sqliteTable(
   },
   (t) => [index("idx_assets_product_owner").on(t.productId, t.owner)],
 );
+
+export const uploads = sqliteTable("uploads", {
+ id:text("id").primaryKey(),owner:text("owner").notNull(),productId:text("product_id").notNull(),name:text("name").notNull(),mime:text("mime").notNull(),size:integer("size").notNull(),objectKey:text("object_key").notNull(),status:text("status").notNull().default("uploading"),createdAt:integer("created_at").notNull(),
+},t=>[index("idx_uploads_owner").on(t.owner),index("idx_uploads_product").on(t.productId)]);
+export const leads = sqliteTable("leads", {
+ id:text("id").primaryKey(),owner:text("owner").notNull(),productId:text("product_id").notNull(),email:text("email").notNull(),name:text("name").notNull(),marketing:integer("marketing").notNull().default(0),source:text("source").notNull(),createdAt:integer("created_at").notNull(),
+},t=>[index("idx_leads_owner_date").on(t.owner,t.createdAt)]);
+export const bookingSlots = sqliteTable("booking_slots", {
+ id:text("id").primaryKey(),owner:text("owner").notNull(),productId:text("product_id").notNull(),startsAt:integer("starts_at").notNull(),duration:integer("duration").notNull(),bookingId:text("booking_id"),
+},t=>[index("idx_slots_product_date").on(t.productId,t.startsAt)]);
+export const bookings = sqliteTable("bookings", {
+ id:text("id").primaryKey(),owner:text("owner").notNull(),productId:text("product_id").notNull(),slotId:text("slot_id").notNull(),userId:text("user_id").notNull(),email:text("email").notNull(),name:text("name").notNull(),status:text("status").notNull().default("confirmed"),notes:text("notes").notNull().default(""),createdAt:integer("created_at").notNull(),
+},t=>[index("idx_bookings_owner").on(t.owner),index("idx_bookings_user").on(t.userId,t.productId)]);
+export const lessonProgress = sqliteTable("lesson_progress", {
+ id:text("id").primaryKey(),productId:text("product_id").notNull(),userId:text("user_id").notNull(),lessonId:text("lesson_id").notNull(),completedAt:integer("completed_at").notNull(),
+},t=>[index("idx_progress_user_product").on(t.userId,t.productId)]);
+export const communityPosts = sqliteTable("community_posts", {
+ id:text("id").primaryKey(),productId:text("product_id").notNull(),userId:text("user_id").notNull(),name:text("name").notNull(),body:text("body").notNull(),parentId:text("parent_id"),pinned:integer("pinned").notNull().default(0),createdAt:integer("created_at").notNull(),
+},t=>[index("idx_posts_product_date").on(t.productId,t.createdAt)]);
+export const referralInvites = sqliteTable("referral_invites", {
+ id:text("id").primaryKey(),owner:text("owner").notNull(),productId:text("product_id").notNull(),email:text("email").notNull(),percent:integer("percent").notNull(),code:text("code").notNull().unique(),tokenHash:text("token_hash").notNull().unique(),userId:text("user_id"),status:text("status").notNull().default("pending"),expiresAt:integer("expires_at").notNull(),createdAt:integer("created_at").notNull(),
+},t=>[index("idx_referrals_owner").on(t.owner),index("idx_referrals_user").on(t.userId)]);
+export const referralCommissions = sqliteTable("referral_commissions", {
+ id:text("id").primaryKey(),orderId:text("order_id").notNull().unique(),inviteId:text("invite_id").notNull(),owner:text("owner").notNull(),partner:text("partner").notNull(),productId:text("product_id").notNull(),amount:integer("amount").notNull(),percent:integer("percent").notNull(),account:text("account").notNull(),paymentIntent:text("payment_intent").notNull(),state:text("state").notNull().default("pending"),availableAt:integer("available_at").notNull(),transferId:text("transfer_id"),payoutStartedAt:integer("payout_started_at"),createdAt:integer("created_at").notNull(),
+},t=>[index("idx_commissions_partner").on(t.partner,t.createdAt),index("idx_commissions_owner").on(t.owner,t.createdAt),index("idx_commissions_payment").on(t.account,t.paymentIntent)]);

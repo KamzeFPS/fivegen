@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Commerce } from "./commerce";
+import type { Experience } from "./experience";
 export const formats = [
   "Guide",
   "Mini course",
@@ -7,12 +8,16 @@ export const formats = [
   "Challenge",
   "Playbook",
   "Custom product",
+  "Coaching session",
+  "Community",
 ] as const;
 export const colors = ["orange", "violet", "blue", "green", "pink"] as const;
 export const sectionSchema = z.object({
   title: z.string().min(1).max(150),
   body: z.string().max(18000),
   objective: z.string().max(1500).optional(),
+  id: z.string().uuid().optional(),
+  videoId: z.string().uuid().optional(),
 });
 export const fileSchema = z.object({
   name: z
@@ -24,24 +29,26 @@ export const fileSchema = z.object({
   description: z.string().max(300),
 });
 export const contentSchema = z.object({
-  sections: z.array(sectionSchema).min(1).max(30),
+  sections: z.array(sectionSchema).min(1).max(30).refine(sections=>{const ids=sections.map(s=>s.id).filter(Boolean);return new Set(ids).size===ids.length;},"Each lesson must have its own identity."),
   benefits: z.array(z.string().max(300)).max(8),
   launch: z.string().max(50000),
-  files: z.array(fileSchema).max(20).optional(),
+  files: z.array(fileSchema).max(20).refine(files=>new Set(files.map(f=>f.name.toLowerCase())).size===files.length,"Use a unique name for every file.").optional(),
   imagePrompt: z.string().max(4000).optional(),
   videoPrompt: z.string().max(4000).optional(),
   salesCopy: z.string().max(15000).optional(),
 });
 export const briefSchema = z.object({
-  title: z.string().min(3).max(100),
-  description: z.string().min(12).max(12000),
-  audience: z.string().min(3).max(300),
+  title: z.string().trim().min(3).max(100),
+  description: z.string().trim().min(12).max(12000),
+  audience: z.string().trim().min(3).max(300),
   format: z.enum(formats),
   price: z.number().min(0).max(9999),
   color: z.enum(colors).default("orange"),
   instructions: z.string().max(12000).optional(),
   language: z.string().max(50).optional(),
   quality: z.enum(["balanced", "premium"]).optional(),
+  angle: z.string().max(2000).optional(),
+  duration: z.number().int().min(3).max(30).optional(),
 });
 export type Brief = z.infer<typeof briefSchema>;
 export type ProductContent = z.infer<typeof contentSchema>;
@@ -51,6 +58,7 @@ export type Product = Brief & {
   status: "draft" | "published";
   content: ProductContent;
   commerce?: Commerce;
+  experience?: Experience;
   createdAt: number;
   updatedAt: number;
 };
@@ -83,10 +91,10 @@ export function money(cents: number) {
   }).format(cents / 100);
 }
 export function emptyContent(b: Brief): ProductContent {
-  return { sections: [{ title: b.title, body: "" }], benefits: [], launch: "", files: [] };
+  return { sections: [{ id:crypto.randomUUID(), title: b.title, body: "" }], benefits: [], launch: "", files: [] };
 }
 export function publishContentError(content: ProductContent): string | null {
-  if (!content.sections.length || content.sections.some(section => !section.title.trim() || !section.body.trim()))
+  if (!content.sections.length || content.sections.some(section => !section.title.trim() || (!section.body.trim() && !section.videoId)))
     return "Add finished content to every section before publishing. Remove any unused sections.";
   if (content.files?.some(file => !file.content.trim()))
     return "Add content to every supporting file, or remove empty files before publishing.";

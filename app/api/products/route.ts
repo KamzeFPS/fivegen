@@ -9,6 +9,7 @@ import {
 } from "@/lib/server";
 import { providerSettings } from "@/lib/ai";
 import { planFor } from "@/lib/billing";
+import {readExperience} from "@/lib/experience";
 import { z } from "zod";
 export async function POST(req: Request) {
   try {
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
     const statements = [
       db
         .prepare(
-          "INSERT INTO products (id,owner,slug,title,description,audience,format,price,color,content,status,created_at,updated_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM products WHERE owner=?) < ?",
+          "INSERT INTO products (id,owner,slug,title,description,audience,format,price,color,content,status,created_at,updated_at,experience) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM products WHERE owner=?) < ?",
         )
         .bind(
           id,
@@ -46,6 +47,7 @@ export async function POST(req: Request) {
           "draft",
           now,
           now,
+          JSON.stringify(readExperience(plan.tier==="pro"?{community:{enabled:brief.format==="Community"},booking:{enabled:brief.format==="Coaching session"}}:{})),
           u.userId,
           plan.limit,
         ),

@@ -34,7 +34,8 @@ export async function PUT(req: Request) {
         openai: z.string().max(600).optional(),
         anthropic: z.string().max(600).optional(),
         fal: z.string().max(600).optional(),
-        remove: z.enum(["openai", "anthropic", "fal"]).optional(),
+        resend:z.string().max(600).optional(),
+        remove: z.enum(["openai", "anthropic", "fal", "resend"]).optional(),
       })
       .parse(await req.json());
     if(data.config.textModel!==(data.config.textProvider==="openai"?"gpt-4.1-mini":"claude-haiku-4-5"))throw new ApiError("Choose the matching model for this provider.");
@@ -43,8 +44,9 @@ export async function PUT(req: Request) {
       openai: current.row?.openai ?? null,
       anthropic: current.row?.anthropic ?? null,
       fal: current.row?.fal ?? null,
+      resend:current.row?.resend ?? null,
     };
-    for (const p of ["openai", "anthropic", "fal"] as const) {
+    for (const p of ["openai", "anthropic", "fal", "resend"] as const) {
       if (data.remove === p) keys[p] = null;
       else if (data[p]?.trim()) {
         const key = data[p]!.trim();
@@ -55,13 +57,14 @@ export async function PUT(req: Request) {
     }
     await database()
       .prepare(
-        "INSERT INTO providers (owner,openai,anthropic,fal,config) VALUES (?,?,?,?,?) ON CONFLICT(owner) DO UPDATE SET openai=excluded.openai,anthropic=excluded.anthropic,fal=excluded.fal,config=excluded.config",
+        "INSERT INTO providers (owner,openai,anthropic,fal,resend,config) VALUES (?,?,?,?,?,?) ON CONFLICT(owner) DO UPDATE SET openai=excluded.openai,anthropic=excluded.anthropic,fal=excluded.fal,resend=excluded.resend,config=excluded.config",
       )
       .bind(
         MASTER_OWNER,
         keys.openai,
         keys.anthropic,
         keys.fal,
+        keys.resend,
         JSON.stringify(data.config),
       )
       .run();

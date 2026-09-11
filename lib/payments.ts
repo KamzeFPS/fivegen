@@ -2,6 +2,8 @@ import { ApiError, database, stripe } from "./server";
 import type { OfferProduct } from "./commerce";
 import {commissionAmount,commissionRate} from "./credit-policy";
 import {planFor} from "./billing";
+import {recordReferral} from "./referrals";
+import {captureLead} from "./customer-journey";
 export type PurchasedItem=OfferProduct & {amount:number};
 export function orderItems(order:Record<string,unknown>):PurchasedItem[]{try{return JSON.parse(String(order.items||"[]"));}catch{return [];}}
 async function insertOrder(id:string,intent:Record<string,unknown>,email:string,provider:string,subscriptionId:string|null=null,customerId:string|null=null){
@@ -13,7 +15,7 @@ async function insertOrder(id:string,intent:Record<string,unknown>,email:string,
 export async function recordFreeOrder(ref:string){
   const intent=await database().prepare("SELECT * FROM checkout_intents WHERE id=?").bind(ref).first();
   if(!intent||intent.amount!==0||intent.mode!=="payment")throw new ApiError("This offer requires payment.",403);
-  return insertOrder(`free_${ref}`,intent,"Free download","free");
+  return insertOrder(`free_${ref}`,intent,String(intent.email||"Free download"),"free");
 }
 export async function recordPayment(
   session: Record<string, any>,
@@ -23,7 +25,12 @@ export async function recordPayment(
     const intent=await database().prepare("SELECT * FROM checkout_intents WHERE id=?").bind(session.metadata.order_ref).first();
     if(!intent||intent.account!==account||intent.owner!==session.metadata.owner||intent.product_id!==session.metadata.product_id||(intent.session_id&&intent.session_id!==session.id))throw new ApiError("Payment could not be matched to this offer.",403);
     if(session.payment_status!=="paid"||session.currency!=="usd"||session.mode!==intent.mode||Number(session.amount_total)!==Number(intent.amount))throw new ApiError("Payment has not completed or its amount could not be verified.",409);
-    return insertOrder(session.id,intent,session.customer_details?.email||"customer","stripe",session.subscription?String(session.subscription):null,session.customer?String(session.customer):null);
+    const order=await insertOrder(session.id,intent,session.customer_details?.email||"customer","stripe",session.subscription?String(session.subscription):null,session.customer?String(session.customer):null);
+    await recordReferral(order,intent,session);
+    // The first invoice has already been paid; all future invoices use only FiveGen's fee.
+    if(session.subscription){const plan=await planFor(String(intent.owner));await stripe('subscriptions/'+session.subscription,new URLSearchParams({application_fee_percent:String(commissionRate(plan.tier))}),account);}
+    if(String(order.email).includes("@"))await captureLead(String(intent.owner),String(intent.product_id),String(order.email),session.customer_details?.name||String(order.email),"purchase");
+    return order;
   }
   if (
     session.payment_status !== "paid" ||

@@ -12,12 +12,12 @@ export const blockSchema = z.object({
   id: z.string().min(1).max(60), kind: z.enum(["hero", "text", "benefits", "image", "video", "testimonial", "faq", "offer"]),
   title: z.string().max(160), body: z.string().max(8000), image: z.string().max(1500).default(""),
   visible: z.boolean().default(true), align: z.enum(["left", "center"]).default("left"),
-}).refine(b => !b.image || /^https:\/\//i.test(b.image) || /^\/api\/assets\/[a-zA-Z0-9-]+\/file$/.test(b.image), "Use an HTTPS image URL or a FiveGen asset.");
+}).refine(b => !b.image || /^https:\/\//i.test(b.image) || /^\/api\/assets\/[a-zA-Z0-9-]+\/file$/.test(b.image) || /^\/api\/uploads\/[a-f0-9-]{36}$/.test(b.image), "Use an HTTPS image URL or a FiveGen asset.");
 export const commerceSchema = z.object({
   billing: z.enum(["once", "month", "year"]).default("once"),
   deal: z.object({ type: z.enum(dealTypes).default("none"), value: z.number().min(0).max(9999).default(20), code: z.string().max(30).regex(/^[a-zA-Z0-9_-]*$/).default(""), startsAt: optionalDate.default(""), endsAt: optionalDate.default(""), minimum: z.number().int().min(2).max(100).default(3), productId: z.string().max(60).default("") }).default({}),
   upsell: z.object({ enabled: z.boolean().default(false), productId: z.string().max(60).default(""), price: z.number().min(0).max(9999).default(9), headline: z.string().max(120).default("Complete your toolkit"), description: z.string().max(400).default("") }).default({}),
-  funnel: z.object({ enabled: z.boolean().default(false), accent: hex.default("#dbff73"), background: hex.default("#0c0c0e"), foreground: hex.default("#f4f4f7"), font: z.enum(["sans", "serif"]).default("sans"), width: z.enum(["focused", "wide"]).default("focused"), radius: z.enum(["sharp", "soft", "round"]).default("soft"), cta: z.string().min(1).max(50).default("Get instant access"), blocks: z.array(blockSchema).max(20).default([]) }).default({}),
+  funnel: z.object({ kind:z.enum(["sales","vsl","free_guide","booking","post_booking"]).default("sales"),leadProductId:z.string().max(60).default(""),thankYou:z.string().max(1500).default("Your guide is ready. Put the first step into practice today."),enabled: z.boolean().default(false), accent: hex.default("#dbff73"), background: hex.default("#0c0c0e"), foreground: hex.default("#f4f4f7"), font: z.enum(["sans", "serif"]).default("sans"), width: z.enum(["focused", "wide"]).default("focused"), radius: z.enum(["sharp", "soft", "round"]).default("soft"), cta: z.string().min(1).max(50).default("Get instant access"), blocks: z.array(blockSchema).max(20).default([]) }).default({}),
 }).superRefine((c, ctx) => {
   const d = c.deal;
   if (["percentage", "volume", "early_bird", "flash_sale"].includes(d.type) && d.value > 100) ctx.addIssue({code:"custom", path:["deal","value"], message:"A percentage must be between 0 and 100."});

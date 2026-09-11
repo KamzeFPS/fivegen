@@ -18,8 +18,8 @@ export function productBundle(p: Product, includeMarketing = true) {
       `${p.title}\n\nOpen 01-product/guide.html in your browser. Use Print > Save as PDF to create a PDF.${p.content.files?.length ? "\nSupporting resources are in 02-resources. CSV files open in Excel or Google Sheets.\nReview any generated code before running it." : ""}\n\nCreated with FiveGen.`,
     ),
   };
-  for (const [i, f] of (p.content.files || []).entries())
-    entries[`02-resources/${String(i + 1).padStart(2, "0")}-${f.name}`] =
+  for (const f of (p.content.files || []))
+    entries[`02-resources/${f.name}`] =
       strToU8(f.content);
   if (includeMarketing) {
     if (p.content.launch.trim()) entries["03-marketing/launch-campaign.txt"] = strToU8(p.content.launch);
