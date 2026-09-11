@@ -17,6 +17,8 @@ FiveGen is a full-stack creator workspace for generating, editing, publishing, a
 
 ## Activation
 
+For the Render deployment target and root `render.yaml`, see [Render setup](docs/render.md). It includes its own production server, persistent storage, and Google sign-in; it starts with a fresh database.
+
 1. `CREDENTIAL_ENCRYPTION_KEY` must be a stable random server secret. It is already configured for this Site and in the ignored local environment. Do not rotate it without migrating encrypted keys.
 2. Sign in and open **AI providers**. Add an OpenAI or Anthropic API key for content, and a fal.ai API key for images and videos. The keys are encrypted with AES-GCM and account-bound additional data, and never returned from the settings API.
 3. For payments, the platform owner must configure `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in the hosted Site environment. Configure a **connected-account** Stripe webhook at `/api/webhooks/stripe` for `checkout.session.completed` and `checkout.session.async_payment_succeeded`. Each creator then uses **Payments → Connect Stripe**. Use test credentials and verify a purchase before switching to live payments.

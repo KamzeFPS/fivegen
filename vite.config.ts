@@ -2,6 +2,7 @@ import vinext from "vinext";
 import { defineConfig } from "vite";
 import hostingConfig from "./.openai/hosting.json";
 import { sites } from "./build/sites-vite-plugin";
+import { fileURLToPath } from "node:url";
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";
@@ -34,6 +35,18 @@ const localBindingConfig = {
 };
 
 export default defineConfig(async () => {
+  // Render runs the production Node server, with disk-backed storage and its
+  // own sign-in boundary. Never include the Sites local sign-in plugin there.
+  if (process.env.FIVEGEN_RUNTIME === "render") {
+    return {
+      resolve: {
+        alias: {
+          "cloudflare:workers": fileURLToPath(new URL("./runtime/render/bindings.mjs", import.meta.url)),
+        },
+      },
+      plugins: [vinext()],
+    };
+  }
   // Use Miniflare's local Request.cf placeholder unless fetching is requested.
   process.env.CLOUDFLARE_CF_FETCH_ENABLED ??= "false";
   process.env.WRANGLER_SEND_METRICS ??= "false";

@@ -11,7 +11,7 @@ export type Scope = keyof typeof mcpScopes;
 export type Connection = {id:string;owner:string;client_id:string;name:string;scopes:string;resource:string;access_expires:number};
 export function mcpOrigin(request?:Request) {
   if(request && ["localhost","127.0.0.1"].includes(new URL(request.url).hostname)) return new URL(request.url).origin;
-  return binding("MCP_ORIGIN") || "https://folio-product-studio.kamzewac.chatgpt.site";
+  return binding("MCP_ORIGIN") || binding("APP_ORIGIN") || "https://folio-product-studio.kamzewac.chatgpt.site";
 }
 export function randomToken(){return crypto.randomUUID().replaceAll("-","")+crypto.randomUUID().replaceAll("-","");}
 export async function digest(value:string){return btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value))))).replaceAll("+","-").replaceAll("/","_").replaceAll("=","");}

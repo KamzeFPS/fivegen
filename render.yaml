@@ -1,0 +1,41 @@
+# Import this repository as a Render Blueprint. See docs/render.md first.
+services:
+  - type: web
+    name: fivegen
+    runtime: node
+    region: singapore
+    plan: 0.5c-512mb
+    numInstances: 1
+    buildCommand: npm ci --include=dev --include=optional && npm run build:render
+    startCommand: npm run start:render
+    healthCheckPath: /healthz
+    maxShutdownDelaySeconds: 60
+    autoDeployTrigger: off
+    disk:
+      name: fivegen-data
+      mountPath: /var/data/fivegen
+      sizeGB: 10
+    envVars:
+      - key: NODE_VERSION
+        value: 24.13.0
+      - key: NODE_ENV
+        value: production
+      - key: FIVEGEN_RUNTIME
+        value: render
+      - key: FIVEGEN_DATA_DIR
+        value: /var/data/fivegen
+      - key: CREDENTIAL_ENCRYPTION_KEY
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: ADMIN_EMAILS
+        value: kamzewac@gmail.com
+      - key: AI_DAILY_BUDGET_USD
+        value: "10"
+# Set optional Stripe and AI secrets in Render Environment or FiveGen's admin
+# settings after creation. APP_ORIGIN defaults to Render's RENDER_EXTERNAL_URL.
+# A disk is required: do not switch this service to the free plan.
