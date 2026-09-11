@@ -16,7 +16,19 @@ export function readConfig(source = process.env) {
   if (source.CREDENTIAL_ENCRYPTION_KEY.length < 32) throw new Error('CREDENTIAL_ENCRYPTION_KEY must contain at least 32 characters');
   const port = Number(source.PORT || 10000);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid PORT');
-  return { origin: origin.origin, port, googleClientId: source.GOOGLE_CLIENT_ID, googleClientSecret: source.GOOGLE_CLIENT_SECRET };
+  const redirectHosts = new Set();
+  // Only aliases derived from trusted deployment configuration may redirect.
+  // Never trust an arbitrary Host or X-Forwarded-Host header.
+  if (source.RENDER_EXTERNAL_URL) {
+    const renderOrigin = new URL(source.RENDER_EXTERNAL_URL);
+    if (renderOrigin.protocol !== 'https:' || !renderOrigin.hostname.endsWith('.onrender.com') ||
+        renderOrigin.username || renderOrigin.password || renderOrigin.port)
+      throw new Error('RENDER_EXTERNAL_URL must be the service HTTPS onrender.com origin');
+    redirectHosts.add(renderOrigin.host);
+  }
+  if (origin.hostname.startsWith('www.')) redirectHosts.add(origin.host.slice(4));
+  redirectHosts.delete(origin.host);
+  return { origin: origin.origin, redirectHosts, port, googleClientId: source.GOOGLE_CLIENT_ID, googleClientSecret: source.GOOGLE_CLIENT_SECRET };
 }
 
 export async function start() {
@@ -52,6 +64,10 @@ export async function start() {
       req.rawHeaders.push('x-forwarded-proto', req.headers['x-forwarded-proto']);
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+      res.setHeader('X-Frame-Options', 'DENY');
+      res.setHeader('Content-Security-Policy', "frame-ancestors 'none'; object-src 'none'; base-uri 'self'");
+      res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+      if (authority.protocol === 'https:') res.setHeader('Strict-Transport-Security', 'max-age=31536000');
       if (url.pathname === '/healthz') {
         const disk = await statfs(storage.root);
         storage.sqlite.prepare('SELECT 1').get();
@@ -59,7 +75,10 @@ export async function start() {
         res.writeHead(healthy ? 200 : 503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
         res.end(JSON.stringify({ status: healthy ? 'ok' : 'unavailable' })); return;
       }
-      if (host !== authority.host && !productHost) { res.writeHead(421); res.end('Unrecognized host'); return; }
+      if (config.redirectHosts.has(host) && ['GET', 'HEAD'].includes(req.method)) {
+        res.writeHead(308, { Location: config.origin + url.pathname + url.search, 'Cache-Control': 'no-store' }); res.end(); return;
+      }
+      if (host !== authority.host && !productHost) { res.writeHead(421, { 'Cache-Control': 'no-store' }); res.end('Unrecognized host'); return; }
       if (productHost && ['/signin-with-chatgpt', '/signout-with-chatgpt', '/callback'].includes(url.pathname)) {
         res.writeHead(303, { Location: config.origin + url.pathname + url.search }); res.end(); return;
       }

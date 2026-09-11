@@ -5,9 +5,11 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
-import { randomBytes } from 'node:crypto';
+import { request as httpRequest } from 'node:http';
+import { randomBytes, createHmac } from 'node:crypto';
 import { createStorage } from '../runtime/render/storage.mjs';
 import { digest } from '../runtime/render/auth.mjs';
+import { unzipSync, strFromU8 } from 'fflate';
 
 const probe = createServer();
 await new Promise(resolve => probe.listen(0, '127.0.0.1', resolve));
@@ -19,13 +21,15 @@ let processHandle, output = '', storage;
 const value = randomBytes(32).toString('base64url');
 const owner = 'google:render-integration-user';
 const cookie = 'fivegen-local-session=' + value;
+const webhookSecret = 'whsec_local_integration_fixture';
 async function launch() {
   output = '';
   processHandle = spawn(process.execPath, ['runtime/render/server.mjs'], {
     env: { ...process.env, NODE_ENV: 'production', APP_ORIGIN: base, PORT: String(port), FIVEGEN_RUNTIME: 'render',
       FIVEGEN_DATA_DIR: root, GOOGLE_CLIENT_ID: 'local-test', GOOGLE_CLIENT_SECRET: 'local-test',
       CREDENTIAL_ENCRYPTION_KEY: 'local-test-encryption-value-'.repeat(2),
-      STRIPE_SECRET_KEY: '', STRIPE_WEBHOOK_SECRET: '', STRIPE_BILLING_WEBHOOK_SECRET: '',
+      STRIPE_MODE: 'live', STRIPE_SECRET_KEY: 'sk_live_integration_fixture_not_a_key', STRIPE_WEBHOOK_SECRET: webhookSecret, STRIPE_BILLING_WEBHOOK_SECRET: '',
+      RENDER_EXTERNAL_URL: 'https://fivegen-integration.onrender.com', PRODUCT_DOMAIN: '',
       OPENAI_API_KEY: '', ANTHROPIC_API_KEY: '', FAL_KEY: '', ADMIN_EMAILS: 'admin@example.test', RENDER: '' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -51,22 +55,65 @@ async function json(path, method = 'GET', body, authenticated = true, status = 2
   assert.equal(response.status, status, `${method} ${path}: ${text.slice(0, 350)}\n${output.slice(-1500)}`);
   return JSON.parse(text);
 }
+function requestHost(host, path = '/') {
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(base + path, { headers: { host } }, response => {
+      response.resume();
+      response.on('end', () => resolve({ status: response.statusCode, location: response.headers.location }));
+    });
+    request.on('error', reject); request.end();
+  });
+}
 try {
   storage = createStorage(root);
   storage.sqlite.prepare('INSERT INTO render_sessions VALUES (?,?,?,?,?)').run(digest(value), owner, 'creator@example.test', 'Creator', Date.now() + 3600000);
   await launch();
-  assert.equal((await fetch(base)).status, 200);
+  const home = await fetch(base);
+  assert.equal(home.status, 200);
+  const html = await home.text();
+  assert.ok(!/Sample data|DEMO WORKSPACE|olivia@example.com|12,845/.test(html), 'Public workspace contains no demonstration metrics');
+  assert.equal(home.headers.get('x-frame-options'), 'DENY');
+  const misdirected = await requestHost('attacker.example');
+  assert.equal(misdirected.status, 421, 'Unknown hosts stay blocked');
+  const alias = await requestHost('fivegen-integration.onrender.com', '/?connect=mcp');
+  assert.equal(alias.status, 308);
+  assert.equal(alias.location, base + '/?connect=mcp');
+  const signIn = await fetch(base + '/signin-with-chatgpt', { redirect: 'manual' });
+  assert.equal(new URL(signIn.headers.get('location')).searchParams.get('redirect_uri'), base + '/callback');
+  async function event(livemode, valid = true) {
+    const body = JSON.stringify({ id: 'evt_local_' + livemode, type: 'integration.noop', livemode, data: { object: {} } });
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signature = createHmac('sha256', webhookSecret).update(timestamp + '.' + body).digest('hex');
+    return fetch(base + '/api/webhooks/stripe', { method: 'POST', headers: { 'Content-Type': 'application/json',
+      'stripe-signature': `t=${timestamp},v1=${valid ? signature : '0'.repeat(64)}` }, body });
+  }
+  assert.equal((await event(true)).status, 200, 'Signed live events are accepted');
+  assert.equal((await event(false)).status, 400, 'Test events cannot enter the live payment environment');
+  assert.equal((await event(true, false)).status, 400, 'Unsigned events are rejected');
   await json('/api/workspace', 'GET', undefined, false, 401);
   const spoof = await fetch(base + '/api/workspace', { headers: { 'oai-authenticated-user-id': owner,
     'oai-authenticated-user-email': 'admin@example.test', cookie: '__sites_local_auth=1', 'x-forwarded-host': 'evil.example', 'x-forwarded-proto': 'https' } });
   assert.equal(spoof.status, 401);
   await json('/api/admin', 'GET', undefined, true, 403);
   const workspace = await json('/api/workspace'); assert.equal(workspace.products.length, 0);
+  await json('/api/products', 'POST', { title: 'Unavailable AI', description: 'This request must not turn into a generic starter product.',
+    audience: 'Local test audience', format: 'Guide', color: 'orange', price: 0 }, true, 503);
+  assert.equal((await json('/api/workspace')).products.length, 0, 'Unavailable AI does not create or consume a product slot');
   let { product } = await json('/api/products', 'POST', { title: 'Render production test', description: 'A useful private test guide for checking durable publishing and delivery.',
     audience: 'Local test audience', format: 'Guide', color: 'orange', price: 49, generationMode: 'manual' });
+  assert.equal(product.content.sections.length, 1);
+  assert.equal(product.content.sections[0].body, '');
+  assert.deepEqual(product.content.benefits, []);
+  await json('/api/products/' + product.id, 'PATCH', { ...product, status: 'published' }, true, 409);
   const marker = 'PRIVATE RENDER CONTENT ' + randomBytes(12).toString('hex');
   product.content.sections[0].body = marker;
   product = (await json('/api/products/' + product.id, 'PATCH', { ...product, status: 'published' })).product;
+  const bundle = await fetch(base + '/api/products/' + product.id + '/bundle', { headers: { cookie } });
+  assert.equal(bundle.status, 200);
+  const files = unzipSync(new Uint8Array(await bundle.arrayBuffer()));
+  assert.ok(Object.values(files).some(bytes => strFromU8(bytes).includes(marker)), 'Export contains the saved product');
+  assert.ok(!Object.keys(files).some(name => name.startsWith('03-marketing/')), 'Exports do not invent empty marketing deliverables');
+  await json('/api/products/' + product.id, 'PATCH', { ...product, expectedUpdatedAt: product.updatedAt - 1 }, true, 409);
   const paidPage = await fetch(base + '/p/' + product.slug);
   assert.equal(paidPage.status, 200); assert.ok(!(await paidPage.text()).includes(marker));
   assert.equal((await fetch(base + '/api/download/' + product.slug)).status, 403);

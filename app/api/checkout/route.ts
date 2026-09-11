@@ -1,4 +1,4 @@
-import { ApiError, database, failure, sameOrigin, stripe } from "@/lib/server";
+import { ApiError, binding, database, failure, sameOrigin, stripe } from "@/lib/server";
 import { quoteProduct } from "@/lib/offers-server";
 import { selectionSchema } from "@/lib/commerce";
 import { recordFreeOrder } from "@/lib/payments";
@@ -18,9 +18,10 @@ export async function POST(req:Request){try{
     return Response.json({url:`${origin}/p/${s.slug}/success?token=${encodeURIComponent(String(order.token))}`});
   }
   if(quote.total<50)throw new ApiError("The minimum checkout total is $0.50. Please adjust the offer.",409);
+  if(!binding("STRIPE_WEBHOOK_SECRET"))throw new ApiError("Payment delivery is not configured yet. Please try again after the creator finishes payment setup.",503);
   if(!row.stripe_account)throw new ApiError("This creator has not connected payments yet.",409);
   const account=await stripe(`accounts/${row.stripe_account}`);
-  if(!account.charges_enabled)throw new ApiError("This creator’s payment setup is not complete.",409);
+  if(!account.charges_enabled || !account.payouts_enabled)throw new ApiError("This creator’s payment setup is not complete.",409);
   const fields=new URLSearchParams({mode,"line_items[0][price_data][currency]":"usd","line_items[0][price_data][unit_amount]":String(quote.total),"line_items[0][price_data][product_data][name]":String(row.title)+(quote.quantity>1?` · ${quote.quantity} licenses`:""),"line_items[0][price_data][product_data][description]":quote.items.map(i=>i.title).join(" + ").slice(0,1000),"line_items[0][quantity]":"1",success_url:`${origin}/p/${s.slug}/success?session_id={CHECKOUT_SESSION_ID}`,cancel_url:`${origin}/p/${s.slug}`,"metadata[product_id]":String(row.id),"metadata[owner]":String(row.owner),"metadata[order_ref]":id,"metadata[expected_amount]":String(quote.total)});
   if(mode==="subscription"){
     fields.set("subscription_data[application_fee_percent]",String(commissionRate(plan.tier)));

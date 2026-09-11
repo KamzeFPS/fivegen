@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { database, productFromRow, binding } from "@/lib/server";
+import { database, productFromRow, binding, stripeConfigured } from "@/lib/server";
 import { Brand, Cover } from "@/app/ui-brand";
 import { Check, Layers3 } from "lucide-react";
 import { money } from "@/lib/product";
@@ -26,7 +26,7 @@ export default async function ProductPage({
   const c=pro?p.commerce!:defaultCommerce();
   const quote=await quoteProduct(slug).then(q=>q.quote).catch(()=>null);
   const available =
-    p.price === 0 || !!(row.stripe_account && binding("STRIPE_SECRET_KEY"));
+    p.price === 0 || !!(row.stripe_account && stripeConfigured() && binding("STRIPE_WEBHOOK_SECRET"));
   return (
     <div className="storefront">
       <nav className="store-nav">

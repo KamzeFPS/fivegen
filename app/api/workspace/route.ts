@@ -7,6 +7,8 @@ import {
   productFromRow,
   sameOrigin,
   stripe,
+  stripeConfigured,
+  stripeMode,
 } from "@/lib/server";
 import { providerSettings } from "@/lib/ai";
 import { planFor } from "@/lib/billing";
@@ -41,10 +43,10 @@ export async function GET() {
       providerSettings(user.userId),
     ]);
     let stripeReady = false;
-    if (s?.stripe_account && binding("STRIPE_SECRET_KEY")) {
+    if (s?.stripe_account && stripeConfigured() && binding("STRIPE_WEBHOOK_SECRET")) {
       try {
         const acct = await stripe(`accounts/${s.stripe_account}`);
-        stripeReady = acct.charges_enabled === true;
+        stripeReady = acct.charges_enabled === true && acct.payouts_enabled === true;
       } catch {
         /* Connection remains visible; checkout validates again. */
       }
@@ -70,7 +72,8 @@ export async function GET() {
       },
       capabilities: {
         ai: ai.connected[ai.config.textProvider]&&!ai.config.paused,
-        stripe: !!binding("STRIPE_SECRET_KEY"),
+        stripe: stripeConfigured(),
+        paymentMode: stripeMode(),
         domain: binding("PRODUCT_DOMAIN") || null,
       },
       stripeReady,

@@ -22,6 +22,8 @@ services:
         value: production
       - key: FIVEGEN_RUNTIME
         value: render
+      - key: APP_ORIGIN
+        value: https://www.fivegen.ai
       - key: FIVEGEN_DATA_DIR
         value: /var/data/fivegen
       - key: CREDENTIAL_ENCRYPTION_KEY
@@ -32,10 +34,12 @@ services:
         sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
+      - key: STRIPE_MODE
+        value: live
       - key: ADMIN_EMAILS
         value: kamzewac@gmail.com
       - key: AI_DAILY_BUDGET_USD
         value: "10"
 # Set optional Stripe and AI secrets in Render Environment or FiveGen's admin
-# settings after creation. APP_ORIGIN defaults to Render's RENDER_EXTERNAL_URL.
+# settings after creation. APP_ORIGIN must match the canonical custom domain.
 # A disk is required: do not switch this service to the free plan.

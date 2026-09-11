@@ -45,6 +45,10 @@ test('Render configuration rejects insecure public origins and missing secrets',
   assert.throws(() => readConfig({ ...config, GOOGLE_CLIENT_SECRET: '' }));
   assert.throws(() => readConfig({ ...config, CREDENTIAL_ENCRYPTION_KEY: 'short' }));
   assert.throws(() => readConfig({ ...config, APP_ORIGIN: 'https://fivegen.example/redirect' }));
+  const production = readConfig({ ...config, APP_ORIGIN: 'https://www.fivegen.ai', RENDER_EXTERNAL_URL: 'https://fivegen-example.onrender.com' });
+  assert.equal(production.origin, 'https://www.fivegen.ai');
+  assert.deepEqual([...production.redirectHosts].sort(), ['fivegen-example.onrender.com', 'fivegen.ai']);
+  assert.throws(() => readConfig({ ...config, RENDER_EXTERNAL_URL: 'https://attacker.example' }));
   assert.equal(safeReturn('/\\evil.example'), '/');
   assert.equal(safeReturn('//evil.example'), '/');
   assert.equal(safeReturn('/oauth/authorize?client_id=abc'), '/oauth/authorize?client_id=abc');

@@ -43,10 +43,10 @@ const brief = {
   price: 49,
   color: "orange",
 };
-const created = await call("/api/products", "POST", brief);
+const created = await call("/api/products", "POST", { ...brief, generationMode: "manual" });
 const p = created.product;
 assert.ok(p.id);
-assert.equal(created.mode, "starter");
+assert.equal(created.mode, "manual");
 const marker = "PRIVATE-CONTENT-" + crypto.randomUUID();
 p.content.sections[0].body = marker + " <script>alert(1)</script>";
 p.status = "published";

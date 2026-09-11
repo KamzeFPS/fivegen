@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { briefSchema, contentSchema } from "@/lib/product";
+import { briefSchema, contentSchema, publishContentError } from "@/lib/product";
 import { advancedCommerce, commerceSchema, defaultCommerce } from "@/lib/commerce";
 import { requirePro } from "@/lib/billing";
 import { validateRelated } from "@/lib/offers-server";
@@ -33,6 +33,8 @@ export async function PATCH(
     const { id } = await params;
     const existing = productFromRow(await ownedProduct(id, u.userId));
     const data = updateSchema.parse(await req.json());
+    const contentError = publishContentError(data.content);
+    if (data.status === "published" && contentError) throw new ApiError(contentError, 409);
     const commerce=data.commerce||existing.commerce||defaultCommerce();
     const commerceChanged=JSON.stringify(commerce)!==JSON.stringify(existing.commerce);
     if(commerceChanged && advancedCommerce(commerce))await requirePro(u.userId);

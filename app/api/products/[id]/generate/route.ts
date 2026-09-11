@@ -140,7 +140,8 @@ export async function POST(
         ...p.content,
         sections: d.sections.map((s) => ({
           title: s.title,
-          body: s.objective,
+          body: "",
+          objective: s.objective,
         })),
         benefits: d.benefits,
       };
@@ -177,13 +178,14 @@ export async function POST(
       p.content = { ...p.content, ...d };
     }
     p.content = contentSchema.parse(p.content);
+    p.updatedAt = Math.max(Date.now(), p.updatedAt + 1);
     const done = stage >= p.content.sections.length;
     await db.batch([
       db
         .prepare(
           "UPDATE products SET content=?,updated_at=? WHERE id=? AND owner=?",
         )
-        .bind(JSON.stringify(p.content), Date.now(), id, owner),
+        .bind(JSON.stringify(p.content), p.updatedAt, id, owner),
       db
         .prepare(
           "UPDATE generation SET stage=?,status=?,lease=0,error=NULL,attempts=0,updated_at=? WHERE product_id=? AND owner=?",

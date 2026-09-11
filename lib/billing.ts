@@ -1,4 +1,4 @@
-import { ApiError, binding, database, stripe } from "./server";
+import { ApiError, binding, database, stripe, stripeConfigured } from "./server";
 import { plans, type PlanInfo } from "./plans";
 
 export async function planFor(owner:string):Promise<PlanInfo>{
@@ -9,7 +9,7 @@ export async function planFor(owner:string):Promise<PlanInfo>{
   ]);
   const active=!!row && ["active","trialing"].includes(String(row.status)) && Number(row.period_end)*1000>Date.now();
   const tier=active?"pro":"free";
-  return {tier,limit:plans[tier].limit,used:count?.n||0,status:String(row?.status||"free"),interval:row?.interval as "month"|"year"|null||null,renewsAt:row?.period_end?Number(row.period_end)*1000:null,cancelAtPeriodEnd:!!row?.cancel_at_period_end,billingReady:!!binding("STRIPE_SECRET_KEY")&&!!binding("STRIPE_BILLING_WEBHOOK_SECRET"),hasCustomer:!!row?.customer_id};
+  return {tier,limit:plans[tier].limit,used:count?.n||0,status:String(row?.status||"free"),interval:row?.interval as "month"|"year"|null||null,renewsAt:row?.period_end?Number(row.period_end)*1000:null,cancelAtPeriodEnd:!!row?.cancel_at_period_end,billingReady:stripeConfigured()&&!!binding("STRIPE_BILLING_WEBHOOK_SECRET"),hasCustomer:!!row?.customer_id};
 }
 export async function requirePro(owner:string){const p=await planFor(owner);if(p.tier!=="pro")throw new ApiError("Upgrade to FiveGen Pro to use deals, upsells, funnels, and subscriptions.",403);return p;}
 export async function syncMembership(subscription:Record<string,any>){

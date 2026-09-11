@@ -1,4 +1,4 @@
-import { binding, database, failure, ApiError, stripe } from "@/lib/server";
+import { binding, database, failure, ApiError, stripe, assertStripeMode } from "@/lib/server";
 import { recordPayment, recordRenewal, updateRenewalCommission } from "@/lib/payments";
 import {recordCreditPurchase,reverseCreditPurchase} from "@/lib/credits";
 import { syncMembership } from "@/lib/billing";
@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     const parts = signature.split(",").map((s) => s.split("="));
     const time = parts.find((s) => s[0] === "t")?.[1];
     const candidates = parts.filter((s) => s[0] === "v1").map((s) => s[1]);
-    if (!time || Math.abs(Date.now() / 1000 - Number(time)) > 300)
+    if (!time || !Number.isFinite(Number(time)) || Math.abs(Date.now() / 1000 - Number(time)) > 300)
       throw new ApiError("Invalid signature timestamp.", 400);
     let valid = false;
     for(const secret of secrets){
@@ -38,6 +38,7 @@ export async function POST(req: Request) {
     }
     if (!valid) throw new ApiError("Invalid signature.", 400);
     const event = JSON.parse(body);
+    assertStripeMode(event.livemode);
     const object=event.data.object;
     if(!event.account && event.type==="charge.refunded")await reverseCreditPurchase(object.id);
     if(!event.account && ["charge.dispute.created","charge.dispute.closed"].includes(event.type))await reverseCreditPurchase(String(object.charge));

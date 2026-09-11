@@ -208,7 +208,7 @@ export function GenerationProgress({
                   : "Designing your product architecture…"
                 : job
                   ? "Your product is taking shape."
-                  : aiReady ? "Take this product further with AI." : "Your editable starter is ready."}
+                  : aiReady ? "Take this product further with AI." : "Write your product content."}
           </strong>
           <p>
             {completed

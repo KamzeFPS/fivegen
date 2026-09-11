@@ -498,21 +498,7 @@ a {
   width: 1px;
   background: #1d1d21;
 }
-.sample-switch {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 12px;
-  color: #c0c0ca;
-}
-.sample-switch [data-slot="switch"] {
-  height: 16px;
-  width: 28px;
-}
-.sample-switch [data-slot="switch-thumb"] {
-  height: 12px;
-  width: 12px;
-}
+
 .mobile-menu {
   display: none !important;
 }
@@ -567,32 +553,7 @@ a {
   font-size: 12px;
   padding: 9px 12px;
 }
-.demo-note {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 12px;
-  color: #c0c0ca;
-  margin: -5px 0 20px;
-  line-height: 1.6;
-}
-.demo-note > span {
-  font-size: 12px;
-  letter-spacing: 0.8px;
-  border: 1px solid #303036;
-  border-radius: 4px;
-  padding: 2px 6px;
-  white-space: nowrap;
-}
-.demo-note button {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-left: auto;
-  font-size: 12px;
-  white-space: nowrap;
-  color: #c0c0ca;
-}
+
 .create-banner {
   position: relative;
   display: grid;
@@ -2107,13 +2068,7 @@ label small {
   .page-heading h1 {
     font-size: 26px;
   }
-  .demo-note {
-    flex-wrap: wrap;
-    gap: 5px 10px;
-  }
-  .demo-note button {
-    margin-left: 0;
-  }
+
   .editor-layout {
     grid-template-columns: minmax(0, 1fr) 240px;
   }
@@ -2233,9 +2188,7 @@ label small {
   .topbar-actions {
     gap: 9px;
   }
-  .sample-switch {
-    font-size: 12px;
-  }
+
   .header-divider {
     display: none;
   }
@@ -2268,13 +2221,7 @@ label small {
   .heading-actions .export-button {
     display: inline-flex;
   }
-  .demo-note {
-    margin-bottom: 19px;
-    font-size: 12px;
-  }
-  .demo-note > span {
-    font-size: 12px;
-  }
+
   .create-banner {
     padding: 23px 20px;
     gap: 24px;
@@ -2485,9 +2432,7 @@ label small {
   .page-heading h1 {
     font-size: 25px;
   }
-  .sample-switch {
-    gap: 5px;
-  }
+
   .topbar-actions > .icon-button {
     display: none;
   }

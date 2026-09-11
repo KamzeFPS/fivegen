@@ -47,9 +47,7 @@ h1, h2, h3 { color: var(--foreground); }
 .topbar { height: 65px; padding: 0 32px; border-color: #25252a; background: #101012e6; backdrop-filter: blur(18px); position: sticky; top: 0; z-index: 20; }
 .breadcrumbs { font-size: 13px; color: #81818f; }
 .breadcrumbs strong { color: #d6d6df; }
-.sample-switch { color: #a6a6b2; font-size: 12px; }
-.sample-switch [data-slot="switch"] { height: 20px; width: 34px; }
-.sample-switch [data-slot="switch-thumb"] { height: 16px; width: 16px; }
+
 .header-divider { background: #36363e; }
 .workspace-main { max-width: 1700px; padding: 30px 32px 0; margin-top: 0; animation: studio-enter .5s cubic-bezier(.2,.7,.2,1) both; }
 .page-heading { margin-bottom: 24px; align-items: center; }
@@ -58,9 +56,7 @@ h1, h2, h3 { color: var(--foreground); }
 .eyebrow { font-size: 12px; letter-spacing: .13em; color: #8c8c9c; margin-bottom: 10px; font-weight: 500; }
 .period-select { height: 40px; width: 145px; color: #c8c8d3; border: 1px solid #33333a; background: #19191c; font-size: 13px; box-shadow: none; }
 .export-button { min-height: 40px; font-size: 13px; }
-.demo-note { font-size: 12px; color: #a5a5b2; background: #17171a; padding: 9px 12px; border: 1px solid #29292f; border-radius: 8px; margin: 0 0 23px; }
-.demo-note > span { border: 0; color: #dddde7; background: #29292f; font-size: 12px; letter-spacing: .03em; padding: 3px 6px; }
-.demo-note button { color: #d6e4b3; font-size: 12px; }
+
 .ai-setup-note { background: #1a2116; border-color: #36432a; }
 .ai-setup-note strong { color: #e1eecb; }
 .ai-setup-note p { color: #a9b59a; font-size: 14px; }
@@ -291,8 +287,7 @@ input::placeholder, textarea::placeholder { color: #878796; }
   .heading-actions { padding-top: 4px; }
   .products-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .product-card:last-child:nth-child(3) { grid-column: auto; }
-  .demo-note { flex-wrap: wrap; gap: 8px; }
-  .demo-note button { margin-left: 0; }
+
 }
 @media (max-width: 767px) {
   .workspace-main { padding: 24px 18px 0; }
@@ -352,10 +347,10 @@ input::placeholder, textarea::placeholder { color: #878796; }
   .product-stats { font-size: 12px; }
   .format-options { grid-template-columns: 1fr; }
   .store-art .cover-title { font-size: 38px; }
-  .demo-note > span { font-size: 12px; }
+
   [data-slot="dialog-content"] { padding: 22px !important; }
   .breadcrumbs { font-size: 12px; }
-  .sample-switch { font-size: 12px; gap: 6px; }
+
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }

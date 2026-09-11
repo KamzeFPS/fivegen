@@ -62,7 +62,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -101,7 +100,6 @@ import {
   YAxis,
 } from "recharts";
 import {
-  blueprint,
   colors,
   formats,
   money,
@@ -129,7 +127,7 @@ type Workspace = {
   orders: Order[];
   visits: { createdAt: number }[];
   settings: { name: string; stripeAccount: string | null };
-  capabilities: { ai: boolean; stripe: boolean; domain: string | null };
+  capabilities: { ai: boolean; stripe: boolean; domain: string | null; paymentMode?: "live" | "test" | null };
   stripeReady?: boolean;
 };
 const empty: Workspace = {
@@ -147,35 +145,6 @@ const nav = [
   { name: "Analytics", icon: TrendingUp },
   { name: "Customers", icon: Users },
 ] as const;
-const sampleOrders: Order[] = [
-  {
-    id: "example-1",
-    productId: "0",
-    email: "olivia@example.com",
-    amount: 4900,
-    provider: "stripe",
-    createdAt: Date.UTC(2026, 8, 10, 14, 0) - 120000,
-    title: "The Creator Launch Kit",
-  },
-  {
-    id: "example-2",
-    productId: "1",
-    email: "james@example.com",
-    amount: 7900,
-    provider: "stripe",
-    createdAt: Date.UTC(2026, 8, 10, 14, 0) - 1800000,
-    title: "Build Your Personal Brand",
-  },
-  {
-    id: "example-3",
-    productId: "2",
-    email: "emma@example.com",
-    amount: 2900,
-    provider: "stripe",
-    createdAt: Date.UTC(2026, 8, 10, 14, 0) - 3600000,
-    title: "The Notion Productivity OS",
-  },
-];
 async function api<T>(url: string, method = "GET", body?: unknown): Promise<T> {
   const r = await fetch(url, {
     method,
@@ -208,7 +177,6 @@ export default function Studio({
 }) {
   const [view, setView] = useState<View>("Overview");
   const [workspace, setWorkspace] = useState<Workspace>(empty);
-  const [demo, setDemo] = useState(!user);
   const [loading, setLoading] = useState(!!user);
   const [error, setError] = useState("");
   const [period, setPeriod] = useState("30");
@@ -237,6 +205,7 @@ export default function Studio({
   const [preview, setPreview] = useState(false);
   const [publishReview, setPublishReview] = useState(false);
   const [creationError, setCreationError] = useState("");
+  const [generationMode, setGenerationMode] = useState<"auto" | "manual">("auto");
   const [resumeBrief, setResumeBrief] = useState(false);
   const [returnProduct, setReturnProduct] = useState<Product | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -286,6 +255,7 @@ export default function Studio({
       if (draft) {
         try {
           setBrief(JSON.parse(draft));
+          setGenerationMode(sessionStorage.getItem("fivegen-generation-mode") === "manual" ? "manual" : "auto");
           setStep(2);
           const destination = sessionStorage.getItem("fivegen-brief-destination");
           if (destination === "AI & credits") { setView("AI & credits"); setResumeBrief(true); }
@@ -293,6 +263,7 @@ export default function Studio({
         } catch {}
         sessionStorage.removeItem("folio-unsaved-brief");
         sessionStorage.removeItem("fivegen-brief-destination");
+        sessionStorage.removeItem("fivegen-generation-mode");
       }
     }
     if (new URLSearchParams(location.search).has("stripe")) setView("Payments");
@@ -344,9 +315,10 @@ export default function Studio({
     setCreate(true);
     });
   }
-  async function generate() {
+  async function generate(generationMode: "auto" | "manual") {
     if (!user) {
       sessionStorage.setItem("folio-unsaved-brief", JSON.stringify(brief));
+      sessionStorage.setItem("fivegen-generation-mode", generationMode);
       sessionStorage.removeItem("fivegen-brief-destination");
     }
     if (!requireUser()) return;
@@ -356,7 +328,7 @@ export default function Studio({
       const p = await api<{ product: Product; mode: string }>(
         "/api/products",
         "POST",
-        brief,
+        { ...brief, generationMode },
       );
       setCreate(false);
       receiveProduct(p.product);
@@ -366,12 +338,11 @@ export default function Studio({
       setSection(0);
       setEditTab("content");
       setView("My products");
-      setDemo(false);
       await reload();
       toast.success(
         p.mode === "ai"
           ? "Your AI production workflow is starting."
-          : "Your editable starter is ready. FiveGen AI is being configured. You can edit your draft now.",
+          : "Your blank draft is ready. Add your content before publishing.",
       );
     } catch (e) {
       setCreationError((e as Error).message);
@@ -386,7 +357,7 @@ export default function Studio({
       const r = await api<{ product: Product }>(
         `/api/products/${p.id}`,
         "PATCH",
-        p,
+        { ...p, expectedUpdatedAt: p.updatedAt },
       );
       receiveProduct(r.product);
       await reload();
@@ -405,7 +376,7 @@ export default function Studio({
       const r = await api<{ product: Product }>(
         `/api/products/${p.id}`,
         "PATCH",
-        { ...p, status: "published" },
+        { ...p, status: "published", expectedUpdatedAt: p.updatedAt },
       );
       receiveProduct(r.product);
       setPublishReview(false);
@@ -449,30 +420,10 @@ export default function Studio({
     finally { setBusy(false); }
   }
   const cutoff = Date.now() - Number(period) * 86400000;
-  const orders = demo
-    ? sampleOrders
-    : workspace.orders.filter((o) => o.createdAt >= cutoff);
-  const revenue = demo
-    ? period === "7"
-      ? 428900
-      : period === "90"
-        ? 3241600
-        : 1284500
-    : orders.reduce((a, o) => a + o.amount, 0);
-  const visits = demo
-    ? period === "7"
-      ? 1234
-      : period === "90"
-        ? 18241
-        : 6842
-    : workspace.visits.filter((v) => v.createdAt >= cutoff).length;
-  const sales = demo
-    ? period === "7"
-      ? 87
-      : period === "90"
-        ? 652
-        : 248
-    : orders.filter((o) => o.amount > 0).length;
+  const orders = workspace.orders.filter((o) => o.createdAt >= cutoff);
+  const revenue = orders.reduce((a, o) => a + o.amount, 0);
+  const visits = workspace.visits.filter((v) => v.createdAt >= cutoff).length;
+  const sales = orders.filter((o) => o.amount > 0).length;
   const chartData = useMemo(() => {
     const n = Number(period);
     const count = n === 7 ? 7 : Math.min(n, 15);
@@ -484,33 +435,13 @@ export default function Studio({
           month: "short",
           day: "numeric",
         }),
-        revenue: demo
-          ? [
-              240, 440, 370, 690, 580, 740, 630, 980, 820, 1120, 980, 1380,
-              1270, 1570, 1760,
-            ][i] * (n === 7 ? 0.65 : 1)
-          : orders
+        revenue: workspace.orders
               .filter((o) => o.createdAt >= start && o.createdAt < end)
               .reduce((a, o) => a + o.amount / 100, 0),
       };
     });
-  }, [demo, period, workspace.orders]);
-  const displayProducts = demo
-    ? templates
-        .slice(0, 3)
-        .map(
-          (b, i) =>
-            ({
-              ...b,
-              id: `sample-${i}`,
-              slug: "",
-              status: "published",
-              content: blueprint(b),
-              createdAt: 0,
-              updatedAt: 0,
-            }) as Product,
-        )
-    : workspace.products;
+  }, [period, workspace.orders]);
+  const displayProducts = workspace.products;
   const filtered = displayProducts.filter(
     (p) =>
       (filter === "all" || p.status === filter) &&
@@ -529,7 +460,7 @@ export default function Studio({
         .replace(/^[=+@-]/, "'") +
       '"';
     downloadText(
-      `${demo ? "sample-" : ""}fivegen-sales.csv`,
+      "fivegen-sales.csv",
       [
         ["Date", "Product", "Customer", "Gross amount (USD)", "Provider", "FiveGen fee (USD)", "After FiveGen fee, before processing (USD)"],
         ...orders.map((o) => [
@@ -550,15 +481,11 @@ export default function Studio({
   };
   const productCards = (items: Product[]) => (
     <div className="products-grid">
-      {items.map((p, i) => (
+      {items.map((p) => (
         <article className="product-card" key={p.id}>
           <button
             className="cover-button"
-            onClick={() =>
-              demo
-                ? startCreate(templates[i])
-                : openEditor(p)
-            }
+            onClick={() => openEditor(p)}
             aria-label={`Edit ${p.title}`}
           >
             <Cover product={p} />
@@ -567,9 +494,7 @@ export default function Studio({
             <div className="row-between">
               <span className={`status ${p.status}`}>
                 <i />
-                {demo
-                  ? "Example product"
-                  : p.status === "published"
+                {p.status === "published"
                     ? "Published"
                     : "Draft"}
               </span>
@@ -584,15 +509,11 @@ export default function Studio({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem
-                    onClick={() =>
-                      demo
-                        ? startCreate(templates[i])
-                        : openEditor(p)
-                    }
+                    onClick={() => openEditor(p)}
                   >
                     Edit product
                   </DropdownMenuItem>
-                  {!demo && p.status === "published" && (
+                  {p.status === "published" && (
                     <>
                       <DropdownMenuItem
                         onClick={() => window.open(`/p/${p.slug}`, "_blank")}
@@ -614,17 +535,13 @@ export default function Studio({
             </div>
             <div className="product-stats">
               <span>
-                {demo
-                  ? [128, 76, 44][i]
-                  : workspace.orders.filter((o) => o.productId === p.id)
+                {workspace.orders.filter((o) => o.productId === p.id)
                       .length}{" "}
                 sales
               </span>
               <span>
                 {money(
-                  demo
-                    ? [627200, 600400, 127600][i]
-                    : workspace.orders
+                  workspace.orders
                         .filter((o) => o.productId === p.id)
                         .reduce((s, o) => s + o.amount, 0),
                 )}{" "}
@@ -676,7 +593,7 @@ export default function Studio({
                   <span>{name === "Overview" ? "Studio" : name}</span>
                   {name === "My products" && (
                     <span className="nav-count">
-                      {demo ? 3 : workspace.products.length}
+                      {workspace.products.length}
                     </span>
                   )}
                   {name === "Templates" && (
@@ -744,15 +661,7 @@ export default function Studio({
             <strong>{editor ? "Product editor" : view === "Overview" ? "Create & manage" : view}</strong>
           </div>
           <div className="topbar-actions">
-            <span className="sample-switch">
-              <Switch
-                id="sample-data"
-                checked={demo}
-                onCheckedChange={setDemo}
-              />
-              <label htmlFor="sample-data">Sample data</label>
-            </span>
-            <span className="header-divider" />
+            {!user && <button className="button secondary" onClick={requireUser}>Sign in</button>}
             <button
               className="icon-button"
               onClick={() => setHelp(true)}
@@ -1155,24 +1064,16 @@ export default function Studio({
                   ) : null}
                 </div>
               </div>
-              {demo && (
-                <div className="demo-note">
-                  <span>DEMO WORKSPACE</span>Sample products and sales. Your workspace starts fresh.
-                  <button onClick={() => setDemo(false)}>
-                    View my workspace <ArrowRight size={14} />
-                  </button>
-                </div>
-              )}
               {loading && (
                 <div className="loading-line">
                   <Loader2 size={15} className="spin" />
                   Loading your workspace…
                 </div>
               )}
-              {view === "Overview" && !demo && !workspace.capabilities.ai && (
+              {view === "Overview" && user && !loading && !workspace.capabilities.ai && (
                 <div className="ai-setup-note">
                   <Sparkles size={19}/>
-                  <div><strong>Your AI, built into FiveGen.</strong><p>Generate complete products, images, and videos with FiveGen credits. No API keys needed.</p></div>
+                  <div><strong>AI generation is currently unavailable.</strong><p>You can write a product manually. Check AI & credits for service availability.</p></div>
                   <button className="text-link" onClick={()=>navigate("AI & credits")}>View AI & credits <ArrowRight size={15}/></button>
                 </div>
               )}
@@ -1225,29 +1126,25 @@ export default function Studio({
                         title: "Total revenue",
                         value: money(revenue),
                         icon: CreditCard,
-                        note: demo ? "+18.6%" : "Gross sales",
-                        line: [8, 10, 9, 15, 13, 20, 18, 23, 22, 30],
+                        note: "Gross sales",
                       },
                       {
                         title: "Products sold",
                         value: sales.toLocaleString(),
                         icon: ShoppingBag,
-                        note: demo ? "+12.4%" : "Paid orders",
-                        line: [8, 14, 10, 16, 14, 15, 20, 16, 27, 28],
+                        note: "Paid orders",
                       },
                       {
                         title: "Storefront views",
                         value: visits.toLocaleString(),
                         icon: MousePointer2,
-                        note: demo ? "+24.8%" : "Total page views",
-                        line: [8, 12, 10, 17, 13, 21, 19, 25, 22, 32],
+                        note: "Total page views",
                       },
                       {
                         title: "Conversion rate",
                         value: `${visits ? ((sales / visits) * 100).toFixed(2) : "0.00"}%`,
                         icon: TrendingUp,
-                        note: demo ? "+0.8%" : "Sales / page views",
-                        line: [10, 10, 16, 14, 20, 17, 23, 23, 27, 29],
+                        note: "Sales / page views",
                       },
                     ].map((s) => (
                       <article className="stat-card" key={s.title}>
@@ -1257,28 +1154,9 @@ export default function Studio({
                         </div>
                         <div className="stat-main">
                           <strong>{s.value}</strong>
-                          <svg
-                            className="sparkline"
-                            viewBox="0 0 100 40"
-                            aria-hidden="true"
-                          >
-                            <polyline
-                              points={(demo ? s.line : s.line.map(() => 8))
-                                .map((p, i) => `${i * 11},${40 - p}`)
-                                .join(" ")}
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
                         </div>
                         <div className="stat-note">
-                          <span className={demo ? "positive" : ""}>
-                            {demo && <ArrowUpRight size={13} />} {s.note}
-                          </span>
-                          {demo && <small>vs. previous period</small>}
+                          <span>{s.note}</span>
                         </div>
                       </article>
                     ))}
@@ -1376,7 +1254,7 @@ export default function Studio({
                           </AreaChart>
                         </ResponsiveContainer>
                       </div>
-                      {!demo && orders.length === 0 && (
+                      {orders.length === 0 && (
                         <p className="chart-empty-caption">
                           Your first sale starts the story. Publish a product to
                           begin.
@@ -1575,7 +1453,7 @@ export default function Studio({
                 <section className="panel">
                   <div className="panel-heading">
                     <div>
-                      <h2>{demo ? "Example customers" : "Your customers"}</h2>
+                      <h2>Your customers</h2>
                       <p>{orders.length} transactions in the selected period</p>
                     </div>
                     <button className="button secondary" onClick={exportSales}>
@@ -1635,7 +1513,6 @@ export default function Studio({
                     <div>
                       <span>
                         Tracked revenue · last {period} days
-                        {demo ? " · sample" : ""}
                       </span>
                       <h2>{money(revenue)}</h2>
                     </div>
@@ -1720,9 +1597,7 @@ export default function Studio({
                   <div className="info-note">
                     <CircleHelp size={19} />
                     <p>
-                      FiveGen only counts verified Stripe payments in live
-                      revenue. Your FiveGen commission is deducted automatically. Example
-                      sales are visible only when sample data is enabled.
+                      {workspace.capabilities.paymentMode === "test" ? "Stripe is in test mode. Transactions here are test payments, not real revenue." : "FiveGen records verified Stripe payments. Your FiveGen commission is deducted automatically."}
                     </p>
                   </div>
                 </>
@@ -1784,12 +1659,12 @@ export default function Studio({
                         <strong>
                           {workspace.capabilities.ai
                             ? "AI generation available"
-                            : "Structured starter mode"}
+                            : "Manual writing available"}
                         </strong>
                         <p>
                           {workspace.capabilities.ai
                             ? "Products are generated from your brief."
-                            : "Create editable outlines and worksheets now. FiveGen AI will be available when the administrator completes setup."}
+                            : "Start with a blank draft and add your own content. AI generation requires the administrator to complete setup."}
                         </p>
                       </div>
                     </div>
@@ -1830,7 +1705,7 @@ export default function Studio({
           </footer>
         </main>
       </SidebarInset>
-      <CreateProductFlow textCost={workspace.textCost||10} open={create} onOpenChange={setCreate} brief={brief} onBriefChange={setBrief} step={step} onStepChange={setStep} busy={busy} aiReady={workspace.capabilities.ai} signedIn={!!user} error={creationError} onCreate={() => void generate()} onConnectAI={() => { if (!user) { sessionStorage.setItem("folio-unsaved-brief", JSON.stringify(brief)); sessionStorage.setItem("fivegen-brief-destination", "AI & credits"); } setCreate(false); setResumeBrief(true); commitNavigation("AI & credits"); }} />
+      <CreateProductFlow textCost={workspace.textCost||10} open={create} onOpenChange={setCreate} brief={brief} onBriefChange={setBrief} step={step} onStepChange={setStep} busy={busy} aiReady={workspace.capabilities.ai} signedIn={!!user} error={creationError} generationMode={generationMode} onModeChange={setGenerationMode} onCreate={() => void generate(generationMode)} onConnectAI={() => { if (!user) { sessionStorage.setItem("folio-unsaved-brief", JSON.stringify(brief)); sessionStorage.setItem("fivegen-brief-destination", "AI & credits"); sessionStorage.setItem("fivegen-generation-mode", generationMode); } setCreate(false); setResumeBrief(true); commitNavigation("AI & credits"); }} />
       {editor && <>
         <ProductPreview product={editor} open={preview} onOpenChange={setPreview} />
         <PublishReview product={editor} open={publishReview} onOpenChange={setPublishReview} busy={busy} paymentsReady={!!workspace.stripeReady} onPayments={() => { setEditTab("storefront"); setPublishReview(false); }} onPublish={() => void publishProduct(editor)} />

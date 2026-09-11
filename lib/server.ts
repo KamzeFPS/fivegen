@@ -79,15 +79,29 @@ export function sameOrigin(request: Request) {
   if (origin && origin !== new URL(request.url).origin)
     throw new ApiError("This request is not allowed.", 403);
 }
+export function stripeMode(): "live" | "test" | null {
+  const key = binding("STRIPE_SECRET_KEY");
+  return /^(sk|rk)_live_/.test(key) ? "live" : /^(sk|rk)_test_/.test(key) ? "test" : null;
+}
+export function stripeConfigured() {
+  const mode = stripeMode();
+  const expected = binding("STRIPE_MODE");
+  return !!mode && (!expected || mode === expected);
+}
+export function assertStripeMode(livemode: unknown) {
+  if (!stripeConfigured()) throw new ApiError("Platform payments are not configured for this environment.", 503);
+  if (typeof livemode !== "boolean" || livemode !== (stripeMode() === "live"))
+    throw new ApiError("The Stripe payment environment does not match this platform.", 400);
+}
 export async function stripe(
   path: string,
   body?: URLSearchParams,
   account?: string,
 ): Promise<Record<string, any>> {
   const key = binding("STRIPE_SECRET_KEY");
-  if (!key)
+  if (!stripeConfigured())
     throw new ApiError(
-      "Stripe is not connected yet. Add your platform Stripe credentials to enable payments.",
+      "Platform payments are not configured for this environment. The administrator needs to check Stripe settings.",
       503,
     );
   const res = await fetch(`https://api.stripe.com/v1/${path}`, {
@@ -98,6 +112,7 @@ export async function stripe(
       ...(account ? { "Stripe-Account": account } : {}),
     },
     body: body?.toString(),
+    signal: AbortSignal.timeout(30000),
   });
   const data = (await res.json()) as Record<string, any>;
   if (!res.ok)

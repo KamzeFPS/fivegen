@@ -13,7 +13,7 @@ try{
  const saved=await req('/api/providers');assert.equal(saved.connected.openai,true);assert.ok(!JSON.stringify(saved).includes(key));
  const record=db.prepare("SELECT * FROM providers WHERE owner='__fivegen_platform__'").get();assert.ok(record.openai);assert.notEqual(record.openai,key);
  const prior=await req('/api/credits');
- const {product}=await req('/api/products','POST',{title:'Local paused AI test',description:'Test the platform kill switch without contacting an AI provider.',audience:'Local QA',format:'Guide',price:0,color:'orange'});productId=product.id;
+ const {product}=await req('/api/products','POST',{generationMode:'manual',title:'Local paused AI test',description:'Test the platform kill switch without contacting an AI provider.',audience:'Local QA',format:'Guide',price:0,color:'orange'});productId=product.id;
  await req(`/api/products/${product.id}/generate`,'POST',{},503);
  const after=await req('/api/credits');assert.deepEqual(after.balance,prior.balance,'Paused generation must return reserved credits');assert.equal(after.history[0].state,'refunded');
  await req('/api/providers','PUT',{config:saved.config,remove:'openai'});assert.equal((await req('/api/providers')).connected.openai,false);

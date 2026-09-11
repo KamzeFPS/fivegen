@@ -19,8 +19,8 @@ async function call(path,method='GET',body,expected=200,auth=true){const r=await
 const state={ids:[],owner:null,membership:null};let keep=false;
 try{
  const ws=await call('/api/workspace');assert.ok(ws.plan.used<7,'Use a local account with room for test products');
- const brief={title:'Launch Studio — local commerce test',description:'A complete local QA product to test pricing and secure digital delivery.',audience:'Local testing only',format:'Guide',price:49,color:'orange'};
- async function create(title,price){const {product}=await call('/api/products','POST',{...brief,title,price});state.ids.push(product.id);await call(`/api/products/${product.id}/generate`,'DELETE');return product;}
+ const brief={generationMode:'manual',title:'Launch Studio — local commerce test',description:'A complete local QA product to test pricing and secure digital delivery.',audience:'Local testing only',format:'Guide',price:49,color:'orange'};
+ async function create(title,price){const {product}=await call('/api/products','POST',{...brief,title,price});state.ids.push(product.id);await call(`/api/products/${product.id}/generate`,'DELETE');product.content.sections[0].body='Completed local test content for checkout and delivery verification.';return product;}
  let main=await create(brief.title,49),bonus=await create('Bonus workbook — local test',19),extra=await create('Creator toolkit — local test',29);
  state.owner=db.prepare('SELECT owner FROM products WHERE id=?').get(main.id).owner;state.membership=db.prepare('SELECT * FROM memberships WHERE owner=?').get(state.owner)||null;
  db.prepare('DELETE FROM memberships WHERE owner=?').run(state.owner);
