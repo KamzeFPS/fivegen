@@ -85,7 +85,8 @@ export async function start() {
     stopping = true;
     server.close(() => { storage.close(); process.exit(0); });
     server.closeIdleConnections();
-    setTimeout(() => { server.closeAllConnections(); process.exit(1); }, 55000).unref();
+    // Exit before Render's default 30-second limit for disk-backed services.
+    setTimeout(() => { server.closeAllConnections(); process.exit(1); }, 25000).unref();
   };
   process.once('SIGTERM', shutdown);
   process.once('SIGINT', shutdown);

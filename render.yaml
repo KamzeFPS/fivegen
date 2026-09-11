@@ -9,7 +9,7 @@ services:
     buildCommand: npm ci --include=dev --include=optional && npm run build:render
     startCommand: npm run start:render
     healthCheckPath: /healthz
-    maxShutdownDelaySeconds: 60
+    # Disk-backed services do not support a custom shutdown delay.
     autoDeployTrigger: off
     disk:
       name: fivegen-data
