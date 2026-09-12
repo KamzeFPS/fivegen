@@ -116,6 +116,8 @@ try {
   assert.equal(one('SELECT count(*) AS n FROM wallets').n,0,'Sandbox never credits real AI wallets');
   assert.equal(one('SELECT owner FROM paddle_customers WHERE customer_id=?',customer.id).owner,'owner-a');
   assert.ok(await hasPaddlePaidAccess('owner-a'));
+  const billing=await paddleAccount('owner-a');
+  for(const row of [...billing.customers,...billing.subscriptions,...billing.payments]) assert.equal(Object.getPrototypeOf(row),Object.prototype,'Rows passed to React must be plain objects');
   assert.ok(!await hasPaddlePaidAccess('owner-b'));
   intent('intent-b','owner-b');
   await assert.rejects(dispatch('transaction.completed',tx('txn_other_owner','intent-b')),/another account/);

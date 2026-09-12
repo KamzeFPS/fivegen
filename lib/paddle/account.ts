@@ -11,7 +11,9 @@ export async function paddleAccount(owner: string) {
     db.prepare('SELECT transaction_id,status,credits,credited,reversed,created_at FROM paddle_transactions WHERE environment=? AND owner=? ORDER BY created_at DESC LIMIT 30').bind(environment, owner).all<{ transaction_id: string; status: string; credits: number; credited: number; reversed: number; created_at: string }>(),
     db.prepare('SELECT credits FROM paddle_test_wallets WHERE owner=?').bind(owner).first<{ credits: number }>(),
   ]);
-  return { environment, customers: customers.results, subscriptions: subscriptions.results, payments: payments.results, hasPaidAccess: subscriptions.results.some(subscriptionGrantsAccess), sandboxCredits: environment === 'sandbox' ? testWallet?.credits ?? 0 : null };
+  // node:sqlite returns rows with a null prototype. Normalize them before they
+  // cross React's server-to-client boundary; JSON API responses do this too.
+  return { environment, customers: customers.results.map(row => ({ ...row })), subscriptions: subscriptions.results.map(row => ({ ...row })), payments: payments.results.map(row => ({ ...row })), hasPaidAccess: subscriptions.results.some(subscriptionGrantsAccess), sandboxCredits: environment === 'sandbox' ? testWallet?.credits ?? 0 : null };
 }
 
 export async function hasPaddlePaidAccess(owner: string): Promise<boolean> {

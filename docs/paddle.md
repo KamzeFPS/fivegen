@@ -56,7 +56,7 @@ Keep the notification destination and signing secret, all three catalog products
 
 ## Validation
 
-Run `npm run test:paddle` and `npx tsc --noEmit`. The tests use the actual SDK signature verifier and real SQLite migrations and transactions; only outbound API calls and the session boundary use contract fixtures. They cover signature rejection before writes, duplicate and out-of-order deliveries, access states, account isolation, fulfillment, proportional refunds, chargebacks, and the portal boundary. Then use the sandbox checkout in a real browser: verify the localized total, corresponding line item, successful test payment, redirect to `/welcome`, verified credit balance, and the customer portal. Use Paddle's documented sandbox test card; never take a live payment as part of this test.
+Run `npm run test:paddle` and `npx tsc --noEmit`. After `npm run build:render`, run `node scripts/paddle-runtime-test.mjs` to check authenticated billing SSR and webhook/auth boundaries in the actual Node production runtime. All isolated fixture databases are retained. The handler tests use the actual SDK signature verifier and real SQLite migrations and transactions; only outbound API calls and the session boundary use contract fixtures. They cover signature rejection before writes, duplicate and out-of-order deliveries, access states, account isolation, fulfillment, proportional refunds, chargebacks, and the portal boundary. Then use the sandbox checkout in a real browser: verify the localized total, corresponding line item, successful test payment, redirect to `/welcome`, verified credit balance, and the customer portal. Use Paddle's documented sandbox test card; never take a live payment as part of this test.
 
 Verified on September 12, 2026 using the actual Paddle sandbox:
 
@@ -65,3 +65,4 @@ Verified on September 12, 2026 using the actual Paddle sandbox:
 - Signed-in local test email was prefilled by Paddle.
 - A 390px mobile viewport had no horizontal overflow and all purchase controls were 48px tall.
 - The owner configured the missing default payment link after Paddle returned `transaction_default_checkout_url_not_set`.
+- Hosted Starter checkout `che_01m2a4kw3eee52j9qe887v24fx` completed for $15.00 on `www.fivegen.ai`; `/welcome` confirmed 1,000 sandbox credits from the authenticated account API. Paddle notification `ntf_01m2a4mzpngpxaa4q7xnsa2mae` (`transaction.completed`) was delivered successfully to the hosted webhook. Production credits were unaffected.
