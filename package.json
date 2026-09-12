@@ -18,12 +18,14 @@
     "db:generate": "drizzle-kit generate",
     "test:journey": "node scripts/journey-integration-test.mjs",
     "test:referrals": "node scripts/referral-test.mjs",
-    "test:credits": "node scripts/credits-test.mjs && node scripts/generation-credit-test.mjs && node scripts/commission-test.mjs"
+    "test:credits": "node scripts/credits-test.mjs && node scripts/generation-credit-test.mjs && node scripts/commission-test.mjs",
+    "test:paddle": "node scripts/paddle-test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
     "@hookform/resolvers": "^5.7.1",
     "@modelcontextprotocol/sdk": "^1.26.0",
+    "@paddle/paddle-js": "^1.6.5",
     "@shadcn/react": "^0.3.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
