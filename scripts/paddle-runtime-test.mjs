@@ -13,11 +13,14 @@ const port=portProbe.address().port;
 await new Promise(done=>portProbe.close(done));
 const base=`http://127.0.0.1:${port}`;
 const secret='pdl_ntfset_local_runtime_fixture';
+const live=process.argv.includes('--live');
 Object.assign(process.env,{
   NODE_ENV:'production',APP_ORIGIN:base,PORT:String(port),FIVEGEN_RUNTIME:'render',FIVEGEN_DATA_DIR:root,
   GOOGLE_CLIENT_ID:'fixture',GOOGLE_CLIENT_SECRET:'fixture',CREDENTIAL_ENCRYPTION_KEY:'test-only-encryption-value-'.repeat(2),
-  RENDER_EXTERNAL_URL:'',RENDER:'',PRODUCT_DOMAIN:'',PADDLE_ENVIRONMENT:'sandbox',
-  PADDLE_API_KEY:'pdl_sdbx_apikey_fixture',PADDLE_WEBHOOK_SECRET:secret,
+  RENDER_EXTERNAL_URL:'',RENDER:'',PRODUCT_DOMAIN:'',PADDLE_ENVIRONMENT:live?'production':'sandbox',
+  PADDLE_API_KEY:live?'pdl_live_apikey_fixture':'pdl_sdbx_apikey_fixture',PADDLE_WEBHOOK_SECRET:secret,
+  PADDLE_CLIENT_TOKEN:live?'live_fixture':'test_fixture',PADDLE_LIVE_RELEASE:'staging',PADDLE_WEBHOOK_IP_MODE:'direct',
+  PADDLE_PRICE_STARTER:'pri_'+'a'.repeat(26),PADDLE_PRICE_PRO:'pri_'+'b'.repeat(26),PADDLE_PRICE_ADVANCED:'pri_'+'c'.repeat(26),
 });
 const seed=createStorage(root),token=randomBytes(32).toString('base64url'),owner='paddle-runtime-fixture',now=new Date().toISOString();
 seed.sqlite.prepare('INSERT INTO render_sessions VALUES (?,?,?,?,?)').run(digest(token),owner,'runtime@example.test','Runtime test',Date.now()+3600000);
@@ -25,6 +28,11 @@ seed.sqlite.prepare('INSERT INTO terms_acceptances VALUES (?,?,?,?,?)').run(rand
 seed.sqlite.prepare('INSERT INTO paddle_customers (customer_id,environment,email,owner,created_at,updated_at) VALUES (?,?,?,?,?,?)').run('ctm_runtime','sandbox','runtime@example.test',owner,now,now);
 seed.sqlite.prepare('INSERT INTO paddle_test_wallets VALUES (?,?)').run(owner,1000);
 seed.sqlite.prepare('INSERT INTO paddle_transactions (transaction_id,environment,customer_id,owner,status,currency,total,credits,credited,created_at,updated_at,event_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').run('txn_runtime','sandbox','ctm_runtime',owner,'completed','USD','1500',1000,1,now,now,Date.now());
+const customerId='ctm_'+'a'.repeat(26),otherCustomerId='ctm_'+'b'.repeat(26);
+if(live){
+  seed.sqlite.prepare('INSERT INTO paddle_customers (customer_id,environment,email,owner,created_at,updated_at) VALUES (?,?,?,?,?,?)').run(customerId,'production','runtime@example.test',owner,now,now);
+  seed.sqlite.prepare('INSERT INTO paddle_customers (customer_id,environment,email,owner,created_at,updated_at) VALUES (?,?,?,?,?,?)').run(otherCustomerId,'production','other@example.test','other-owner',now,now);
+}
 seed.close();
 const {start}=await import('../runtime/render/server.mjs');
 const app=await start();
@@ -37,6 +45,28 @@ try {
   assert.equal((await fetch(base+'/api/paddle/account')).status,401);
   assert.equal((await fetch(base+'/api/paddle/portal',{method:'POST',body:'{"customerId":"ctm_runtime"}'})).status,401);
   const account=await (await fetch(base+'/api/paddle/account',{headers})).json();
+  if(live){
+    assert.equal(account.payments.length,0,'Sandbox purchases must not appear as live purchases');
+    const pricing=await (await fetch(base+'/pricing',{headers})).text();
+    assert.ok(pricing.includes(customerId),'Retain receives the signed-in owner’s live Paddle customer');
+    assert.ok(!pricing.includes(otherCustomerId)&&!pricing.includes('ctm_runtime'),'Other owners and sandbox identities never reach Retain');
+    const anonymous=await (await fetch(base+'/pricing')).text();
+    assert.ok(!anonymous.includes(customerId),'Anonymous pricing does not expose a customer identity');
+    const checkout=await fetch(base+'/api/paddle/checkout',{method:'POST',headers:{...headers,origin:base,'content-type':'application/json'},body:JSON.stringify({priceId:process.env.PADDLE_PRICE_STARTER})});
+    assert.equal(checkout.status,503,'Signed-in callers cannot bypass the staging purchase lock');
+    assert.equal(app.storage.sqlite.prepare('SELECT COUNT(*) AS n FROM paddle_checkout_intents').get().n,0);
+    const source=(await (await fetch('https://api.paddle.com/ips')).json()).data.ipv4_cidrs[0].split('/')[0];
+    for(const path of ['/api/webhooks/paddle','/api/webhooks/paddle/','/api/webhooks/%70addle']){
+      const delivery=await fetch(base+path,{method:'POST',headers:{'x-forwarded-for':source,'cf-ray':'forged'},body:'{}',redirect:'manual'});
+      assert.equal(delivery.status,403,'A forged IP header must not bypass the live network boundary at '+path);
+    }
+    assert.equal(app.storage.sqlite.prepare('SELECT COUNT(*) AS n FROM paddle_webhook_events').get().n,0);
+    for(const [path,title] of [['/terms','Terms &amp; Conditions'],['/refund','Refund &amp; Cancellation Policy']]){
+      const page=await fetch(base+path);assert.equal(page.status,200);assert.ok((await page.text()).includes(title));
+    }
+    const alias=await fetch(base+'/refunds');assert.equal(alias.status,200);assert.ok(alias.url.endsWith('/refund'));
+    console.log('Live Node runtime passed: server purchase lock, scoped Retain identity, anonymous isolation, forged webhook source rejection, and public policy routes.');
+  }else{
   assert.equal(account.sandboxCredits,1000);assert.equal(account.payments[0].transaction_id,'txn_runtime');
   const raw=JSON.stringify({event_id:'evt_runtime',event_type:'customer.created',occurred_at:now,data:{id:'ctm_webhook_runtime',email:'webhook@example.test',status:'active',created_at:now,updated_at:now}});
   const ts=Math.floor(Date.now()/1000),signature=`ts=${ts};h1=${createHmac('sha256',secret).update(`${ts}:${raw}`).digest('hex')}`;
@@ -44,6 +74,7 @@ try {
   assert.equal((await fetch(base+'/api/webhooks/paddle',{method:'POST',headers:{'paddle-signature':signature},body:raw})).status,200);
   assert.equal((await fetch(base+'/api/webhooks/paddle',{method:'POST',headers:{'paddle-signature':signature},body:raw+' '})).status,400);
   console.log('Paddle production-runtime checks passed: authenticated billing SSR, protected API routes, real SDK raw-body verification, and persisted account data.');
+  }
   console.log('Runtime QA database retained: '+root);
 } finally {
   await new Promise(done=>{app.server.close(done);app.server.closeIdleConnections();});

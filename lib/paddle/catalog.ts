@@ -39,6 +39,7 @@ export interface PaddlePublicConfig {
   environment: 'sandbox' | 'production';
   clientToken: string;
   tiers: Tier[];
+  checkoutEnabled: boolean;
 }
 
 export class PaddleConfigurationError extends Error {}
@@ -62,7 +63,14 @@ export function parsePaddleConfig(read: (key: string) => string): PaddlePublicCo
     used.add(priceId);
     return { ...tier, priceId };
   });
-  return { environment, clientToken, tiers };
+  const release = read('PADDLE_LIVE_RELEASE').trim();
+  if (environment === 'production' && release !== 'staging' && release !== 'approved') throw new PaddleConfigurationError('Set PADDLE_LIVE_RELEASE to staging until Paddle verification and domain approval are complete.');
+  return { environment, clientToken, tiers, checkoutEnabled: environment === 'sandbox' || release === 'approved' };
+}
+
+// Retain accepts only Paddle customer IDs. Unknown and anonymous buyers use {}.
+export function retainCustomer(customerId?: string) {
+  return customerId && /^ctm_[a-z0-9]{26}$/.test(customerId) ? { id: customerId } : {};
 }
 
 // Accept actual ISO 3166-1 alpha-2 values only. CDN sentinels (XX, T1,

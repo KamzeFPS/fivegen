@@ -5,10 +5,10 @@ import { initializePaddle, type Paddle, type PaddleEventData, type PricePreviewR
 import { ArrowLeft, ArrowRight, Check, CircleAlert, Globe2, Loader2, LockKeyhole, RefreshCw, Sparkles, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Brand } from '../ui-brand';
-import { tierDefinitions, type PaddlePublicConfig, type Tier } from '@/lib/paddle/catalog';
+import { retainCustomer, tierDefinitions, type PaddlePublicConfig, type Tier } from '@/lib/paddle/catalog';
 import { checkoutOptions, checkoutSettings, previewRequest, verifiedPrices, type LocalizedPrice } from '@/lib/paddle/checkout';
 
-type Props = { config?: PaddlePublicConfig; countryCode?: string; email?: string; configurationError?: string };
+type Props = { config?: PaddlePublicConfig; countryCode?: string; email?: string; paddleCustomerId?: string; configurationError?: string };
 
 function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -17,7 +17,7 @@ function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
   });
 }
 
-export function Pricing({ config, countryCode, email, configurationError }: Props) {
+export function Pricing({ config, countryCode, email, paddleCustomerId, configurationError }: Props) {
   const [prices, setPrices] = useState<Record<string, LocalizedPrice>>({});
   const [address, setAddress] = useState<PricePreviewResponse['data']['address']>(null);
   const [loading, setLoading] = useState(Boolean(config));
@@ -58,10 +58,10 @@ export function Pricing({ config, countryCode, email, configurationError }: Prop
       setPrices({});
       setError('');
       try {
-        const paddle = await withTimeout(initializePaddle({ environment: config!.environment, token: config!.clientToken, eventCallback: onEvent, checkout: { settings: checkoutSettings(window.location.origin) } }), 'Checkout is taking too long to load. Check your connection and retry.');
+        const paddle = await withTimeout(initializePaddle({ environment: config!.environment, token: config!.clientToken, pwCustomer: retainCustomer(paddleCustomerId), eventCallback: onEvent, checkout: { settings: checkoutSettings(window.location.origin) } }), 'Checkout is taking too long to load. Check your connection and retry.');
         if (cancelled) return;
         if (!paddle) throw new Error('Paddle could not initialize. Please refresh the page.');
-        paddle.Update({ eventCallback: onEvent });
+        paddle.Update({ eventCallback: onEvent, pwCustomer: retainCustomer(paddleCustomerId) });
         paddleRef.current = paddle;
         const preview = await withTimeout(paddle.PricePreview(previewRequest(config!.tiers, countryCode)), 'Local prices could not be loaded. Check your connection and retry.');
         if (cancelled) return;
@@ -73,11 +73,11 @@ export function Pricing({ config, countryCode, email, configurationError }: Prop
     }
     void load();
     return () => { cancelled = true; clearTimeout(checkoutTimer.current); };
-  }, [config, countryCode, retry]);
+  }, [config, countryCode, paddleCustomerId, retry]);
 
   async function buy(tier: Tier) {
     const price = prices[tier.priceId];
-    if (!paddleRef.current || !price || loading || openingRef.current) return;
+    if (!config?.checkoutEnabled || !paddleRef.current || !price || loading || openingRef.current) return;
     openingRef.current = true;
     setOpening(tier.name);
     setError('');
@@ -112,6 +112,7 @@ export function Pricing({ config, countryCode, email, configurationError }: Prop
       </header>
 
       {config?.environment === 'sandbox' && <div className="paddle-sandbox"><span>Sandbox checkout</span> Test payments only. No real money is charged.</div>}
+      {config?.environment === 'production' && !config.checkoutEnabled && <div className="paddle-sandbox"><span>Live setup review</span> Live prices are shown below. Purchases open after verification and website approval.</div>}
       {(configurationError || error) && <div className="paddle-error" role="alert"><CircleAlert size={20} /><div><strong>{configurationError ? 'Checkout setup is incomplete' : 'We couldn’t load checkout'}</strong><p>{configurationError || error}</p></div>{!configurationError && <Button variant="outline" disabled={loading || Boolean(opening)} onClick={() => { paddleRef.current?.Checkout.close(); setPrices({}); setLoading(true); setRetry(value => value + 1); }}><RefreshCw size={16} /> Retry</Button>}</div>}
 
       <section className="paddle-grid" aria-label="One-time AI credit packs" aria-busy={loading}>
@@ -121,7 +122,7 @@ export function Pricing({ config, countryCode, email, configurationError }: Prop
             <div className="paddle-tier-top"><span className="paddle-tier-icon">{tier.name === 'Starter' ? <Zap size={21} /> : <Sparkles size={21} />}</span>{tier.featured && <span className="paddle-recommendation">RECOMMENDED</span>}</div>
             <h2>{tier.name}</h2><p className="paddle-description">{tier.description}</p>
             <div className="paddle-price" aria-live="polite">{price ? <strong>{price.formattedTotals.total}</strong> : loading ? <span className="paddle-price-skeleton" aria-label="Loading local price" /> : <strong className="paddle-unavailable">Unavailable</strong>}<span>one-time payment</span></div>
-            <Button className="paddle-buy" variant={tier.featured ? 'default' : 'outline'} disabled={!price || loading || Boolean(opening)} onClick={() => buy(tier as Tier)} aria-label={`Buy ${tier.name} credits${price ? ` for ${price.formattedTotals.total}` : ''}`}>{opening === tier.name ? <><Loader2 size={18} className="animate-spin" /> Opening checkout…</> : <>Buy credits <ArrowRight size={17} /></>}</Button>
+            <Button className="paddle-buy" variant={tier.featured ? 'default' : 'outline'} disabled={!config?.checkoutEnabled || !price || loading || Boolean(opening)} onClick={() => buy(tier as Tier)} aria-label={`Buy ${tier.name} credits${price ? ` for ${price.formattedTotals.total}` : ''}`}>{opening === tier.name ? <><Loader2 size={18} className="animate-spin" /> Opening checkout…</> : !config?.checkoutEnabled && config ? <>Available after approval <LockKeyhole size={17} /></> : <>Buy credits <ArrowRight size={17} /></>}</Button>
             <div className="paddle-tier-divider" /><ul>{tier.features.map(feature => <li key={feature}><Check size={17} />{feature}</li>)}</ul>
           </article>;
         })}

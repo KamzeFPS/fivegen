@@ -20,3 +20,7 @@ export function paddleSigningSecret() {
   if (!secret || secret.startsWith('ntfset_') || /^pdl_(sdbx|live)_apikey_/.test(secret)) throw new ApiError('Paddle notification signing secret is not configured.', 503);
   return secret;
 }
+
+export function assertPaddleCheckoutReleased() {
+  if (paddleEnvironment() === 'production' && binding('PADDLE_LIVE_RELEASE') !== 'approved') throw new ApiError('Live checkout is awaiting Paddle verification and website approval.', 503);
+}

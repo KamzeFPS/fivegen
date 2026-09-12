@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import { ApiError, binding, database, failure, identity, sameOrigin } from '@/lib/server';
 import { parsePaddleConfig } from '@/lib/paddle/catalog';
-import { paddleServer, paddleSigningSecret } from '@/lib/paddle/server';
+import { assertPaddleCheckoutReleased, paddleServer, paddleSigningSecret } from '@/lib/paddle/server';
 
 export async function POST(request: Request) {
   try {
     const user = await identity();
     sameOrigin(request);
+    assertPaddleCheckoutReleased();
     const { priceId } = z.object({ priceId: z.string() }).strict().parse(await request.json());
     const config = parsePaddleConfig(binding);
     paddleSigningSecret();

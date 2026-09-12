@@ -1,0 +1,281 @@
+{
+  "checkedAt": "2026-09-12T07:04:07.034Z",
+  "pages": [
+    {
+      "url": "https://www.fivegen.ai/",
+      "finalUrl": "https://www.fivegen.ai/",
+      "status": 200,
+      "title": "FiveGen — Your next idea, made real",
+      "headings": [
+        "Your next creation starts here .",
+        "One idea. Endless possibilities.",
+        "Revenue overview",
+        "Recent sales",
+        "Your products"
+      ],
+      "links": [
+        {
+          "href": "/pricing",
+          "text": "AI credit pricing"
+        },
+        {
+          "href": "/terms",
+          "text": "Terms &amp; Conditions"
+        },
+        {
+          "href": "/refund",
+          "text": "Refund policy"
+        },
+        {
+          "href": "mailto:kamzewac@gmail.com",
+          "text": "Contact support"
+        }
+      ],
+      "sandboxNotice": false
+    },
+    {
+      "url": "https://www.fivegen.ai/terms",
+      "finalUrl": "https://www.fivegen.ai/terms",
+      "status": 200,
+      "title": "Terms &amp; Conditions · FiveGen",
+      "headings": [
+        "Terms &amp; Conditions",
+        "1. Your account and workspace",
+        "2. AI generation and credits",
+        "3. Selling fees and payments",
+        "4. Your products and customers",
+        "5. Bookings, communities, and partners",
+        "6. Service changes and support"
+      ],
+      "links": [
+        {
+          "href": "mailto:kamzewac@gmail.com",
+          "text": "kamzewac@gmail.com"
+        },
+        {
+          "href": "/refund",
+          "text": "Refund &amp; Cancellation Policy"
+        },
+        {
+          "href": "/pricing",
+          "text": "AI credit pricing"
+        },
+        {
+          "href": "mailto:kamzewac@gmail.com",
+          "text": "Contact support"
+        }
+      ],
+      "sandboxNotice": false
+    },
+    {
+      "url": "https://www.fivegen.ai/privacy",
+      "finalUrl": "https://www.fivegen.ai/privacy",
+      "status": 404,
+      "title": "FiveGen — Your next idea, made real",
+      "headings": [
+        "This page isn’t available."
+      ],
+      "links": [],
+      "sandboxNotice": false
+    },
+    {
+      "url": "https://www.fivegen.ai/refund",
+      "finalUrl": "https://www.fivegen.ai/refund",
+      "status": 200,
+      "title": "Refund &amp; Cancellation Policy · FiveGen",
+      "headings": [
+        "Refund &amp; Cancellation Policy",
+        "1. Requesting a refund",
+        "2. Credit delivery and generation issues",
+        "3. Cancellations and recurring payments",
+        "4. Products sold by FiveGen creators",
+        "5. Your consumer rights"
+      ],
+      "links": [
+        {
+          "href": "#request",
+          "text": "Request a refund"
+        },
+        {
+          "href": "mailto:kamzewac@gmail.com?subject=FiveGen%20billing%20support",
+          "text": "kamzewac@gmail.com"
+        },
+        {
+          "href": "https://www.paddle.com/legal/refund-policy",
+          "text": "Paddle Refund Policy"
+        },
+        {
+          "href": "/terms#ai-credits",
+          "text": "Terms &amp; Conditions"
+        },
+        {
+          "href": "/terms",
+          "text": "Terms &amp; Conditions"
+        },
+        {
+          "href": "/pricing",
+          "text": "AI credit pricing"
+        },
+        {
+          "href": "mailto:kamzewac@gmail.com",
+          "text": "Contact support"
+        }
+      ],
+      "sandboxNotice": false
+    },
+    {
+      "url": "https://www.fivegen.ai/refunds",
+      "finalUrl": "https://www.fivegen.ai/refund",
+      "status": 200,
+      "title": "Refund &amp; Cancellation Policy · FiveGen",
+      "headings": [
+        "Refund &amp; Cancellation Policy",
+        "1. Requesting a refund",
+        "2. Credit delivery and generation issues",
+        "3. Cancellations and recurring payments",
+        "4. Products sold by FiveGen creators",
+        "5. Your consumer rights"
+      ],
+      "links": [
+        {
+          "href": "#request",
+          "text": "Request a refund"
+        },
+        {
+          "href": "mailto:kamzewac@gmail.com?subject=FiveGen%20billing%20support",
+          "text": "kamzewac@gmail.com"
+        },
+        {
+          "href": "https://www.paddle.com/legal/refund-policy",
+          "text": "Paddle Refund Policy"
+        },
+        {
+          "href": "/terms#ai-credits",
+          "text": "Terms &amp; Conditions"
+        },
+        {
+          "href": "/terms",
+          "text": "Terms &amp; Conditions"
+        },
+        {
+          "href": "/pricing",
+          "text": "AI credit pricing"
+        },
+        {
+          "href": "mailto:kamzewac@gmail.com",
+          "text": "Contact support"
+        }
+      ],
+      "sandboxNotice": false
+    },
+    {
+      "url": "https://www.fivegen.ai/pricing",
+      "finalUrl": "https://www.fivegen.ai/pricing",
+      "status": 200,
+      "title": "AI Credits — FiveGen",
+      "headings": [
+        "More ideas. More possibilities.",
+        "Starter",
+        "Pro",
+        "Advanced",
+        "Your workspace. Already included."
+      ],
+      "links": [
+        {
+          "href": "/terms",
+          "text": "Terms &amp; Conditions"
+        },
+        {
+          "href": "/refund",
+          "text": "Refund policy"
+        },
+        {
+          "href": "mailto:kamzewac@gmail.com",
+          "text": "Contact support"
+        }
+      ],
+      "sandboxNotice": true
+    },
+    {
+      "url": "https://fivegen.ai/pricing",
+      "finalUrl": "https://www.fivegen.ai/pricing",
+      "status": 200,
+      "title": "AI Credits — FiveGen",
+      "headings": [
+        "More ideas. More possibilities.",
+        "Starter",
+        "Pro",
+        "Advanced",
+        "Your workspace. Already included."
+      ],
+      "links": [
+        {
+          "href": "/terms",
+          "text": "Terms &amp; Conditions"
+        },
+        {
+          "href": "/refund",
+          "text": "Refund policy"
+        },
+        {
+          "href": "mailto:kamzewac@gmail.com",
+          "text": "Contact support"
+        }
+      ],
+      "sandboxNotice": true
+    }
+  ],
+  "domains": [
+    {
+      "id": "chedom_01m2a5zrwncks7dkntsd80btwf",
+      "domain": "fivegen.ai",
+      "status": "rejected"
+    }
+  ],
+  "catalog": [
+    {
+      "pack": "scale",
+      "priceId": "pri_01m2a5d4w5qa8m4jhhfr6dc06t",
+      "productId": "pro_01m2a5d4e47qjg5c82bnypxjtr",
+      "amount": "7500",
+      "currency": "USD",
+      "active": true,
+      "billingCycle": null,
+      "matchesSandbox": true
+    },
+    {
+      "pack": "studio",
+      "priceId": "pri_01m2a5d5gwe5fc9y631bxcrp5s",
+      "productId": "pro_01m2a5d57f4274y98pt1qrmnsf",
+      "amount": "3500",
+      "currency": "USD",
+      "active": true,
+      "billingCycle": null,
+      "matchesSandbox": true
+    },
+    {
+      "pack": "starter",
+      "priceId": "pri_01m2a5d64xpnf4wwtp94n62vxh",
+      "productId": "pro_01m2a5d5v7s9m4x037vfmb52x3",
+      "amount": "1500",
+      "currency": "USD",
+      "active": true,
+      "billingCycle": null,
+      "matchesSandbox": true
+    }
+  ],
+  "liveWebhookIPs": {
+    "source": "https://api.paddle.com/ips",
+    "ipv4_cidrs": [
+      "34.237.3.244/32",
+      "34.195.105.136/32",
+      "34.232.58.13/32",
+      "35.155.119.135/32",
+      "34.212.5.7/32",
+      "52.11.166.252/32"
+    ]
+  },
+  "publicDeployment": "sandbox intentionally retained",
+  "defaultLivePaymentLink": "unverified dashboard-only setting",
+  "verification": "not confirmed"
+}

@@ -1,4 +1,6 @@
-# Paddle sandbox pricing
+# Paddle pricing and sandbox verification
+
+Live preparation is documented in [paddle-live-readiness.md](paddle-live-readiness.md), with catalog mappings in [paddle-live-mapping.json](paddle-live-mapping.json). The public service remains on sandbox pending verification. `.env.example` now describes the separate live staging profile; use the IDs below only for sandbox environments.
 
 The public `/pricing` page uses `@paddle/paddle-js` with the existing Vinext / Next.js App Router. The final catalog is **one-time credit packs**, per the owner's clarification. There is no recurring billing toggle or subscription.
 
@@ -12,7 +14,7 @@ Edit the page's tier names, descriptions, and features in `lib/paddle/catalog.ts
 
 ## Environment
 
-Set the seven `PADDLE_*` variables listed in `.env.example`. `PADDLE_ENVIRONMENT` must explicitly be `sandbox` or `production`. There is no default; missing configuration or mismatched token prefixes fail closed. `PADDLE_CLIENT_TOKEN` is a client-side token (`test_` for sandbox, `live_` for production). `PADDLE_API_KEY` and `PADDLE_WEBHOOK_SECRET` are server-only. The API key needs customer read and customer portal session write permissions. The signing secret is the notification destination's endpoint secret (usually `pdl_ntfset_...`), not its `ntfset_...` ID and not an API key.
+Set the `PADDLE_*` variables listed in `.env.example`. `PADDLE_ENVIRONMENT` must explicitly be `sandbox` or `production`. There is no default; missing configuration or mismatched token prefixes fail closed. `PADDLE_CLIENT_TOKEN` is a client-side token (`test_` for sandbox, `live_` for production). `PADDLE_API_KEY` and `PADDLE_WEBHOOK_SECRET` are server-only. The API key needs customer read and customer portal session write permissions. The signing secret is the notification destination's endpoint secret (usually `pdl_ntfset_...`), not its `ntfset_...` ID and not an API key.
 
 Locally, Workers development uses `.dev.vars`; Render uses `.env.render.local`. These files are ignored by Git. Configure the same variables privately in your deployment's environment settings; never commit environment files or put them in public assets. The client receives only the validated environment, public token, tier definitions, optional country, and signed-in email.
 

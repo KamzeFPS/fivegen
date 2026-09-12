@@ -53,7 +53,13 @@ for(const wrong of ['','ntfset_destination_id','pdl_sdbx_apikey_fixture']) {
 state.config.PADDLE_WEBHOOK_SECRET=secret;
 state.config.PADDLE_ENVIRONMENT='';assert.throws(()=>serverConfig.paddleEnvironment(),/explicitly/);
 state.config.PADDLE_ENVIRONMENT='production';assert.throws(()=>serverConfig.paddleServer(),/credentials/);
+for(const release of ['', 'staging', 'typo']){
+  state.config.PADDLE_LIVE_RELEASE=release;
+  assert.throws(()=>serverConfig.assertPaddleCheckoutReleased(),e=>e.status===503);
+}
+state.config.PADDLE_LIVE_RELEASE='approved';serverConfig.assertPaddleCheckoutReleased();
 state.config.PADDLE_ENVIRONMENT='sandbox';
+state.config.PADDLE_LIVE_RELEASE='';serverConfig.assertPaddleCheckoutReleased();
 const one = (sql, ...args) => storage.sqlite.prepare(sql).get(...args);
 const run = (sql, ...args) => storage.sqlite.prepare(sql).run(...args);
 const date = '2026-09-12T08:00:00.000000Z';

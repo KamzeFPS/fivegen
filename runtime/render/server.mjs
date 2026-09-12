@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getStorage } from './storage.mjs';
 import { createAuth, stripHeaders } from './auth.mjs';
+import { createPaddleWebhookIpGuard } from './paddle-webhook-ips.mjs';
 
 export function readConfig(source = process.env) {
   const origin = new URL(source.APP_ORIGIN || source.RENDER_EXTERNAL_URL || '');
@@ -41,6 +42,7 @@ export async function start() {
   process.env.VINEXT_TRUST_PROXY = '1';
   const storage = getStorage();
   const auth = createAuth(config, storage);
+  const allowPaddleWebhookSource = createPaddleWebhookIpGuard();
   const { startProdServer } = await import('vinext/server/prod-server');
   // Initialize Vinext on loopback, then install our authentication boundary
   // before exposing the same production server on Render's public port.
@@ -51,6 +53,7 @@ export async function start() {
   let stopping = false;
   server.on('request', async (req, res) => {
     try {
+      const webhookSource = { socket: { remoteAddress: req.socket.remoteAddress }, headers: { 'x-forwarded-for': req.headers['x-forwarded-for'], 'cf-ray': req.headers['cf-ray'] } };
       stripHeaders(req, name => name.startsWith('oai-authenticated-user-') || name.startsWith('x-forwarded-') || name === 'forwarded');
       const authority = new URL(config.origin);
       const host = String(req.headers.host || '').toLowerCase();
@@ -79,6 +82,14 @@ export async function start() {
         res.writeHead(308, { Location: config.origin + url.pathname + url.search, 'Cache-Control': 'no-store' }); res.end(); return;
       }
       if (host !== authority.host && !productHost) { res.writeHead(421, { 'Cache-Control': 'no-store' }); res.end('Unrecognized host'); return; }
+      // Apply the boundary to encoded and trailing-slash route equivalents too.
+      let routePath;
+      try { routePath = decodeURIComponent(url.pathname).replace(/\/+$/, ''); }
+      catch { res.writeHead(400); res.end(); return; }
+      if (routePath === '/api/webhooks/paddle' && process.env.PADDLE_ENVIRONMENT === 'production') {
+        try { await allowPaddleWebhookSource(webhookSource, { mode: process.env.PADDLE_WEBHOOK_IP_MODE, render: process.env.RENDER === 'true' }); }
+        catch (error) { res.writeHead(error.status === 403 ? 403 : 503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...(error.status === 403 ? {} : { 'Retry-After': '60' }) }); res.end(JSON.stringify({ error: error.status === 403 ? 'Webhook source IP is not allowed.' : 'Webhook IP verification is temporarily unavailable.' })); return; }
+      }
       if (productHost && ['/signin-with-chatgpt', '/signout-with-chatgpt', '/callback'].includes(url.pathname)) {
         res.writeHead(303, { Location: config.origin + url.pathname + url.search }); res.end(); return;
       }

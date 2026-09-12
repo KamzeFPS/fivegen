@@ -1,0 +1,61 @@
+{
+  "source": "sandbox",
+  "destination": "production",
+  "products": [
+    {
+      "packId": "scale",
+      "name": "FiveGen — 6,000 AI Credits",
+      "sandboxId": "pro_01m2a247h47wrp1jrby52mgbj6",
+      "liveId": "pro_01m2a5d4e47qjg5c82bnypxjtr"
+    },
+    {
+      "packId": "studio",
+      "name": "FiveGen — 2,500 AI Credits",
+      "sandboxId": "pro_01m2a2263vtzdwm8y513tdezse",
+      "liveId": "pro_01m2a5d57f4274y98pt1qrmnsf"
+    },
+    {
+      "packId": "starter",
+      "name": "FiveGen — 1,000 AI Credits",
+      "sandboxId": "pro_01m2a1vherpw11dztrvkjjvzd0",
+      "liveId": "pro_01m2a5d5v7s9m4x037vfmb52x3"
+    }
+  ],
+  "prices": [
+    {
+      "packId": "scale",
+      "sandboxId": "pri_01m2a24wedk6c8z0j0d389ge86",
+      "liveId": "pri_01m2a5d4w5qa8m4jhhfr6dc06t",
+      "liveProductId": "pro_01m2a5d4e47qjg5c82bnypxjtr",
+      "amount": "7500",
+      "currency": "USD",
+      "billingCycle": null
+    },
+    {
+      "packId": "studio",
+      "sandboxId": "pri_01m2a22x9e44gqtz1mx8ck4x09",
+      "liveId": "pri_01m2a5d5gwe5fc9y631bxcrp5s",
+      "liveProductId": "pro_01m2a5d57f4274y98pt1qrmnsf",
+      "amount": "3500",
+      "currency": "USD",
+      "billingCycle": null
+    },
+    {
+      "packId": "starter",
+      "sandboxId": "pri_01m2a1xs85jt0dn03czxwq7174",
+      "liveId": "pri_01m2a5d64xpnf4wwtp94n62vxh",
+      "liveProductId": "pro_01m2a5d5v7s9m4x037vfmb52x3",
+      "amount": "1500",
+      "currency": "USD",
+      "billingCycle": null
+    }
+  ],
+  "discounts": [],
+  "clientTokenId": "ctkn_01m2a5asnyydzm2s9fcjq63bwh",
+  "updatedAt": "2026-09-12T06:39:05.402Z",
+  "notification": {
+    "id": "ntfset_01m2a5bsqv22c2e1f7x4sqq8ng",
+    "destination": "https://www.fivegen.ai/api/webhooks/paddle",
+    "active": true
+  }
+}
