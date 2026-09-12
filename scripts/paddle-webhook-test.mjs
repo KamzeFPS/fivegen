@@ -147,6 +147,19 @@ try {
   assert.equal((await paddleAccount('owner-b')).payments.length,0);
   state.user={userId:'owner-a',email:'buyer@example.test'};
   assert.equal((await portal(new Request('https://fivegen.example/api/paddle/portal',{method:'POST',headers:{origin:'https://attacker.example'}}))).status,403);
+
+  // Exercise the production wallet SQL without a real production API or payment.
+  state.environment='production';
+  intent('intent-production','owner-production','production');
+  const productionTx={...tx('txn_qa_production','intent-production'),customerId:'ctm_qa_production'};
+  await dispatch('transaction.completed',productionTx);
+  await dispatch('transaction.completed',productionTx);
+  assert.equal(one('SELECT purchased FROM wallets WHERE owner=?','owner-production').purchased,1000);
+  run('UPDATE wallets SET purchased=purchased-200 WHERE owner=?','owner-production');
+  await dispatch('adjustment.created',adjust('adj_production','txn_qa_production','1500'),time(10));
+  assert.equal(one('SELECT purchased FROM wallets WHERE owner=?','owner-production').purchased,-200,'Already spent refunded credits retain debt');
+  assert.equal(one('SELECT credits FROM paddle_test_wallets WHERE owner=?','owner-a').credits,750);
+  assert.equal((await paddleAccount('owner-a')).customers.length,0,'Environment switching cannot expose sandbox customers');
   console.log('Paddle webhook checks passed: raw SDK verification, rejection before mutation, typed routing, duplicate/out-of-order state, subscription access, account isolation, atomic fulfillment, refunds, chargebacks, sandbox isolation, and authenticated portal.');
   console.log('Billing QA database retained: '+root);
 } finally { storage.close(); }
