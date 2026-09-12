@@ -12,9 +12,9 @@ Edit the page's tier names, descriptions, and features in `lib/paddle/catalog.ts
 
 ## Environment
 
-Set the five `PADDLE_*` variables listed in `.env.example`. `PADDLE_ENVIRONMENT` must explicitly be `sandbox` or `production`. There is no default; missing configuration or mismatched token prefixes produce a visible setup error and disable buying. `PADDLE_CLIENT_TOKEN` is a client-side token (`test_` for sandbox, `live_` for production). A server API key is neither required nor read by this pricing page.
+Set the seven `PADDLE_*` variables listed in `.env.example`. `PADDLE_ENVIRONMENT` must explicitly be `sandbox` or `production`. There is no default; missing configuration or mismatched token prefixes fail closed. `PADDLE_CLIENT_TOKEN` is a client-side token (`test_` for sandbox, `live_` for production). `PADDLE_API_KEY` and `PADDLE_WEBHOOK_SECRET` are server-only. The API key needs customer read and customer portal session write permissions. The signing secret is the notification destination's endpoint secret (usually `pdl_ntfset_...`), not its `ntfset_...` ID and not an API key.
 
-Locally, Workers development uses `.dev.vars`; Render uses `.env.render.local`. These files are ignored by Git. Configure the same variables in your deployment's environment settings; never upload local environment files. The client receives only the validated environment, public token, tier definitions, optional country, and signed-in email.
+Locally, Workers development uses `.dev.vars`; Render uses `.env.render.local`. These files are ignored by Git. Configure the same variables privately in your deployment's environment settings; never commit environment files or put them in public assets. The client receives only the validated environment, public token, tier definitions, optional country, and signed-in email.
 
 ## Required dashboard step (owner)
 
@@ -26,19 +26,37 @@ For live checkout, first complete Paddle verification and domain approval. The d
 
 - The server reads `x-vercel-ip-country`, then `cf-ipcountry`. Only valid ISO 3166-1 alpha-2 codes are accepted. Missing values, `OTHERS`, `XX`, `T1`, and invalid codes are omitted entirely; Paddle then detects the visitor's IP.
 - The browser calls `Paddle.PricePreview()` for the three IDs. It renders `lineItem.formattedTotals.total` verbatim. There is no frontend price calculation, rounding, or currency reformatting.
-- Checkout uses the exact returned price ID and quantity. A configured recurring/trial price or missing total is rejected. An authenticated email and preview address are prefilled. Anonymous checkout detects the visitor's location itself.
+- Checkout uses the exact returned price ID and quantity. A configured recurring/trial price or missing total is rejected. Buyers sign in and accept the existing terms before checkout. `/api/paddle/checkout` validates the catalog ID and stores a server-owned checkout intent with account, email, and credit entitlement. The authenticated email and preview address are prefilled, and checkout email changes are disabled.
 - Checkout is an overlay with the `one-page` variant and an absolute `successUrl` ending `/welcome`. Changing billing address or tax information inside Paddle may update the final total.
 - Loading, retry, checkout errors, timeouts, mobile layouts, and reduced-motion preferences are handled. The `/welcome` checkout receipt preserves the existing explicit `return_to` onboarding/terms flow.
 
-## Scope and fulfillment
+## Verified fulfillment and state
 
-This change adds a Paddle **sandbox pricing and checkout flow**. FiveGen's existing Stripe wallet fulfillment and seller payment flow remain in place. Sandbox transactions do not grant production AI credits. The browser completion marker controls only the welcome message, never wallet credit or access.
+`POST /api/webhooks/paddle` reads `request.text()` and calls the official Node SDK's `paddle.webhooks.unmarshal(rawBody, signingSecret, signature)` before dispatch. Invalid or absent signatures return 400. Configuration, API, validation, and database failures return non-2xx so Paddle can retry. Unhandled, verified events are acknowledged and ignored.
 
-Before replacing live credit purchases with Paddle, add a signed server-side transaction-completed webhook, account binding, an idempotent credit ledger, and refund/dispute reversal handling. Never grant credits from `checkout.completed`, a URL, or browser storage. The public pricing page is not a production wallet fulfillment integration.
+The existing sandbox notification destination is `ntfset_01m2a3d59znze9a5fxrhg12ffx`, active at `https://www.fivegen.ai/api/webhooks/paddle`, subscribed to all events with platform traffic. Its secret is stored only in private environment configuration. Required events: customer.created/updated; subscription.created/updated/canceled/activated/trialing/paused/past_due/resumed; transaction.completed; adjustment.created/updated.
+
+Drizzle migration `0007_serious_ikaris.sql` adds separate Paddle customer, subscription, checkout intent, transaction, adjustment, event audit, and sandbox wallet tables. Existing Stripe records remain intact. Entity IDs are primary keys, state upserts compare microsecond event timestamps, and missing customers get placeholders so subscriptions can arrive first. Later customer events hydrate these placeholders without losing account ownership.
+
+For a completed credit payment, the server validates its persisted intent, exact price, quantity, one-time billing, and customer email fetched from Paddle. Customer ownership is bound once and cannot move to another account. Wallet credit and the credited flag are committed in one SQLite transaction, making concurrent retries safe. Transactions without a recognized intent are mirrored but do not grant credits or account ownership.
+
+Sandbox fulfillment writes only `paddle_test_wallets`; it never adds production AI capacity. Production fulfillment adds `wallets.purchased`. Verified approved refunds and chargebacks reverse the proportional number of purchased credits, rounding up to a whole credit. Chargeback reversals restore the corresponding amount. Adjustment IDs and event timestamps prevent double reversals; refunds received before payment are applied when it arrives. An already-spent production balance can become negative to retain the debt. No billing records are deleted.
+
+The welcome page polls the authenticated account endpoint for the completed transaction. Browser checkout events and storage affect presentation only; they never grant credit or access.
+
+## Subscription access and customer portal
+
+`subscriptionGrantsAccess()` and server-side `hasPaddlePaidAccess(owner)` grant access for current `active` or `trialing` status. Scheduled cancellation or pause does not revoke access early. Actual `paused`, `past_due`, or `canceled` status denies paid access until a later access-granting status arrives. The pricing catalog remains three one-time packs; FiveGen's free workspace features are not newly gated.
+
+`/account/billing` shows the signed-in account's mirrored subscriptions, recent purchases, and sandbox balance. Manage billing calls `POST /api/paddle/portal`. The endpoint authenticates first, checks request origin, resolves the Paddle customer and subscriptions from the account-owned database rows, and calls the official SDK. Client-supplied customer IDs, subscription IDs, and emails are never used. It returns a short-lived HTTPS Paddle portal URL with `private, no-store`; the browser redirects directly. Portal session URLs are never persisted.
+
+## Permanent infrastructure
+
+Keep the notification destination and signing secret, all three catalog products and prices, and every Paddle or mirrored customer, subscription, transaction, adjustment, and fulfillment record. These are the running fulfillment system, not disposable test artifacts. Do not delete or suggest deleting them after testing. The webhook test suite retains its isolated SQLite fixture databases under `outputs/paddle-qa/`.
 
 ## Validation
 
-Run `node scripts/paddle-test.mjs` and `npx tsc --noEmit`. Then use the sandbox checkout in a real browser: verify the localized card total, the corresponding checkout line item, successful test payment, and redirect to `/welcome`. Use Paddle's documented sandbox test card; never use a real card for this test.
+Run `npm run test:paddle` and `npx tsc --noEmit`. The tests use the actual SDK signature verifier and real SQLite migrations and transactions; only outbound API calls and the session boundary use contract fixtures. They cover signature rejection before writes, duplicate and out-of-order deliveries, access states, account isolation, fulfillment, proportional refunds, chargebacks, and the portal boundary. Then use the sandbox checkout in a real browser: verify the localized total, corresponding line item, successful test payment, redirect to `/welcome`, verified credit balance, and the customer portal. Use Paddle's documented sandbox test card; never take a live payment as part of this test.
 
 Verified on September 12, 2026 using the actual Paddle sandbox:
 

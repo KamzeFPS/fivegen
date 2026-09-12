@@ -49,7 +49,7 @@ export function Pricing({ config, countryCode, email, configurationError }: Prop
       if (event.name === 'checkout.completed') {
         // This flag is presentation only. Never use browser events or storage
         // to credit a wallet or grant an entitlement.
-        try { sessionStorage.setItem('fivegen:paddle-checkout', JSON.stringify({ environment: config!.environment, completedAt: Date.now() })); } catch { /* Storage can be unavailable in private browsing. */ }
+        try { sessionStorage.setItem('fivegen:paddle-checkout', JSON.stringify({ environment: config!.environment, transactionId: event.data?.transaction_id, completedAt: Date.now() })); } catch { /* Storage can be unavailable in private browsing. */ }
         window.location.assign('/welcome');
       }
     }
@@ -75,7 +75,7 @@ export function Pricing({ config, countryCode, email, configurationError }: Prop
     return () => { cancelled = true; clearTimeout(checkoutTimer.current); };
   }, [config, countryCode, retry]);
 
-  function buy(tier: Tier) {
+  async function buy(tier: Tier) {
     const price = prices[tier.priceId];
     if (!paddleRef.current || !price || loading || openingRef.current) return;
     openingRef.current = true;
@@ -87,17 +87,22 @@ export function Pricing({ config, countryCode, email, configurationError }: Prop
       setError('Checkout did not respond. Please check your connection and try again.');
     }, 20000);
     try {
-      paddleRef.current.Checkout.open(checkoutOptions(price, window.location.origin, email, address));
-    } catch {
+      const response = await fetch('/api/paddle/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ priceId: tier.priceId }), signal: AbortSignal.timeout(15000) });
+      if (response.status === 401 || response.status === 428) { window.location.assign('/welcome?return_to=%2Fpricing'); return; }
+      const intent = await response.json() as { email: string; customData: { fivegen_checkout_intent: string }; error?: string };
+      if (!response.ok) throw new Error(intent.error || 'Your checkout could not be prepared. Please try again.');
+      const options = checkoutOptions(price, window.location.origin, intent.email, address);
+      paddleRef.current.Checkout.open({ ...options, customData: intent.customData, settings: { ...options.settings, allowLogout: false } });
+    } catch (caught) {
       clearTimeout(checkoutTimer.current);
       openingRef.current = false;
       setOpening(null);
-      setError('Checkout could not open. Please try again.');
+      setError(caught instanceof Error ? caught.message : 'Checkout could not open. Please try again.');
     }
   }
 
   return <main className="paddle-pricing">
-    <nav className="paddle-nav" aria-label="Pricing navigation"><a href="/" aria-label="FiveGen home"><Brand /></a><a className="paddle-back" href="/"><ArrowLeft size={16} /> Back to studio</a></nav>
+    <nav className="paddle-nav" aria-label="Pricing navigation"><a href="/" aria-label="FiveGen home"><Brand /></a><div className="paddle-nav-links">{email && <a href="/account/billing">Billing & receipts</a>}<a className="paddle-back" href="/"><ArrowLeft size={16} /> Back to studio</a></div></nav>
     <div className="paddle-content">
       <header className="paddle-heading">
         <span className="paddle-eyebrow"><Sparkles size={16} /> YOUR NEXT IDEA STARTS HERE</span>

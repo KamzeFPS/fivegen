@@ -117,6 +117,29 @@ export const creditPurchases=sqliteTable("credit_purchases",{
   id:text("id").primaryKey(),owner:text("owner").notNull(),credits:integer("credits").notNull(),amount:integer("amount").notNull(),paymentIntent:text("payment_intent"),state:text("state").notNull().default("pending"),reversed:integer("reversed").notNull().default(0),createdAt:integer("created_at").notNull(),
 });
 export const platformReceipts=sqliteTable("platform_receipts",{id:text("id").primaryKey(),owner:text("owner").notNull(),amount:integer("amount").notNull(),createdAt:integer("created_at").notNull()});
+// Paddle's infrastructure and billing mirrors are permanent records. Never
+// delete these records when testing, canceling access, or reversing credits.
+export const paddleCustomers=sqliteTable('paddle_customers',{
+ customerId:text('customer_id').primaryKey(),environment:text('environment').notNull(),email:text('email').notNull().default(''),owner:text('owner'),status:text('status').notNull().default('active'),createdAt:text('created_at').notNull(),updatedAt:text('updated_at').notNull(),eventTime:integer('event_time').notNull().default(0),
+},t=>[index('idx_paddle_customers_owner').on(t.environment,t.owner)]);
+export const paddleSubscriptions=sqliteTable('paddle_subscriptions',{
+ subscriptionId:text('subscription_id').primaryKey(),environment:text('environment').notNull(),customerId:text('customer_id').notNull().references(()=>paddleCustomers.customerId),status:text('status').notNull(),priceId:text('price_id').notNull(),productId:text('product_id').notNull(),items:text('items').notNull(),scheduledChangeAction:text('scheduled_change_action'),scheduledChangeAt:text('scheduled_change_at'),createdAt:text('created_at').notNull(),updatedAt:text('updated_at').notNull(),eventTime:integer('event_time').notNull(),
+},t=>[index('idx_paddle_subscriptions_customer').on(t.environment,t.customerId)]);
+export const paddleCheckoutIntents=sqliteTable('paddle_checkout_intents',{
+ id:text('id').primaryKey(),environment:text('environment').notNull(),owner:text('owner').notNull(),email:text('email').notNull(),priceId:text('price_id').notNull(),packId:text('pack_id').notNull(),credits:integer('credits').notNull(),createdAt:integer('created_at').notNull(),
+});
+export const paddleTransactions=sqliteTable('paddle_transactions',{
+ transactionId:text('transaction_id').primaryKey(),environment:text('environment').notNull(),customerId:text('customer_id').notNull().references(()=>paddleCustomers.customerId),owner:text('owner'),intentId:text('intent_id'),status:text('status').notNull(),currency:text('currency').notNull(),total:text('total').notNull(),credits:integer('credits').notNull().default(0),credited:integer('credited').notNull().default(0),reversed:integer('reversed').notNull().default(0),createdAt:text('created_at').notNull(),updatedAt:text('updated_at').notNull(),eventTime:integer('event_time').notNull(),
+},t=>[index('idx_paddle_transactions_owner').on(t.environment,t.owner)]);
+export const paddleAdjustments=sqliteTable('paddle_adjustments',{
+ adjustmentId:text('adjustment_id').primaryKey(),environment:text('environment').notNull(),transactionId:text('transaction_id').notNull(),action:text('action').notNull(),status:text('status').notNull(),total:text('total').notNull(),createdAt:text('created_at').notNull(),updatedAt:text('updated_at').notNull(),eventTime:integer('event_time').notNull(),
+},t=>[index('idx_paddle_adjustments_transaction').on(t.environment,t.transactionId)]);
+export const paddleWebhookEvents=sqliteTable('paddle_webhook_events',{
+ eventId:text('event_id').primaryKey(),environment:text('environment').notNull(),eventType:text('event_type').notNull(),occurredAt:text('occurred_at').notNull(),processedAt:integer('processed_at').notNull(),
+});
+export const paddleTestWallets=sqliteTable('paddle_test_wallets',{
+ owner:text('owner').primaryKey(),credits:integer('credits').notNull().default(0),
+});
 export const aiProductRuns=sqliteTable('ai_product_runs',{
  id:text('id').primaryKey(),owner:text('owner').notNull(),productId:text('product_id').notNull(),period:text('period').notNull(),mode:text('mode').notNull(),state:text('state').notNull(),createdAt:integer('created_at').notNull(),
 },t=>[index('idx_ai_runs_month').on(t.owner,t.period)]);
