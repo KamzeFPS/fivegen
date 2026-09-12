@@ -3039,3 +3039,6 @@ label small {
 @media(prefers-reduced-motion:reduce){.button{transition:none}.button:active:not(:disabled){transform:none}}
 
 .consent-page .button.primary{background:#fc843f;color:#211307}.consent-page .button.primary:hover:not(:disabled){background:#ff995d}.workspace-footer a:hover{color:#fff}#credit-packs{scroll-margin-top:90px}.workspace-footer{flex-wrap:wrap;gap:12px}
+
+/* Public policy navigation stays readable and wraps on narrow screens. */
+.legal-links{display:flex;flex-wrap:wrap;align-items:center;gap:12px 22px;font-size:.875rem;line-height:1.6}.legal-links a{color:#b7bac6}.legal-links a:hover{color:#ff9456}.legal-links a:focus-visible,.terms-page a:focus-visible{outline:2px solid #ff9c62;outline-offset:4px;border-radius:2px}.terms-page p{font-size:1rem}.terms-page p a{text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}.terms-page .terms-index a{font-size:.875rem}.terms-page footer p{font-size:.875rem}.workspace-footer{flex-wrap:wrap;gap:20px}.terms-page>nav .button{font-size:.875rem}
