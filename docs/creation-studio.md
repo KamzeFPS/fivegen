@@ -28,3 +28,7 @@ Their seven actual customer, subscription and completed-transaction events were 
 ## Persistent infrastructure
 
 Keep every Paddle catalog entity, notification destination/signing secret, customer, subscription and transaction. Keep local verification databases and historical payment records. Replaying verified events must never grant duplicate credits. Do not use broad cleanup scripts on billing data.
+
+## Published release
+
+The private studio is published at https://www.fivegen.ai/ from commit 464cc4f7fd03767e227b2d8f65786be1b9fb2a8b. Render deployment dep-daj893m7bikc73b318s0 completed successfully on September 13, 2026. Public health, home, pricing, Privacy, Terms and Refund pages returned HTTP 200; storefront paths, seller checkout and Stripe seller connection paths returned HTTP 410. Public pricing still identifies sandbox payments, and the two new subscriptions show Coming soon with disabled checkout controls. No public billing environment variables or live approval gates were changed. The first private-studio deployment was dep-daj8706k1f9s73cl0640; the second includes the verified mobile navigation fix.
