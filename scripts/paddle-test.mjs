@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 
+const subscriptionSource=readFileSync('lib/subscriptions.ts','utf8');
 const compile = source => 'data:text/javascript;base64,' + Buffer.from(ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText).toString('base64');
-const catalogUrl = compile(readFileSync('lib/paddle/catalog.ts', 'utf8'));
+const catalogUrl = compile(readFileSync('lib/paddle/catalog.ts','utf8').replace("from '../subscriptions'",`from '${compile(subscriptionSource)}'`));
 const { parsePaddleConfig, validCountryCode, countryFromHeaders } = await import(catalogUrl);
 const checkoutSource = readFileSync('lib/paddle/checkout.ts', 'utf8').replace("from './catalog'", `from '${catalogUrl}'`);
 const { previewRequest, verifiedPrices, checkoutOptions } = await import(compile(checkoutSource));

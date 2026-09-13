@@ -17,9 +17,8 @@ export function verifiedPrices(response: PricePreviewResponse, tiers: Tier[]): R
     if (!item || item.quantity !== 1 || !item.formattedTotals?.total) {
       throw new Error('Paddle did not return all pack prices. Please refresh prices.');
     }
-    if (item.price.billingCycle || item.price.trialPeriod) {
-      throw new Error(`${tier.name} is configured as a recurring or trial price. This page only sells one-time credits.`);
-    }
+    const cycle=item.price.billingCycle;
+    if(item.price.trialPeriod||(tier.billingInterval?cycle?.interval!==tier.billingInterval||cycle.frequency!==1:!!cycle))throw new Error(`${tier.name} has the wrong recurring or trial price. Please contact support.`);
     return [tier.priceId, item];
   }));
 }

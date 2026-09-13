@@ -5,7 +5,6 @@ export const mcpScopes = {
   "products:read": "Read your products, assets, credits and revenue summary",
   "products:write": "Create and edit draft products, files, pricing and funnels",
   "ai:generate": "Spend your FiveGen credits on AI content, images and videos",
-  "products:publish": "Publish, unpublish and edit live product pages",
 } as const;
 export type Scope = keyof typeof mcpScopes;
 export type Connection = {id:string;owner:string;client_id:string;name:string;scopes:string;resource:string;access_expires:number};

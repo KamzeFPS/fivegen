@@ -1,4 +1,4 @@
-import Studio from "./studio";
+import Studio from "./generator-studio";
 import { getChatGPTUser } from "./chatgpt-auth";
 import {acceptedTerms} from '@/lib/terms';
 import {redirect} from 'next/navigation';

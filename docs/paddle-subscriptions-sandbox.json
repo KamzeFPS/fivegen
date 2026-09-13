@@ -1,0 +1,41 @@
+{
+  "environment": "sandbox",
+  "catalog": [
+    {
+      "plan": "pro",
+      "productId": "pro_01m2d3wescysc070kjgfn421yb",
+      "priceId": "pri_01m2d3wfwvkb9fvefe2d9twprq",
+      "interval": "month",
+      "amount": "2900",
+      "currency": "USD",
+      "monthlyCredits": 2500
+    },
+    {
+      "plan": "pro",
+      "productId": "pro_01m2d3wescysc070kjgfn421yb",
+      "priceId": "pri_01m2d3wg6v45zymvsv0hszh29z",
+      "interval": "year",
+      "amount": "29000",
+      "currency": "USD",
+      "monthlyCredits": 2500
+    },
+    {
+      "plan": "studio",
+      "productId": "pro_01m2d3wghmbdyse8a77b93tqq9",
+      "priceId": "pri_01m2d3wgtn0q4he2q1s03k0k42",
+      "interval": "month",
+      "amount": "6900",
+      "currency": "USD",
+      "monthlyCredits": 6000
+    },
+    {
+      "plan": "studio",
+      "productId": "pro_01m2d3wghmbdyse8a77b93tqq9",
+      "priceId": "pri_01m2d3wh44b8gcdpcmtene43xb",
+      "interval": "year",
+      "amount": "69000",
+      "currency": "USD",
+      "monthlyCredits": 6000
+    }
+  ]
+}

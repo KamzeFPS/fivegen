@@ -86,6 +86,7 @@ export async function start() {
       let routePath;
       try { routePath = decodeURIComponent(url.pathname).replace(/\/+$/, ''); }
       catch { res.writeHead(400); res.end(); return; }
+      if ((productHost && host !== authority.host && !['www','app'].includes(host.slice(0,-domain.length-1))) || /^\/(?:p|f|r|invite|partners)(?:\/|$)/.test(routePath) || /^\/api\/(?:checkout|quote|connect\/stripe|referrals|invite|leads|visits|crm)(?:\/|$)/.test(routePath) || /^\/api\/products\/[^/]+\/slots(?:\/|$)/.test(routePath)) { res.writeHead(410,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:'FiveGen is a private AI creation studio. Storefronts, seller payments, referrals and payouts are no longer available.'}));return; }
       if (routePath === '/api/webhooks/paddle' && process.env.PADDLE_ENVIRONMENT === 'production') {
         try { await allowPaddleWebhookSource(webhookSource, { mode: process.env.PADDLE_WEBHOOK_IP_MODE, render: process.env.RENDER === 'true' }); }
         catch (error) { res.writeHead(error.status === 403 ? 403 : 503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...(error.status === 403 ? {} : { 'Retry-After': '60' }) }); res.end(JSON.stringify({ error: error.status === 403 ? 'Webhook source IP is not allowed.' : 'Webhook IP verification is temporarily unavailable.' })); return; }

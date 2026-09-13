@@ -25,9 +25,12 @@ const allowanceSource=fs.readFileSync('lib/product-allowance.ts','utf8').replace
 const allowanceCode='const {ApiError,database,creditPolicy}=globalThis.__creditTest;\n'+ts.transpileModule(allowanceSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
 const a=await import('data:text/javascript;base64,'+Buffer.from(allowanceCode).toString('base64'));
 globalThis.__creditTest.productAllowance=a.productAllowance;
+const subscriptionSource=fs.readFileSync('lib/subscription-credits.ts','utf8').replace(/^import .*;\r?\n/gm,'');
+const subscriptionCode='const {database,monthlyWindow}=globalThis.__creditTest;\n'+ts.transpileModule(subscriptionSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
+Object.assign(globalThis.__creditTest,await import('data:text/javascript;base64,'+Buffer.from(subscriptionCode).toString('base64')));
 const source=fs.readFileSync('lib/credits.ts','utf8').replace(/^import .*;\r?\n/gm,'');
 globalThis.__creditTest.mcpCreditLimit=new AsyncLocalStorage();
-const code='const {ApiError,binding,database,stripe,planFor,creditPacks,creditPolicy,monthlyWindow,mcpCreditLimit,productAllowance}=globalThis.__creditTest;\n'+ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
+const code='const {ApiError,binding,database,stripe,planFor,creditPacks,creditPolicy,monthlyWindow,mcpCreditLimit,productAllowance,subscriptionCreditBalance,spendableGrant}=globalThis.__creditTest;\n'+ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
 const c=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
 const owner='credit-test';
 await assert.rejects(()=>globalThis.__creditTest.mcpCreditLimit.run({remaining:9},()=>c.reserveCredits(owner,'over-mcp-cap','text',10)),e=>e.status===402);

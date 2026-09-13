@@ -21,7 +21,8 @@
     "test:credits": "node scripts/credits-test.mjs && node scripts/generation-credit-test.mjs && node scripts/commission-test.mjs",
     "test:paddle": "node scripts/paddle-test.mjs && node scripts/paddle-webhook-test.mjs",
     "test:paddle:live": "node scripts/paddle-live-test.mjs",
-    "start:paddle:staging": "node --env-file=.env.render.local --env-file=.env.paddle-live.local scripts/paddle-staging.mjs"
+    "start:paddle:staging": "node --env-file=.env.render.local --env-file=.env.paddle-live.local scripts/paddle-staging.mjs",
+    "test:studio": "node scripts/studio-planning-test.mjs && node scripts/studio-subscription-test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -52,7 +53,8 @@
     "sonner": "^2.0.8",
     "tailwind-merge": "3.6.0",
     "vaul": "^1.1.2",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "3.25.2"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.54.7",

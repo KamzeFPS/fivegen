@@ -1,5 +1,6 @@
 import {generationDirection} from "@/lib/product-recipes";
 import { z } from "zod";
+import {zodToJsonSchema} from 'zod-to-json-schema';
 import { briefSchema, contentSchema, fileSchema } from "@/lib/product";
 import {
   ApiError,
@@ -15,6 +16,9 @@ import {claimProductRun,releaseUnstartedRun,productAllowance} from "@/lib/produc
 import {textCredits} from "@/lib/credit-policy";
 import {providerSettings} from "@/lib/ai";
 import { textGeneration, productSystem } from "@/lib/ai";
+const outlineSchema=z.object({sections:z.array(z.object({title:z.string().min(1).max(150),objective:z.string().min(1).max(1500)})).min(3).max(30),benefits:z.array(z.string().max(300)).min(3).max(8)});
+const sectionBodySchema=z.object({body:z.string().min(300).max(18000)});
+const packageSchema=z.object({launch:z.string().min(600).max(50000),salesCopy:z.string().min(150).max(15000),files:z.array(fileSchema).min(1).max(12),imagePrompt:z.string().min(30).max(4000),videoPrompt:z.string().min(30).max(2500)});
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -79,8 +83,6 @@ export async function POST(
     id = (await params).id;
     const db = database();
     let p = productFromRow(await ownedProduct(id, owner));
-    if (p.status === "published")
-      throw new ApiError("Unpublish this product before generating new content.", 409);
     let job = await db
       .prepare("SELECT * FROM generation WHERE product_id=? AND owner=?")
       .bind(id, owner)
@@ -121,25 +123,14 @@ export async function POST(
     const context = JSON.stringify(brief)+"\n"+generationDirection(brief,id)+"\nAvoid duplicating these existing products: "+JSON.stringify(siblings.results);
     const stage = Number(job!.stage);
     if (stage === -1) {
-      const d = z
-        .object({
-          sections: z
-            .array(
-              z.object({
-                title: z.string().min(1).max(150),
-                objective: z.string().min(1).max(1500),
-              }),
-            )
-            .min(3)
-            .max(30),
-          benefits: z.array(z.string().max(300)).min(3).max(8),
-        })
+      const d = outlineSchema
         .parse(
           await textGeneration(
             owner,
             productSystem,
-            `Design the complete architecture of this digital product. Creator brief: ${context}. The format can be any digital product, including guides, lesson systems, spreadsheets, calculators, scripts, checklists, business systems, or creative resources. Follow the format-specific architecture above. For challenges use exactly the requested number of days. For coaching use three resources: preparation, the agenda for ONE human-delivered session, and follow-up. For template kits use 3–6 tools. Otherwise choose 4–8 substantive units that fit the deliverable. Return JSON: {"sections":[{"title":"...","objective":"Detailed contents and intended outcomes"}],"benefits":["..."]}. No vague filler.`,
+            `Design the complete architecture of this digital product. Creator brief: ${context}. The format can be any digital product, including guides, lesson systems, spreadsheets, calculators, scripts, checklists, business systems, or creative resources. Follow the format-specific architecture above. For challenges use exactly the requested number of days. For coaching use three resources: preparation, the agenda for ONE human-delivered session, and follow-up. For template kits use 3–6 tools. For other formats, use the explicitly requested number of units (3–30); when unspecified choose 4–8 substantive units that fit the deliverable. Do not turn supporting file names into extra sections. Return JSON: {"sections":[{"title":"...","objective":"Detailed contents and intended outcomes"}],"benefits":["..."]}. No vague filler.`,
             5000,
+            {name:'fivegen_product_outline',schema:zodToJsonSchema(outlineSchema,{target:'openAi'})},
           ),
         );
       if(brief.format==='Challenge'&&d.sections.length!==(brief.duration||7))throw new ApiError('The generated plan did not match your requested number of days. Retry to correct the outline.',502);
@@ -155,32 +146,26 @@ export async function POST(
       };
     } else if (stage < p.content.sections.length) {
       const s = p.content.sections[stage];
-      const d = z
-        .object({ body: z.string().min(300).max(18000) })
+      const d = sectionBodySchema
         .parse(
           await textGeneration(
             owner,
             productSystem,
             `Write the finished, publication-ready content for section ${stage + 1} of this product. Brief: ${context}. Full table of contents: ${p.content.sections.map((s) => s.title).join("; ")}. This section: ${JSON.stringify(s)}. Previous section summary: ${stage > 0 ? p.content.sections[stage - 1].body.slice(-1800) : "Introduction"}. Return JSON {"body":"Complete section content with clear paragraph breaks"}. Match the unit to the format. A challenge day or template instruction can be 150–350 useful words; a course lesson should be focused and practice-based; a guide or playbook can be ${brief.quality === "balanced" ? "400–650" : "700–1100"} words. Include concrete examples, step-by-step applications, common mistakes, and a relevant exercise or usable template. For software/tool products, explain usage and exact requirements; code deliverables will follow in the final step. Do not tell the creator to write the content. Produce it.`,
             brief.quality === "balanced" ? 6500 : 10000,
+            {name:'fivegen_product_section',schema:zodToJsonSchema(sectionBodySchema,{target:'openAi'})},
           ),
         );
       p.content.sections[stage] = { ...s, body: d.body };
     } else {
-      const d = z
-        .object({
-          launch: z.string().min(600).max(50000),
-          salesCopy: z.string().min(150).max(15000),
-          files: z.array(fileSchema).max(12),
-          imagePrompt: z.string().min(30).max(4000),
-          videoPrompt: z.string().min(30).max(2500),
-        })
+      const d = packageSchema
         .parse(
           await textGeneration(
             owner,
             productSystem,
             `Complete the commercial package for this product. Brief: ${context}. Sections: ${p.content.sections.map((s) => s.title + ": " + s.body.slice(0, 400)).join("\n")}. Return JSON {"launch":"7-day launch calendar, 5 complete launch emails, 15 social posts with hooks, 3 ad variants and a 15-second video script; written out in full","salesCopy":"finished honest sales page copy with headline, offer, audience, benefits and FAQ","files":[{"name":"filename.csv or .html or .md or .txt or .json or .js or .css or .py","content":"complete usable contents","description":"purpose"}],"imagePrompt":"production-ready art direction for a product marketing image, incorporating product title, distinct visual identity and readable typography","videoPrompt":"production-ready 5-second cinematic product promo with clear subject, camera, action, lighting and sound"}. Provide 3–6 useful supporting files actually tailored to the product. For spreadsheet products include a working CSV structure with formulas and example rows. For calculators include a self-contained HTML tool with inline CSS and JavaScript. For code templates include complete working source and usage instructions; no secrets or external network calls. For courses include a workbook and quizzes with answers. Do not fabricate external platform formats such as .notion. Deliver useful open formats. No fake reviews or income guarantees.`,
             14000,
+            {name:'fivegen_product_package',schema:zodToJsonSchema(packageSchema,{target:'openAi'})},
           ),
         );
       p.content = { ...p.content, ...d };
@@ -209,8 +194,11 @@ export async function POST(
       stage: stage + 1,
       total: p.content.sections.length + 1,
       mode:run.mode,
+      allowance:await productAllowance(owner),
     });
-  } catch (e) {
+  } catch (caught) {
+    let e=caught;
+    if(locked&&e instanceof z.ZodError){console.error('AI product step failed validation',e.issues.map(issue=>({path:issue.path,code:issue.code})));e=new ApiError('AI returned an incomplete result for this step. Your saved sections are safe. Resume to retry; failed steps do not consume credits.',502);}
     if(creditId)await refundCredits(creditId);
     if(runId)await releaseUnstartedRun(runId);
     if (locked)

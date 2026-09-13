@@ -5,7 +5,7 @@ import { paddleServer } from './server';
 
 type Environment = 'sandbox' | 'production';
 type Context = { environment: Environment; time: number; occurredAt: string };
-type Intent = { id: string; environment: Environment; owner: string; email: string; price_id: string; credits: number };
+type Intent = { id: string; environment: Environment; owner: string; email: string; price_id: string; credits: number; billing_interval: 'month'|'year'|null };
 
 function ensureCustomer(id: string, context: Context, email = '') {
   return database().prepare("INSERT OR IGNORE INTO paddle_customers (customer_id,environment,email,created_at,updated_at,event_time) VALUES (?,?,?,?,?,0)")
@@ -63,7 +63,11 @@ export async function handleTransaction(transaction: TransactionNotification, co
   const total = money(transaction.details?.totals?.total);
   const token = transaction.customData?.fivegen_checkout_intent;
   const db = database();
-  const intent = typeof token === 'string' ? await db.prepare('SELECT * FROM paddle_checkout_intents WHERE id=? AND environment=?').bind(token, context.environment).first<Intent>() : null;
+  let intent = typeof token === 'string' ? await db.prepare('SELECT * FROM paddle_checkout_intents WHERE id=? AND environment=?').bind(token, context.environment).first<Intent>() : null;
+  // Recurring renewals can omit the original custom data. Resolve the exact
+  // previously funded subscription/price, never arbitrary client customer IDs.
+  if(transaction.subscriptionId&&!intent) intent=await db.prepare(`SELECT i.* FROM paddle_subscription_periods p JOIN paddle_transactions t ON t.transaction_id=p.transaction_id JOIN paddle_checkout_intents i ON i.id=t.intent_id WHERE p.subscription_id=? AND p.environment=? AND p.price_id=? ORDER BY p.starts_at DESC LIMIT 1`).bind(transaction.subscriptionId,context.environment,transaction.items[0]?.price?.id||'').first<Intent>();
+  if(transaction.subscriptionId&&intent?.billing_interval) {await handleSubscriptionPayment(transaction,context,intent,total);return;}
   let owner: string | null = null;
   if (intent) {
     if (transaction.subscriptionId || transaction.items.length !== 1 || transaction.items[0].price?.id !== intent.price_id || transaction.items[0].quantity !== 1 || transaction.items[0].price?.billingCycle || Number(total) <= 0) throw new ApiError('Paddle credit purchase does not match its server checkout intent.', 409);
@@ -95,6 +99,35 @@ export async function handleTransaction(transaction: TransactionNotification, co
     const saved = await db.prepare('SELECT owner FROM paddle_transactions WHERE transaction_id=?').bind(transaction.id).first<{ owner: string | null }>();
     if (saved?.owner !== owner) throw new ApiError('Paddle customer account binding needs review.', 409);
   }
+}
+
+async function handleSubscriptionPayment(transaction:TransactionNotification,context:Context,intent:Intent,total:string) {
+  const item=transaction.items[0],period=transaction.billingPeriod;
+  const startsAt=Date.parse(period?.startsAt||''),endsAt=Date.parse(period?.endsAt||'');
+  if(transaction.items.length!==1||item.quantity!==1||item.price?.id!==intent.price_id||item.price.billingCycle?.interval!==intent.billing_interval||item.price.billingCycle.frequency!==1||Number(total)<=0||!Number.isFinite(startsAt)||!Number.isFinite(endsAt)||endsAt<=startsAt||endsAt-startsAt>(intent.billing_interval==='month'?32:370)*86400000)throw new ApiError('Paddle subscription payment does not match its checkout intent and paid billing period.',409);
+  const db=database(),customerId=transaction.customerId!,subscriptionId=transaction.subscriptionId!;
+  const bound=await db.prepare('SELECT owner,environment FROM paddle_customers WHERE customer_id=?').bind(customerId).first<{owner:string|null;environment:string}>();
+  if(bound&&(bound.environment!==context.environment||(bound.owner&&bound.owner!==intent.owner)))throw new ApiError('Paddle customer belongs to a different account.',409);
+  if(!bound?.owner){const customer=await paddleServer().customers.get(customerId);if(customer.email.toLowerCase()!==intent.email.toLowerCase())throw new ApiError('Paddle subscription customer does not match the signed-in checkout account.',409);}
+  const subscription=await db.prepare('SELECT customer_id FROM paddle_subscriptions WHERE subscription_id=? AND environment=?').bind(subscriptionId,context.environment).first();
+  if(subscription&&subscription.customer_id!==customerId)throw new ApiError('Paddle subscription customer changed.',409);
+  if(!subscription){
+    const current=await paddleServer().subscriptions.get(subscriptionId);
+    if(current.customerId!==customerId)throw new ApiError('Paddle subscription customer does not match payment.',409);
+    await handleSubscription(current as unknown as SubscriptionNotification,{...context,time:Math.max(context.time,eventTime(current.updatedAt))});
+  }
+  await db.batch([
+    ensureCustomer(customerId,context,intent.email),
+    db.prepare('UPDATE paddle_customers SET owner=COALESCE(owner,?) WHERE customer_id=? AND environment=?').bind(intent.owner,customerId,context.environment),
+    db.prepare(`INSERT OR IGNORE INTO paddle_transactions (transaction_id,environment,customer_id,owner,intent_id,status,currency,total,credits,credited,created_at,updated_at,event_time)
+      SELECT ?,?,?,?,?,?,?,?,0,1,?,?,? WHERE EXISTS(SELECT 1 FROM paddle_customers WHERE customer_id=? AND environment=? AND owner=?)`)
+      .bind(transaction.id,context.environment,customerId,intent.owner,intent.id,transaction.status,transaction.currencyCode,total,transaction.createdAt,transaction.updatedAt,context.time,customerId,context.environment,intent.owner),
+    db.prepare(`INSERT OR IGNORE INTO paddle_subscription_periods (transaction_id,environment,owner,subscription_id,price_id,credits,starts_at,ends_at)
+      SELECT ?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM paddle_transactions WHERE transaction_id=? AND environment=? AND owner=? AND intent_id=?)`)
+      .bind(transaction.id,context.environment,intent.owner,subscriptionId,intent.price_id,intent.credits,startsAt,endsAt,transaction.id,context.environment,intent.owner,intent.id),
+  ]);
+  const saved=await db.prepare('SELECT owner FROM paddle_subscription_periods WHERE transaction_id=? AND environment=?').bind(transaction.id,context.environment).first();
+  if(saved?.owner!==intent.owner)throw new ApiError('Subscription credit fulfillment needs review.',409);
 }
 
 export async function handleAdjustment(adjustment: AdjustmentNotification, context: Context) {

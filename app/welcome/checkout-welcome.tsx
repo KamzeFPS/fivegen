@@ -8,6 +8,7 @@ export function CheckoutWelcome({ signedIn, continueTo }: { signedIn: boolean; c
   const [completion, setCompletion] = useState<'sandbox' | 'production' | null>(null);
   const [fulfillment, setFulfillment] = useState<'waiting' | 'verified' | 'delayed' | null>(null);
   const [credits, setCredits] = useState(0);
+  const [monthly,setMonthly]=useState(false);
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -23,9 +24,9 @@ export function CheckoutWelcome({ signedIn, continueTo }: { signedIn: boolean; c
             try {
               const response = await fetch('/api/paddle/account', { cache: 'no-store', signal: AbortSignal.timeout(10000) });
               if (response.ok) {
-                const data = await response.json() as { environment: string; payments: { transaction_id: string; credited: number; credits: number; reversed: number }[] };
+                const data = await response.json() as { environment: string; payments: { transaction_id: string; credited: number; credits: number; reversed: number; monthly_credits?: number }[] };
                 const payment = data.environment === stored.environment && data.payments.find(payment => payment.transaction_id === stored.transactionId && payment.credited);
-                if (!cancelled && payment) { setCredits(payment.credits - payment.reversed); setFulfillment('verified'); return; }
+                if (!cancelled && payment) { setCredits(payment.monthly_credits||payment.credits-payment.reversed);setMonthly(!!payment.monthly_credits); setFulfillment('verified'); return; }
               }
             } catch { /* A delayed webhook can safely be checked again from Billing. */ }
             if (cancelled) return;
@@ -42,7 +43,7 @@ export function CheckoutWelcome({ signedIn, continueTo }: { signedIn: boolean; c
     {completion ? <CheckCircle2 size={45} /> : <Sparkles size={45} />}
     <h1>{fulfillment === 'verified' ? 'Your credits are ready.' : completion ? 'Thank you for your purchase.' : 'Welcome to FiveGen.'}</h1>
     <p>{completion === 'sandbox' ? 'Your sandbox checkout is complete. No real money was charged. This test purchase does not add production AI credits.' : completion ? 'Your checkout is complete. Paddle will email your payment receipt.' : 'Bring your next idea to life. Your workspace is ready when you are.'}</p>
-    {fulfillment && <p role="status">{fulfillment === 'verified' ? `${credits} ${completion === 'sandbox' ? 'sandbox ' : ''}credits added to your account.` : fulfillment === 'waiting' ? 'Confirming your payment and adding your credits…' : 'Your payment confirmation is taking a little longer. Check Billing & receipts for its status. Please don’t purchase again.'}</p>}
+    {fulfillment && <p role="status">{fulfillment === 'verified' ? `${credits} ${completion === 'sandbox' ? 'sandbox ' : ''}credits ${monthly?'included each month. Your subscription payment is verified.':'added to your account.'}` : fulfillment === 'waiting' ? 'Confirming your payment and adding your credits…' : 'Your payment confirmation is taking a little longer. Check Billing & receipts for its status. Please don’t purchase again.'}</p>}
     <div className="paddle-receipt-actions"><Button asChild size="lg"><a href={continueTo}>{signedIn ? 'Open my workspace' : 'Sign in to FiveGen'}<ArrowRight size={17} /></a></Button>{signedIn && <a href="/account/billing">Billing & receipts</a>}<a href="/pricing">Back to AI credits</a>{completion && <small>Questions about your purchase? <a href="mailto:kamzewac@gmail.com">Contact support</a>.</small>}</div>
   </section></main>;
 }

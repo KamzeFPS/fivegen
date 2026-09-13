@@ -1,3 +1,7 @@
+# Current deployment: private AI studio
+
+For the current product, pricing and release gates, read [creation-studio.md](creation-studio.md) and [Paddle setup](paddle.md). New storefronts, seller checkout/onboarding, funnels, CRM and referrals are disabled in the runtime. Stripe settings and the commerce guidance below are retained for historical fulfillment; do not enable new seller payments. Keep existing Stripe and Paddle destinations, secrets and transaction data. The public service stays on Paddle sandbox until live verification is complete.
+
 # Deploy FiveGen with a Render Blueprint
 
 `render.yaml` runs FiveGen as a production Node service. It uses a paid single instance in Singapore and a 10 GB persistent disk for SQLite and private media. It does not run a Vite development server or Wrangler emulation. The existing Sites build remains available with `npm run build`.

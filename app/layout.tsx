@@ -6,11 +6,12 @@ import "./sales-design.css";
 import "./credits-design.css";
 import "./connections-design.css";
 import "./journey-design.css";
+import "./generator-design.css";
 
 export const metadata: Metadata = {
   title: "FiveGen — Your next idea, made real",
   description:
-    "Turn what you know into beautiful digital products. Create, publish, and sell from one workspace.",
+    "Turn an idea into a complete digital product with AI. Plan, write, create images and videos, and download your finished work in one private studio.",
   icons: {
     icon: "/brand/fivegen-transparent.webp",
     shortcut: "/brand/fivegen-transparent.webp",

@@ -37,7 +37,9 @@ function moduleFile(path, replacements) {
   return compile(source);
 }
 const events = moduleFile('lib/paddle/events.ts', { '@paddle/paddle-node-sdk': import.meta.resolve('@paddle/paddle-node-sdk'), '../server': appServer, './access': access, './server': paddleServer });
-const account = moduleFile('lib/paddle/account.ts', { '../server': appServer, './access': access, './server': paddleServer });
+const creditPolicy=compile(readFileSync('lib/credit-policy.ts','utf8'));
+const subscriptionCredits=moduleFile('lib/subscription-credits.ts',{'./server':appServer,'./credit-policy':creditPolicy});
+const account = moduleFile('lib/paddle/account.ts', { '../server': appServer, './access': access, './server': paddleServer, '../subscription-credits':subscriptionCredits });
 const { POST } = await import(moduleFile('app/api/webhooks/paddle/route.ts', { '@/lib/server': appServer, '@/lib/paddle/server': paddleServer, '@/lib/paddle/events': events }));
 const { POST: portal } = await import(moduleFile('app/api/paddle/portal/route.ts', { '@/lib/server': appServer, '@/lib/paddle/server': paddleServer, '@/lib/paddle/account': account }));
 const { dispatchPaddleEvent } = await import(events);
@@ -168,6 +170,28 @@ try {
   assert.equal(one('SELECT purchased FROM wallets WHERE owner=?','owner-production').purchased,-200,'Already spent refunded credits retain debt');
   assert.equal(one('SELECT credits FROM paddle_test_wallets WHERE owner=?','owner-a').credits,750);
   assert.equal((await paddleAccount('owner-a')).customers.length,0,'Environment switching cannot expose sandbox customers');
+
+  // Subscription funding is verified separately from subscription access.
+  state.environment='sandbox';
+  const subscriptionId='sub_recurring_qa',subscriptionCustomer='ctm_recurring_qa';
+  const begin=new Date(Date.now()-1000).toISOString(),finish=new Date(Date.now()+365*86400000).toISOString();
+  state.paddle.subscriptions={async get(id){assert.equal(id,subscriptionId);return {...sub('active'),id,customerId:subscriptionCustomer,updatedAt:begin};}};
+  run('INSERT INTO paddle_checkout_intents (id,environment,owner,email,price_id,pack_id,credits,created_at,billing_interval) VALUES (?,?,?,?,?,?,?,?,?)','recurring-intent','sandbox','recurring-owner','buyer@example.test','pri_qa_recurring','pro',2500,Date.now(),'year');
+  const recurring={...tx('txn_recurring_qa','recurring-intent'),customerId:subscriptionCustomer,subscriptionId,billingPeriod:{startsAt:begin,endsAt:finish},items:[{price:{id:'pri_qa_recurring',billingCycle:{interval:'year',frequency:1}},quantity:1}],details:{totals:{total:'29000'}}};
+  await assert.rejects(dispatch('transaction.completed',{...recurring,items:[{...recurring.items[0],quantity:2}]}),/checkout intent/);
+  await assert.rejects(dispatch('transaction.completed',{...recurring,billingPeriod:null}),/paid billing period/);
+  await assert.rejects(dispatch('transaction.completed',{...recurring,customerId:customer.id}),/different account/);
+  await dispatch('transaction.completed',recurring);
+  await dispatch('transaction.completed',recurring);
+  assert.equal(one('SELECT COUNT(*) n FROM paddle_subscription_periods WHERE transaction_id=?',recurring.id).n,1);
+  assert.equal((await paddleAccount('recurring-owner')).sandboxCredits,2500,'Annual verified payment releases one month');
+  assert.equal(one('SELECT COUNT(*) n FROM wallets WHERE owner=?','recurring-owner').n,0);
+  const renewal={...recurring,id:'txn_renewal_qa',customData:null,billingPeriod:{startsAt:finish,endsAt:new Date(Date.parse(finish)+365*86400000).toISOString()}};
+  await dispatch('transaction.completed',renewal);
+  assert.equal(one('SELECT COUNT(*) n FROM paddle_subscription_periods WHERE owner=?','recurring-owner').n,2,'Renewal resolves owner from existing funded subscription without customData');
+  assert.equal((await paddleAccount('recurring-owner')).sandboxCredits,2500,'Future renewal cannot be spent early');
+  await dispatch('adjustment.created',adjust('adj_recurring',recurring.id,'29000'));
+  assert.equal((await paddleAccount('recurring-owner')).sandboxCredits,0,'Refund revokes recurring credits');
   console.log('Paddle webhook checks passed: raw SDK verification, rejection before mutation, typed routing, duplicate/out-of-order state, subscription access, account isolation, atomic fulfillment, refunds, chargebacks, sandbox isolation, and authenticated portal.');
   console.log('Billing QA database retained: '+root);
 } finally { storage.close(); }

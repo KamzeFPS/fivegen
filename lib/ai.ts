@@ -97,10 +97,14 @@ export async function textGeneration(
   system: string,
   prompt: string,
   maxTokens = 8000,
+  outputSchema?: {name:string;schema:Record<string,unknown>},
 ) {
   const { config } = await providerSettings(owner);
   const key = await providerKey(owner, config.textProvider);
-  const inputBytes=new TextEncoder().encode(system+prompt).length;
+  // Responses JSON mode checks the input messages, not just instructions.
+  const schemaText=outputSchema ? JSON.stringify(outputSchema.schema) : '';
+  const requestPrompt = `Return only a valid JSON object for the following request.\n\n${prompt}`;
+  const inputBytes=new TextEncoder().encode(system+requestPrompt+schemaText).length;
   if(inputBytes>64000)throw new ApiError("This request is too large. Shorten the brief or instructions.");
   const inputRate=config.textProvider==="anthropic"?1:0.4,outputRate=config.textProvider==="anthropic"?5:1.6;
   await reserveAIBudget(Math.ceil(inputBytes*inputRate+maxTokens*outputRate));
@@ -116,15 +120,17 @@ export async function textGeneration(
       body: JSON.stringify({
         model: config.textModel,
         instructions: system,
-        input: prompt,
+        input: requestPrompt,
         max_output_tokens: maxTokens,
         store: false,
-        text: { format: { type: "json_object" } },
+        text: { format: outputSchema ? {type:'json_schema',name:outputSchema.name,schema:outputSchema.schema,strict:true} : { type: "json_object" } },
       }),
     });
     const d = (await r.json()) as any;
-    if (!r.ok)
+    if (!r.ok) {
+      console.error('AI provider request failed', { provider: 'openai', status: r.status, code: typeof d.error?.code === 'string' ? d.error.code.slice(0, 80) : undefined, requestId: r.headers.get('x-request-id') });
       throw new ApiError("AI generation is temporarily unavailable. Please retry later.", 502);
+    }
     if (d.status === "incomplete")
       throw new ApiError(
         "The model reached its output limit. Try a more focused brief or another model.",
@@ -150,15 +156,17 @@ export async function textGeneration(
         model: config.textModel,
         system,
         max_tokens: maxTokens,
-        messages: [{ role: "user", content: prompt }],
+        messages: [{ role: "user", content: schemaText ? `${requestPrompt}\n\nMatch this JSON schema exactly:\n${schemaText}` : requestPrompt }],
       }),
     });
     const d = (await r.json()) as any;
-    if (!r.ok)
+    if (!r.ok) {
+      console.error('AI provider request failed', { provider: 'anthropic', status: r.status, type: typeof d.error?.type === 'string' ? d.error.type.slice(0, 80) : undefined, requestId: r.headers.get('request-id') });
       throw new ApiError(
         "AI generation is temporarily unavailable. Please retry later.",
         502,
       );
+    }
     if (d.stop_reason === "max_tokens")
       throw new ApiError(
         "The model reached its output limit. Try a more focused brief.",

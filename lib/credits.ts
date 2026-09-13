@@ -2,13 +2,15 @@ import {ApiError,binding,database,stripe} from "./server";
 import {creditPacks,type CreditBalance} from "./credit-policy";
 import {productAllowance} from "./product-allowance";
 import {mcpCreditLimit} from "./mcp-context";
+import {subscriptionCreditBalance,spendableGrant} from './subscription-credits';
 
 export async function creditBalance(owner:string):Promise<CreditBalance>{
   const db=database();
   await db.prepare("INSERT OR IGNORE INTO wallets (owner,starter) VALUES (?,0)").bind(owner).run();
   const w=(await db.prepare("SELECT purchased FROM wallets WHERE owner=?").bind(owner).first())!;
   const purchased=Number(w.purchased);
-  return {starter:0,included:0,purchased,total:purchased,media:Math.max(0,purchased),renewsAt:null,products:await productAllowance(owner)};
+  const subscription=await subscriptionCreditBalance(owner);
+  return {starter:0,...subscription,purchased,total:purchased+subscription.included,media:Math.max(0,purchased+subscription.included),products:await productAllowance(owner)};
 }
 
 // The ledger claim, balance deduction, and state transition commit atomically in D1.
@@ -18,13 +20,18 @@ export async function reserveCredits(owner:string,id:string,operation:string,cos
   if(!Number.isSafeInteger(cost)||cost<1)throw new Error("Invalid credit cost");
   const balance=await creditBalance(owner);
   const db=database(),text=operation==="text",now=Date.now();
-  const allowIncluded=false;
-  const starter="0",included=allowIncluded?`CASE WHEN expires>${now} THEN included ELSE 0 END`:"0";
-  // Spend expiring monthly credits before the non-expiring starter/purchased balance.
-  const iu=`min(${included},${cost})`,su=`min(${starter},max(0,${cost}-(${iu})))`,pu=`max(0,${cost}-(${su})-(${iu}))`;
+  const eligible=`g.owner=wallets.owner AND g.environment='production' AND ${spendableGrant(now)}`;
+  const available=`(SELECT COALESCE(SUM(g.remaining),0) FROM subscription_credit_grants g WHERE ${eligible})`;
+  const positive=`(SELECT COALESCE(SUM(max(0,g.remaining)),0) FROM subscription_credit_grants g WHERE ${eligible})`;
+  const iu=`min(${positive},${cost})`,pu=`max(0,${cost}-(${iu}))`;
   await db.batch([
-    db.prepare(`INSERT OR IGNORE INTO credit_usage (id,owner,operation,cost,state,starter_used,included_used,purchased_used,cycle,created_at) SELECT ?,owner,?,?,'pending',${su},${iu},${pu},cycle,? FROM wallets WHERE owner=? AND purchased>=0 AND (${starter})+(${included})+purchased>=?`).bind(id,operation,cost,now,owner,cost),
-    db.prepare("UPDATE wallets SET starter=starter-(SELECT starter_used FROM credit_usage WHERE id=?),included=included-(SELECT included_used FROM credit_usage WHERE id=?),purchased=purchased-(SELECT purchased_used FROM credit_usage WHERE id=?) WHERE owner=? AND EXISTS(SELECT 1 FROM credit_usage WHERE id=? AND owner=? AND state='pending')").bind(id,id,id,owner,id,owner),
+    db.prepare(`INSERT OR IGNORE INTO credit_usage (id,owner,operation,cost,state,starter_used,included_used,purchased_used,cycle,created_at) SELECT ?,owner,?,?,'pending',0,${iu},${pu},'subscription-grants',? FROM wallets WHERE owner=? AND ${available}+purchased>=?`).bind(id,operation,cost,now,owner,cost),
+    db.prepare(`INSERT OR IGNORE INTO credit_usage_grants (id,usage_id,grant_id,amount)
+      SELECT ?||':'||id,?,id,min(remaining,max(0,?-preceding)) FROM
+      (SELECT g.id,g.remaining,COALESCE(SUM(g.remaining) OVER (ORDER BY g.expires_at,g.id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING),0) preceding FROM subscription_credit_grants g WHERE g.owner=? AND g.environment='production' AND g.remaining>0 AND ${spendableGrant(now)})
+      WHERE preceding<? AND EXISTS(SELECT 1 FROM credit_usage WHERE id=? AND owner=? AND state='pending')`).bind(id,id,cost,owner,cost,id,owner),
+    db.prepare("UPDATE subscription_credit_grants SET remaining=remaining-(SELECT amount FROM credit_usage_grants WHERE usage_id=? AND grant_id=subscription_credit_grants.id) WHERE id IN (SELECT grant_id FROM credit_usage_grants WHERE usage_id=?) AND EXISTS(SELECT 1 FROM credit_usage WHERE id=? AND state='pending')").bind(id,id,id),
+    db.prepare("UPDATE wallets SET purchased=purchased-(SELECT purchased_used FROM credit_usage WHERE id=?) WHERE owner=? AND EXISTS(SELECT 1 FROM credit_usage WHERE id=? AND owner=? AND state='pending')").bind(id,owner,id,owner),
     db.prepare("UPDATE credit_usage SET state='reserved' WHERE id=? AND owner=? AND state='pending'").bind(id,owner),
   ]);
   const usage=await db.prepare("SELECT state,owner,cost FROM credit_usage WHERE id=?").bind(id).first();
@@ -35,6 +42,7 @@ export async function completeCredits(id:string){await database().prepare("UPDAT
 export async function refundCredits(id:string){
   const db=database();
   await db.batch([
+    db.prepare("UPDATE subscription_credit_grants SET remaining=remaining+(SELECT amount FROM credit_usage_grants WHERE usage_id=? AND grant_id=subscription_credit_grants.id) WHERE id IN (SELECT grant_id FROM credit_usage_grants WHERE usage_id=?) AND EXISTS(SELECT 1 FROM credit_usage WHERE id=? AND state='reserved')").bind(id,id,id),
     db.prepare("UPDATE wallets SET starter=starter+(SELECT starter_used FROM credit_usage WHERE id=?),included=included+CASE WHEN cycle=(SELECT cycle FROM credit_usage WHERE id=?) THEN (SELECT included_used FROM credit_usage WHERE id=?) ELSE 0 END,purchased=purchased+(SELECT purchased_used FROM credit_usage WHERE id=?) WHERE owner=(SELECT owner FROM credit_usage WHERE id=? AND state='reserved')").bind(id,id,id,id,id),
     db.prepare("UPDATE credit_usage SET state='refunded' WHERE id=? AND state='reserved'").bind(id),
   ]);

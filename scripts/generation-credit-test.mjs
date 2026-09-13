@@ -2,18 +2,20 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import ts from 'typescript';
 import {z} from 'zod';
+import {zodToJsonSchema} from 'zod-to-json-schema';
 import {DatabaseSync} from 'node:sqlite';
 import {AsyncLocalStorage} from 'node:async_hooks';
-import {creditPolicy,creditPacks,textCredits} from '../lib/credit-policy.ts';
+import {creditPolicy,creditPacks,textCredits,monthlyWindow} from '../lib/credit-policy.ts';
 const sqlite=new DatabaseSync(':memory:');
 for(const file of fs.readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(fs.readFileSync('drizzle/'+file,'utf8'));
 const stmt=(sql,args=[])=>({sql,args,bind:(...v)=>stmt(sql,v),first:async()=>sqlite.prepare(sql).get(...args)||null,all:async()=>({results:sqlite.prepare(sql).all(...args)}),run:async()=>({meta:{changes:sqlite.prepare(sql).run(...args).changes}})});
 const db={prepare:stmt,batch:async items=>{sqlite.exec('BEGIN');try{const result=items.map(s=>({meta:{changes:sqlite.prepare(s.sql).run(...s.args).changes}}));sqlite.exec('COMMIT');return result;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};
 class ApiError extends Error{constructor(message,status=400){super(message);this.status=status;}}
-const owner='generation-credits',deps={z,ApiError,database:()=>db,creditPolicy,creditPacks,textCredits,mcpCreditLimit:new AsyncLocalStorage(),binding:()=>'',stripe:()=>{throw Error('No payments in this test');}};
+const owner='generation-credits',deps={z,zodToJsonSchema,ApiError,database:()=>db,creditPolicy,creditPacks,textCredits,monthlyWindow,mcpCreditLimit:new AsyncLocalStorage(),binding:()=>'',stripe:()=>{throw Error('No payments in this test');}};
 async function load(path){const key='test'+crypto.randomUUID().replaceAll('-','');globalThis[key]={...deps};const source=fs.readFileSync(path,'utf8').replace(/^import[\s\S]*?;\r?\n/gm,'');const code=`const {${Object.keys(deps).join(',')}}=globalThis.${key};\n`+ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;const loaded=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));delete globalThis[key];return loaded;}
 Object.assign(deps,await load('lib/product.ts'),await load('lib/product-recipes.ts'));
 Object.assign(deps,await load('lib/product-allowance.ts'));
+Object.assign(deps,await load('lib/subscription-credits.ts'));
 Object.assign(deps,await load('lib/credits.ts'));
 let fail=false,providerCalls=0;
 Object.assign(deps,{

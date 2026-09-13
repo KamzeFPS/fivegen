@@ -72,14 +72,14 @@ export function AIProviders({signedIn,onUpdate}:{signedIn:boolean;onUpdate:()=>v
   async function load(){if(!signedIn)return;try{const settings=await request<Settings>("/api/providers");setS(settings);if(settings.admin)setMetrics(await request("/api/admin"));}catch(e){setError((e as Error).message);}}
   useEffect(()=>{void load();},[signedIn]);
   async function save(remove?:"openai"|"anthropic"|"fal"|"resend"){if(!s)return;setBusy(true);setError("");try{await request("/api/providers","PUT",{config:s.config,...keys,remove});setKeys({openai:"",anthropic:"",fal:"",resend:""});await load();onUpdate();toast.success("Platform AI settings saved");}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
-  return <>{s?.admin&&<a href="#platform-ai" className="button secondary"><ShieldCheck size={16}/>Manage platform AI</a>}<CreditsPanel signedIn={signedIn}/>{error&&<p className="error-banner" role="alert">{error}</p>}{s?.admin&&<section id="platform-ai" className="panel admin-ai"><div className="panel-heading"><div><span className="eyebrow">SUPER ADMIN ONLY</span><h2>Platform AI & revenue</h2><p>Master credentials power all customer accounts. Keys are encrypted and never returned to the browser.</p></div><ShieldCheck size={24}/></div>
-    <div className="credit-balances">{[["Sales commissions",metrics?money(metrics.fees):"—"],["Credit sales",metrics?money(metrics.creditSales):"—"]].map(([label,value])=><div key={label}><span>{label}</span><strong>{value}</strong><small>Recorded gross receipts · before refunds and costs</small></div>)}</div>
+  return <>{s?.admin&&<a href="#platform-ai" className="button secondary"><ShieldCheck size={16}/>Manage platform AI</a>}<CreditsPanel signedIn={signedIn}/>{error&&<p className="error-banner" role="alert">{error}</p>}{s?.admin&&<section id="platform-ai" className="panel admin-ai"><div className="panel-heading"><div><span className="eyebrow">SUPER ADMIN ONLY</span><h2>Platform AI & usage</h2><p>Master credentials power all customer accounts. Keys are encrypted and never returned to the browser.</p></div><ShieldCheck size={24}/></div>
+    <div className="credit-balances">{[["Accounts",metrics?String(metrics.accounts):"—"],["Credit sales",metrics?money(metrics.creditSales):"—"]].map(([label,value])=><div key={label}><span>{label}</span><strong>{value}</strong><small>Recorded gross receipts · before refunds and costs</small></div>)}</div>
     <div className="form-two"><label>Content provider<Select value={s.config.textProvider} onValueChange={v=>setS({...s,config:{...s.config,textProvider:v as "openai"|"anthropic",textModel:v==="openai"?"gpt-4.1-mini":"claude-haiku-4-5"}})}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="openai">OpenAI · GPT-4.1 mini · 10 credits/step</SelectItem><SelectItem value="anthropic">Anthropic · Haiku 4.5 · 30 credits/step</SelectItem></SelectContent></Select></label><label>Daily AI spending cap · USD<input type="number" min={1} max={10000} value={s.config.dailyBudget} onChange={e=>setS({...s,config:{...s.config,dailyBudget:Number(e.target.value)}})}/></label></div>
     <p className="field-help">Today’s conservative cost reservations: $ {metrics?.todayBudgetUsed.toFixed(2)||"0.00"}. This cap includes failed calls and protects platform spending; reconcile actual usage with provider invoices.</p>
     <div className="admin-key-grid">{(["openai","anthropic","fal","resend"] as const).map(key=><label key={key}>{key==="resend"?"Resend email key":key==="fal"?"fal.ai master key":key==="openai"?"OpenAI master key":"Anthropic master key"}<span className="field-help">{s.connected[key]?"Connected · leave blank to keep":"Not connected"}</span><input type="password" autoComplete="new-password" value={keys[key]} placeholder="Paste master API key" onChange={e=>setKeys({...keys,[key]:e.target.value})}/>{s.connected[key]&&<button className="text-link" disabled={busy} onClick={()=>void save(key)}>Remove stored key</button>}</label>)}</div>
-    <label>Invitation & booking sender email<input type="email" value={s.config.emailFrom||""} placeholder="hello@fivegen.ai" onChange={e=>setS({...s,config:{...s.config,emailFrom:e.target.value}})}/><small>Verify this sender’s domain in Resend. Invitations only send when an owner chooses Send invitation.</small></label><label className="admin-pause"><input type="checkbox" checked={s.config.paused} onChange={e=>setS({...s,config:{...s.config,paused:e.target.checked}})}/>Pause all new AI generation</label>
+    <label>Support email sender<input type="email" value={s.config.emailFrom||""} placeholder="hello@fivegen.ai" onChange={e=>setS({...s,config:{...s.config,emailFrom:e.target.value}})}/><small>Verify this sender’s domain in Resend before enabling transactional email.</small></label><label className="admin-pause"><input type="checkbox" checked={s.config.paused} onChange={e=>setS({...s,config:{...s.config,paused:e.target.checked}})}/>Pause all new AI generation</label>
     <button className="button primary" disabled={busy||!s.secure} onClick={()=>void save()}>{busy?<Loader2 className="spin" size={16}/>:<ShieldCheck size={16}/>}Save platform settings</button>{!s.secure&&<p className="field-help">Encrypted credential storage needs to be configured on the server.</p>}
-    <details className="credit-history"><summary>Credit pricing and capacity</summary><p>One-time packs: $15 for 1,000 credits, $35 for 2,500, or $75 for 6,000. Three complete AI product runs per account are included each UTC month. The daily AI spending cap applies to all generation; monitor usage and provider costs as your audience grows.</p><p>There are no paid platform plans. Images, videos, and individual rewrites use purchased credits. AI products beyond the monthly allowance use credits per completed step.</p></details>
+    <details className="credit-history"><summary>Credit pricing and capacity</summary><p>One-time packs: $15 for 1,000 credits, $35 for 2,500, or $75 for 6,000. Three complete AI product runs per account are included each UTC month. The daily AI spending cap applies to all generation; monitor usage and provider costs as your audience grows.</p><p>Subscription credits and one-time packs power images, videos, and individual rewrites. AI products beyond the monthly allowance use credits per completed step.</p></details>
   </section>}</>;
 }
 type Job = {
@@ -89,6 +89,7 @@ type Job = {
   updated_at: number;
 };
 export function GenerationProgress({
+  autoStart=false,
   textCost=10,
   product,
   onProduct,
@@ -97,7 +98,9 @@ export function GenerationProgress({
   onSetup,
   onBeforeGenerate,
   onRunningChange,
+  onAllowance,
 }: {
+  autoStart?:boolean;
   textCost?:number;
   product: Product;
   onProduct: (p: Product) => void;
@@ -106,6 +109,7 @@ export function GenerationProgress({
   onSetup: () => void;
   onBeforeGenerate: () => Promise<boolean>;
   onRunningChange: (running: boolean) => void;
+  onAllowance?: (allowance:CreditBalance['products'])=>void;
 }) {
   const [job, setJob] = useState<Job | null>(null);
   const [running, setRunning] = useState(false);
@@ -138,9 +142,13 @@ export function GenerationProgress({
           done: boolean;
           stage: number;
           total: number;
+          mode?:string;
+          allowance?:CreditBalance['products'];
         }>(`/api/products/${product.id}/generate`, "POST", {allowCredits,maxStepCredits:confirmedCost});
         if (!mounted.current) break;
         onProduct(d.product);
+        if(d.mode)setPaymentMode(d.mode);
+        if(d.allowance){setAllowance(d.allowance);onAllowance?.(d.allowance);}
         setJob({
           stage: d.stage,
           status: d.done ? "completed" : "queued",
@@ -174,7 +182,7 @@ export function GenerationProgress({
         setAllowance(d.allowance);setPaymentMode(d.mode);
         // Only a newly created job starts automatically. Reopening a paused
         // or partially completed product always requires an explicit resume.
-        if (d.job?.status === "queued" && d.job.stage === -1) void run();
+        if (autoStart && d.job?.status === "queued" && d.job.stage === -1) void run();
         else if (d.job?.status === "running")
           setError(
             "A generation request is still processing. Wait a moment, then resume.",
@@ -299,7 +307,7 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
   const [kind, setKind] = useState<"image" | "video">("image");
   const [aspect, setAspect] = useState("1:1");
   const [prompt, setPrompt] = useState(
-    product.content.imagePrompt ||
+    product.content.imagePrompt?.slice(0,2500) ||
       `Create a premium marketing image for "${product.title}". Audience: ${product.audience}. ${product.description}. Refined editorial art direction, confident typography, generous negative space, sophisticated ${product.color} accents.`,
   );
   const [busy, setBusy] = useState(false);

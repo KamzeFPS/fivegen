@@ -24,11 +24,6 @@ export async function POST(
     const { id } = await params;
     const raw = await ownedProduct(id, u.userId);
     const p = productFromRow(raw);
-    if (p.status === "published")
-      throw new ApiError(
-        "Unpublish this product before regenerating its content.",
-        409,
-      );
     const job = await database()
       .prepare("SELECT status FROM generation WHERE product_id=?")
       .bind(id)

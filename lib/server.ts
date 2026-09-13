@@ -23,7 +23,7 @@ export function database() {
 export async function identity(options:{allowUnaccepted?:boolean}={}) {
   const user = mcpIdentity.getStore() || await getChatGPTUser();
   if (!user)
-    throw new ApiError("Sign in to save and publish your products.", 401);
+    throw new ApiError("Sign in to create and save your products.", 401);
   if(!options.allowUnaccepted&&!await acceptedTerms(user.userId))throw new ApiError('Review and accept the updated Terms & Conditions at /welcome before continuing.',428);
   return user;
 }

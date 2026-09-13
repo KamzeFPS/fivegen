@@ -57,6 +57,20 @@
       "when": 1789193163986,
       "tag": "0007_serious_ikaris",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1789293758449,
+      "tag": "0008_material_multiple_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1789294339414,
+      "tag": "0009_flippant_goliath",
+      "breakpoints": true
     }
   ]
 }

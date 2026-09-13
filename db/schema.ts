@@ -1,4 +1,10 @@
 import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+export const studioConversations = sqliteTable('studio_conversations', {
+  id:text('id').primaryKey(),owner:text('owner').notNull(),title:text('title').notNull(),messages:text('messages').notNull().default('[]'),plan:text('plan'),productId:text('product_id'),lease:integer('lease').notNull().default(0),updatedAt:integer('updated_at').notNull(),
+},t=>[index('idx_studio_conversations_owner').on(t.owner,t.updatedAt)]);
+export const studioPlanTurns = sqliteTable('studio_plan_turns', {
+  id:text('id').primaryKey(),owner:text('owner').notNull(),conversationId:text('conversation_id').notNull(),prompt:text('prompt').notNull(),period:text('period').notNull(),mode:text('mode').notNull(),state:text('state').notNull(),response:text('response'),createdAt:integer('created_at').notNull(),
+},t=>[index('idx_studio_plan_turns_owner').on(t.owner,t.period)]);
 export const mcpClients = sqliteTable("mcp_clients", {
   id:text("id").primaryKey(),name:text("name").notNull(),redirects:text("redirects").notNull(),createdAt:integer("created_at").notNull(),
 });
@@ -126,8 +132,20 @@ export const paddleSubscriptions=sqliteTable('paddle_subscriptions',{
  subscriptionId:text('subscription_id').primaryKey(),environment:text('environment').notNull(),customerId:text('customer_id').notNull().references(()=>paddleCustomers.customerId),status:text('status').notNull(),priceId:text('price_id').notNull(),productId:text('product_id').notNull(),items:text('items').notNull(),scheduledChangeAction:text('scheduled_change_action'),scheduledChangeAt:text('scheduled_change_at'),createdAt:text('created_at').notNull(),updatedAt:text('updated_at').notNull(),eventTime:integer('event_time').notNull(),
 },t=>[index('idx_paddle_subscriptions_customer').on(t.environment,t.customerId)]);
 export const paddleCheckoutIntents=sqliteTable('paddle_checkout_intents',{
+ billingInterval:text('billing_interval'),
  id:text('id').primaryKey(),environment:text('environment').notNull(),owner:text('owner').notNull(),email:text('email').notNull(),priceId:text('price_id').notNull(),packId:text('pack_id').notNull(),credits:integer('credits').notNull(),createdAt:integer('created_at').notNull(),
 });
+// Only verified completed payments fund these periods. A subscription.created
+// event alone never grants credits, and annual payments release credits monthly.
+export const paddleSubscriptionPeriods=sqliteTable('paddle_subscription_periods',{
+ transactionId:text('transaction_id').primaryKey(),environment:text('environment').notNull(),owner:text('owner').notNull(),subscriptionId:text('subscription_id').notNull(),priceId:text('price_id').notNull(),credits:integer('credits').notNull(),startsAt:integer('starts_at').notNull(),endsAt:integer('ends_at').notNull(),
+},t=>[index('idx_paddle_periods_owner').on(t.owner,t.environment,t.endsAt)]);
+export const subscriptionCreditGrants=sqliteTable('subscription_credit_grants',{
+ id:text('id').primaryKey(),owner:text('owner').notNull(),environment:text('environment').notNull(),transactionId:text('transaction_id').notNull(),subscriptionId:text('subscription_id').notNull(),credits:integer('credits').notNull(),remaining:integer('remaining').notNull(),reversed:integer('reversed').notNull().default(0),startsAt:integer('starts_at').notNull(),expiresAt:integer('expires_at').notNull(),
+},t=>[index('idx_subscription_grants_owner').on(t.owner,t.environment,t.expiresAt)]);
+export const creditUsageGrants=sqliteTable('credit_usage_grants',{
+ id:text('id').primaryKey(),usageId:text('usage_id').notNull(),grantId:text('grant_id').notNull(),amount:integer('amount').notNull(),
+},t=>[index('idx_credit_usage_grants_usage').on(t.usageId)]);
 export const paddleTransactions=sqliteTable('paddle_transactions',{
  transactionId:text('transaction_id').primaryKey(),environment:text('environment').notNull(),customerId:text('customer_id').notNull().references(()=>paddleCustomers.customerId),owner:text('owner'),intentId:text('intent_id'),status:text('status').notNull(),currency:text('currency').notNull(),total:text('total').notNull(),credits:integer('credits').notNull().default(0),credited:integer('credited').notNull().default(0),reversed:integer('reversed').notNull().default(0),createdAt:text('created_at').notNull(),updatedAt:text('updated_at').notNull(),eventTime:integer('event_time').notNull(),
 },t=>[index('idx_paddle_transactions_owner').on(t.environment,t.owner)]);

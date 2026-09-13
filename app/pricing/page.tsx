@@ -7,7 +7,7 @@ import { Pricing } from './pricing';
 import './pricing.css';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'AI Credits — FiveGen', description: 'One-time AI credits for your next idea. Local prices and secure checkout with Paddle.' };
+export const metadata: Metadata = { title: 'Plans & AI Credits — FiveGen', description: 'Monthly or annual plans and one-time AI credit packs for your private creation studio. Local prices and secure checkout with Paddle.' };
 
 export default async function PricingPage() {
   const [requestHeaders, user] = await Promise.all([headers(), getChatGPTUser()]);

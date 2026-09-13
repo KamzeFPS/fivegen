@@ -1,11 +1,13 @@
+import {subscriptionPlans,type BillingInterval} from '../subscriptions';
 export interface Tier {
-  name: 'Starter' | 'Pro' | 'Advanced';
+  name: string;
   description: string;
   features: string[];
   priceId: string;
-  packId: 'starter' | 'studio' | 'scale';
+  packId: string;
   credits: number;
   featured?: boolean;
+  billingInterval?: BillingInterval;
 }
 
 // Edit names, descriptions, and features here. Price IDs come from runtime
@@ -39,6 +41,7 @@ export interface PaddlePublicConfig {
   environment: 'sandbox' | 'production';
   clientToken: string;
   tiers: Tier[];
+  subscriptions?: Tier[];
   checkoutEnabled: boolean;
 }
 
@@ -65,7 +68,14 @@ export function parsePaddleConfig(read: (key: string) => string): PaddlePublicCo
   });
   const release = read('PADDLE_LIVE_RELEASE').trim();
   if (environment === 'production' && release !== 'staging' && release !== 'approved') throw new PaddleConfigurationError('Set PADDLE_LIVE_RELEASE to staging until Paddle verification and domain approval are complete.');
-  return { environment, clientToken, tiers, checkoutEnabled: environment === 'sandbox' || release === 'approved' };
+  const subscriptions:Tier[]=[];
+  for(const plan of subscriptionPlans)for(const interval of ['month','year'] as const){
+    const key=`PADDLE_SUB_${plan.id.toUpperCase()}_${interval.toUpperCase()}`,priceId=read(key).trim();
+    if(!priceId)continue;
+    if(!/^pri_[a-z0-9]{26}$/.test(priceId)||used.has(priceId))throw new PaddleConfigurationError(`${key} must be a unique recurring Paddle price ID.`);
+    used.add(priceId);subscriptions.push({name:plan.name,description:plan.description,features:[...plan.features],credits:plan.credits,packId:plan.id,priceId,billingInterval:interval,featured:'featured' in plan&&plan.featured});
+  }
+  return { environment, clientToken, tiers, subscriptions, checkoutEnabled: environment === 'sandbox' || release === 'approved' };
 }
 
 // Retain accepts only Paddle customer IDs. Unknown and anonymous buyers use {}.
