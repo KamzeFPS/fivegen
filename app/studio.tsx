@@ -1712,7 +1712,7 @@ export default function Studio({
               <span className="footer-logo">✳</span> A little idea can go a long
               way.
             </span>
-            <nav className="legal-links" aria-label="FiveGen information"><a href="/pricing">AI credit pricing</a><a href="/terms">Terms & Conditions</a><a href="/refund">Refund policy</a><a href="mailto:kamzewac@gmail.com">Contact support</a></nav>
+            <nav className="legal-links" aria-label="FiveGen information"><a href="/pricing">AI credit pricing</a><a href="/privacy">Privacy Policy</a><a href="/terms">Terms & Conditions</a><a href="/refund">Refund policy</a><a href="mailto:kamzewac@gmail.com">Contact support</a></nav>
           </footer>
         </main>
       </SidebarInset>
