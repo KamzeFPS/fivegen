@@ -46,7 +46,7 @@ export default function RefundPolicy() {
         <h2>5. Your consumer rights</h2>
         <p>Nothing in this policy excludes rights or remedies that cannot be limited under applicable law, including rights relating to defective, misdescribed, or undelivered digital services. Where mandatory law gives you additional rights, those rights apply.</p>
       </section>
-      <footer><nav className="legal-links" aria-label="FiveGen links"><a href="/terms">Terms & Conditions</a><a href="/pricing">AI credit pricing</a><a href="mailto:kamzewac@gmail.com">Contact support</a></nav><p>FiveGen · Refund & Cancellation Policy</p></footer>
+      <footer><nav className="legal-links" aria-label="FiveGen links"><a href="/privacy">Privacy Policy</a><a href="/terms">Terms & Conditions</a><a href="/pricing">AI credit pricing</a><a href="mailto:kamzewac@gmail.com">Contact support</a></nav><p>FiveGen · Refund & Cancellation Policy</p></footer>
     </article>
   </main>;
 }

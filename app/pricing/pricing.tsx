@@ -130,7 +130,7 @@ export function Pricing({ config, countryCode, email, configurationError }: Prop
       <div className="paddle-assurance"><span><Globe2 size={16} /> Local prices, calculated by Paddle</span><span><LockKeyhole size={16} /> Secure checkout</span><span><Check size={16} /> No automatic renewals</span></div>
       <p className="paddle-tax-note">The total shown includes Paddle’s estimated tax for your location. Your billing address or tax details may change the final total at checkout.</p>
       <section className="paddle-included"><div><span className="paddle-included-icon"><Sparkles size={23} /></span><div><h2>Your workspace. Already included.</h2><p>3 complete AI products each month, plus unlimited manual products, funnels, courses, and communities. Images, videos, and extra AI creation use credits.</p></div></div><a href="/">Explore FiveGen <ArrowRight size={17} /></a></section>
-      <footer className="paddle-footer"><span>Built for your next chapter.</span><div><a href="/terms">Terms & Conditions</a><a href="/refund">Refund policy</a><a href="mailto:kamzewac@gmail.com">Contact support</a></div></footer>
+      <footer className="paddle-footer"><span>Built for your next chapter.</span><div><a href="/privacy">Privacy Policy</a><a href="/terms">Terms & Conditions</a><a href="/refund">Refund policy</a><a href="mailto:kamzewac@gmail.com">Contact support</a></div></footer>
     </div>
   </main>;
 }
