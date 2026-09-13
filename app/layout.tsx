@@ -7,6 +7,7 @@ import "./credits-design.css";
 import "./connections-design.css";
 import "./journey-design.css";
 import "./generator-design.css";
+import "./studio-chat.css";
 
 export const metadata: Metadata = {
   title: "FiveGen — Your next idea, made real",
