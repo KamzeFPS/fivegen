@@ -1,144 +1,30 @@
 'use client';
-
-import { useEffect, useRef, useState } from 'react';
-import { initializePaddle, type Paddle, type PaddleEventData, type PricePreviewResponse } from '@paddle/paddle-js';
-import { ArrowLeft, ArrowRight, Check, CircleAlert, Globe2, Loader2, LockKeyhole, RefreshCw, Sparkles, Zap } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Brand } from '../ui-brand';
-import { retainCustomer, tierDefinitions, type PaddlePublicConfig, type Tier } from '@/lib/paddle/catalog';
-import { checkoutOptions, checkoutSettings, previewRequest, verifiedPrices, type LocalizedPrice } from '@/lib/paddle/checkout';
-import {subscriptionPlans,type BillingInterval} from '@/lib/subscriptions';
-
-type Props = { config?: PaddlePublicConfig; countryCode?: string; email?: string; paddleCustomerId?: string; configurationError?: string };
-
-function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(message)), 20000);
-    promise.then(value => { clearTimeout(timer); resolve(value); }, error => { clearTimeout(timer); reject(error); });
-  });
-}
-
-export function Pricing({ config, countryCode, email, paddleCustomerId, configurationError }: Props) {
-  const [prices, setPrices] = useState<Record<string, LocalizedPrice>>({});
-  const [address, setAddress] = useState<PricePreviewResponse['data']['address']>(null);
-  const [loading, setLoading] = useState(Boolean(config));
-  const [error, setError] = useState('');
-  const [retry, setRetry] = useState(0);
-  const [opening, setOpening] = useState<string | null>(null);
-  const paddleRef = useRef<Paddle | null>(null);
-  const openingRef = useRef(false);
-  const checkoutTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const [purchaseType,setPurchaseType]=useState<'plans'|'packs'>('plans');
-  const [interval,setInterval]=useState<BillingInterval>('month');
-  const tiers:Omit<Tier,'priceId'>[]|Tier[]=purchaseType==='packs'?(config?.tiers??tierDefinitions):subscriptionPlans.map(plan=>config?.subscriptions?.find(t=>t.packId===plan.id&&t.billingInterval===interval)||{name:plan.name,description:plan.description,features:[...plan.features],packId:plan.id,credits:plan.credits,billingInterval:interval,featured:'featured' in plan&&plan.featured});
-  useEffect(()=>{if(new URLSearchParams(location.search).get('type')==='packs')setPurchaseType('packs');},[]);
-
-  useEffect(() => {
-    if (!config) return;
-    let cancelled = false;
-    function onEvent(event: PaddleEventData) {
-      if (cancelled) return;
-      if (['checkout.loaded', 'checkout.closed', 'checkout.error', 'checkout.completed'].includes(event.name ?? '')) {
-        clearTimeout(checkoutTimer.current);
-        openingRef.current = false;
-        setOpening(null);
-      }
-      if (event.name === 'checkout.error' || event.type === 'error') {
-        setError(event.detail === 'transaction_default_checkout_url_not_set'
-          ? 'Paddle needs a default payment link. Set it in your Paddle dashboard under Checkout → Checkout settings, then try again.'
-          : config!.environment === 'sandbox' && event.detail
-          ? `Sandbox checkout: ${event.detail}${event.code ? ` (${event.code})` : ''}`
-          : 'Checkout could not open. Please try again. If this continues, contact support.');
-      }
-      if (event.name === 'checkout.completed') {
-        // This flag is presentation only. Never use browser events or storage
-        // to credit a wallet or grant an entitlement.
-        try { sessionStorage.setItem('fivegen:paddle-checkout', JSON.stringify({ environment: config!.environment, transactionId: event.data?.transaction_id, completedAt: Date.now() })); } catch { /* Storage can be unavailable in private browsing. */ }
-        window.location.assign('/welcome');
-      }
-    }
-    async function load() {
-      setLoading(true);
-      setPrices({});
-      setError('');
-      try {
-        const paddle = await withTimeout(initializePaddle({ environment: config!.environment, token: config!.clientToken, pwCustomer: retainCustomer(paddleCustomerId), eventCallback: onEvent, checkout: { settings: checkoutSettings(window.location.origin) } }), 'Checkout is taking too long to load. Check your connection and retry.');
-        if (cancelled) return;
-        if (!paddle) throw new Error('Paddle could not initialize. Please refresh the page.');
-        paddle.Update({ eventCallback: onEvent, pwCustomer: retainCustomer(paddleCustomerId) });
-        paddleRef.current = paddle;
-        const offers=[...config!.tiers,...(config!.subscriptions||[])];
-        const preview = await withTimeout(paddle.PricePreview(previewRequest(offers, countryCode)), 'Local prices could not be loaded. Check your connection and retry.');
-        if (cancelled) return;
-        setPrices(verifiedPrices(preview, offers));
-        setAddress(preview.data.address);
-      } catch (caught) {
-        if (!cancelled) setError(caught instanceof Error ? caught.message : 'Local prices are unavailable. Please retry.');
-      } finally { if (!cancelled) setLoading(false); }
-    }
-    void load();
-    return () => { cancelled = true; clearTimeout(checkoutTimer.current); };
-  }, [config, countryCode, paddleCustomerId, retry]);
-
-  async function buy(tier: Tier) {
-    const price = prices[tier.priceId];
-    if (!config?.checkoutEnabled || !paddleRef.current || !price || loading || openingRef.current) return;
-    openingRef.current = true;
-    setOpening(tier.name);
-    setError('');
-    checkoutTimer.current = setTimeout(() => {
-      openingRef.current = false;
-      setOpening(null);
-      setError('Checkout did not respond. Please check your connection and try again.');
-    }, 20000);
-    try {
-      const response = await fetch('/api/paddle/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ priceId: tier.priceId }), signal: AbortSignal.timeout(15000) });
-      if (response.status === 401 || response.status === 428) { window.location.assign('/welcome?return_to=%2Fpricing'); return; }
-      const intent = await response.json() as { email: string; customData: { fivegen_checkout_intent: string }; error?: string };
-      if (!response.ok) throw new Error(intent.error || 'Your checkout could not be prepared. Please try again.');
-      const options = checkoutOptions(price, window.location.origin, intent.email, address);
-      paddleRef.current.Checkout.open({ ...options, customData: intent.customData, settings: { ...options.settings, allowLogout: false } });
-    } catch (caught) {
-      clearTimeout(checkoutTimer.current);
-      openingRef.current = false;
-      setOpening(null);
-      setError(caught instanceof Error ? caught.message : 'Checkout could not open. Please try again.');
-    }
-  }
-
+import {useEffect,useState} from 'react';
+import {ArrowLeft,ArrowRight,Check,LockKeyhole,Smartphone,Sparkles,Zap} from 'lucide-react';
+import {Brand} from '../ui-brand';
+import type {WalletOffer} from '@/lib/wallet-catalog';
+import type {walletPublicConfig} from '@/lib/wallet-stripe';
+export function Pricing({config,offers,email}:{config:ReturnType<typeof walletPublicConfig>;offers:WalletOffer[];email?:string}) {
+  const [type,setType]=useState<'plans'|'packs'>('plans'),[interval,setInterval]=useState<'month'|'year'>('month');
+  useEffect(()=>{if(new URLSearchParams(location.search).get('type')==='packs')setType('packs');},[]);
+  const tiers=offers.filter(o=>type==='packs'?!o.interval:o.interval===interval);
   return <main className="paddle-pricing">
-    <nav className="paddle-nav" aria-label="Pricing navigation"><a href="/" aria-label="FiveGen home"><Brand /></a><div className="paddle-nav-links">{email && <a href="/account/billing">Billing & receipts</a>}<a className="paddle-back" href="/"><ArrowLeft size={16} /> Back to studio</a></div></nav>
+    <nav className="paddle-nav" aria-label="Pricing navigation"><a href="/" aria-label="FiveGen home"><Brand/></a><div className="paddle-nav-links">{email&&<a href="/account/billing">Billing & receipts</a>}<a href="/" className="paddle-back"><ArrowLeft size={16}/> Back to studio</a></div></nav>
     <div className="paddle-content">
-      <header className="paddle-heading">
-        <span className="paddle-eyebrow"><Sparkles size={16} /> YOUR NEXT IDEA STARTS HERE</span>
-        <h1>More ideas.<br className="paddle-mobile-break" /> <span>More possibilities.</span></h1>
-        <p>Your ideas deserve room to grow. Choose a monthly credit allowance, or top up on your terms.</p>
-        <div className="paddle-purchase-tabs" aria-label="Purchase type">{(['plans','packs'] as const).map(type=><button key={type} aria-pressed={purchaseType===type} disabled={!!opening} onClick={()=>setPurchaseType(type)}>{type==='plans'?'Subscriptions':'One-time credit packs'}</button>)}</div>
-        {purchaseType==='plans'?<div className="paddle-interval" aria-label="Billing period"><button aria-pressed={interval==='month'} disabled={!!opening} onClick={()=>setInterval('month')}>Monthly</button><button aria-pressed={interval==='year'} disabled={!!opening} onClick={()=>setInterval('year')}>Yearly</button><span>Credits refresh monthly on either plan</span></div>:<div className="paddle-purchase-type"><Check size={16}/> One-time purchase · Credits never expire</div>}
+      <header className="paddle-heading"><span className="paddle-eyebrow"><Sparkles size={16}/> YOUR NEXT IDEA STARTS HERE</span><h1>More ideas.<br className="paddle-mobile-break"/> <span>More possibilities.</span></h1><p>Choose a monthly credit allowance, or top up on your terms.</p>
+        <div className="paddle-purchase-tabs" aria-label="Purchase type">{(['plans','packs'] as const).map(t=><button key={t} aria-pressed={type===t} onClick={()=>setType(t)}>{t==='plans'?'Subscriptions':'One-time credit packs'}</button>)}</div>
+        {type==='plans'?<div className="paddle-interval" aria-label="Billing period"><button aria-pressed={interval==='month'} onClick={()=>setInterval('month')}>Monthly</button><button aria-pressed={interval==='year'} onClick={()=>setInterval('year')}>Yearly</button><span>Credits refresh monthly on either plan</span></div>:<div className="paddle-purchase-type"><Check size={16}/> One-time purchase · Credits never expire</div>}
       </header>
-
-      {config?.environment === 'sandbox' && <div className="paddle-sandbox"><span>Sandbox checkout</span> Test payments only. No real money is charged.</div>}
-      {config?.environment === 'production' && !config.checkoutEnabled && <div className="paddle-sandbox"><span>Live setup review</span> Live prices are shown below. Purchases open after verification and website approval.</div>}
-      {(configurationError || error) && <div className="paddle-error" role="alert"><CircleAlert size={20} /><div><strong>{configurationError ? 'Checkout setup is incomplete' : 'We couldn’t load checkout'}</strong><p>{configurationError || error}</p></div>{!configurationError && <Button variant="outline" disabled={loading || Boolean(opening)} onClick={() => { paddleRef.current?.Checkout.close(); setPrices({}); setLoading(true); setRetry(value => value + 1); }}><RefreshCw size={16} /> Retry</Button>}</div>}
-
-      <section className="paddle-grid" aria-label={purchaseType==='plans'?'AI subscriptions':'One-time AI credit packs'} aria-busy={loading}>
-        {purchaseType==='plans'&&<article className="paddle-tier paddle-free"><div className="paddle-tier-top"><Zap size={21}/></div><h2>Free</h2><p className="paddle-description">Find your direction. Make your first creations.</p><div className="paddle-price"><strong>Free</strong><span>No payment required</span></div><a className="paddle-buy" href={email?'/':'/signin-with-chatgpt?return_to=%2F'}>Start creating <ArrowRight size={17}/></a><div className="paddle-tier-divider"/><ul>{['3 complete AI products each month','20 AI planning messages each month','Unlimited manual products & downloads','Top up credits for images and video'].map(f=><li key={f}><Check size={17}/>{f}</li>)}</ul></article>}
-        {tiers.map(tier => {
-          const price = 'priceId' in tier && typeof tier.priceId==='string' ? prices[tier.priceId] : undefined;
-          return <article key={tier.name} className={`paddle-tier ${tier.featured ? 'paddle-tier-featured' : ''}`}>
-            <div className="paddle-tier-top"><span className="paddle-tier-icon">{tier.name === 'Starter' ? <Zap size={21} /> : <Sparkles size={21} />}</span>{tier.featured && <span className="paddle-recommendation">RECOMMENDED</span>}</div>
-            <h2>{tier.name}</h2><p className="paddle-description">{tier.description}</p>
-            <div className="paddle-price" aria-live="polite">{price ? <strong>{price.formattedTotals.total}</strong> : loading ? <span className="paddle-price-skeleton" aria-label="Loading local price" /> : <strong className="paddle-unavailable">Coming soon</strong>}<span>{tier.billingInterval?`billed every ${tier.billingInterval==='month'?'month':'year'}`:'one-time payment'}</span></div>
-            <Button className="paddle-buy" variant={tier.featured ? 'default' : 'outline'} disabled={!config?.checkoutEnabled || !price || loading || Boolean(opening)} onClick={() => buy(tier as Tier)} aria-label={`${tier.billingInterval?'Subscribe to':'Buy'} ${tier.name}${price ? ` for ${price.formattedTotals.total}` : ''}`}>{opening === tier.name ? <><Loader2 size={18} className="animate-spin" /> Opening checkout…</> : !config?.checkoutEnabled && config ? <>Available after approval <LockKeyhole size={17} /></> : <>{tier.billingInterval?'Subscribe':'Buy credits'} <ArrowRight size={17} /></>}</Button>
-            <div className="paddle-tier-divider" /><ul>{tier.features.map(feature => <li key={feature}><Check size={17} />{feature}</li>)}</ul>
-          </article>;
-        })}
+      {config?.environment==='sandbox'&&<div className="paddle-sandbox"><span>Test mode</span> No real money is charged. Test credits do not spend AI capacity.</div>}
+      {!config?.enabled&&<div className="paddle-sandbox" role="status"><span>Wallet payments coming soon</span> Apple Pay and Google Pay are being set up. Free creation remains available.</div>}
+      <section className="paddle-grid" aria-label={type==='plans'?'AI subscriptions':'AI credit packs'}>
+        {type==='plans'&&<article className="paddle-tier paddle-free"><div className="paddle-tier-top"><Zap size={21}/></div><h2>Free</h2><p className="paddle-description">Find your direction. Make your first creations.</p><div className="paddle-price"><strong>Free</strong><span>No payment required</span></div><a className="paddle-buy" href={email?'/':'/signin-with-chatgpt?return_to=%2F'}>Start creating <ArrowRight size={17}/></a><div className="paddle-tier-divider"/><ul>{['3 complete AI products each month','20 AI planning messages each month','Unlimited manual products & downloads','Top up credits for images and video'].map(f=><li key={f}><Check size={17}/>{f}</li>)}</ul></article>}
+        {tiers.map(tier=><article key={tier.id} className={`paddle-tier ${tier.featured?'paddle-tier-featured':''}`}><div className="paddle-tier-top"><span className="paddle-tier-icon"><Sparkles size={21}/></span>{tier.featured&&<span className="paddle-recommendation">RECOMMENDED</span>}</div><h2>{tier.name}</h2><p className="paddle-description">{tier.description}</p><div className="paddle-price"><strong>{tier.price}<small className="wallet-currency"> USD</small></strong><span>{tier.interval?`billed every ${tier.interval==='month'?'month':'year'}`:'one-time payment'}</span></div>{config?.enabled?<a className="paddle-buy" href={`/checkout?offer=${encodeURIComponent(tier.id)}`}>{tier.interval?'Subscribe':'Buy credits'} <ArrowRight size={17}/></a>:<button className="paddle-buy" disabled>Available soon <LockKeyhole size={17}/></button>}<div className="paddle-tier-divider"/><ul>{tier.features.map(f=><li key={f}><Check size={17}/>{f}</li>)}</ul></article>)}
       </section>
-
-      <div className="paddle-assurance"><span><Globe2 size={16} /> Local prices, calculated by Paddle</span><span><LockKeyhole size={16} /> Secure checkout</span><span><Check size={16} /> {purchaseType==='plans'?'Cancel future renewals in your account':'No automatic renewals'}</span></div>
-      <p className="paddle-tax-note">The total shown includes Paddle’s estimated tax for your location. Your billing address or tax details may change the final total at checkout.</p>
-      <section className="paddle-included"><div><span className="paddle-included-icon"><Sparkles size={23} /></span><div><h2>Know what every credit creates.</h2><p>12 credits per image. 160 credits per 5-second video with audio. Additional product content uses 10–30 credits per step, depending on the active model. Every account gets 3 AI products and 20 planning messages per month. Review the current cost in your studio before generation.</p></div></div><a href="/">Explore FiveGen <ArrowRight size={17} /></a></section>
-      <p className="paddle-tax-note">Subscription credits reset each monthly anniversary and do not roll over. Annual plans are billed for the full year and release credits monthly. Purchased top-up credits never expire. Expiring subscription credits are used first. Subscriptions renew automatically until canceled; credit packs do not renew.</p>
+      <div className="paddle-assurance"><span><Smartphone size={16}/> Apple Pay & Google Pay</span><span><LockKeyhole size={16}/> Encrypted wallet checkout</span><span><Check size={16}/> {type==='plans'?'Cancel future renewals in your account':'No automatic renewals'}</span></div>
+      <p className="paddle-tax-note">Prices are in USD. Review the exact total before authorizing your wallet payment. Wallet availability depends on your browser, device, location and wallet setup.</p>
+      <section className="paddle-included"><div><span className="paddle-included-icon"><Sparkles size={23}/></span><div><h2>Know what every credit creates.</h2><p>12 credits per image. 160 credits per 5-second video with audio. Additional product content uses 10–30 credits per step, depending on the active model. Review the cost in your studio before generation.</p></div></div><a href="/">Explore FiveGen <ArrowRight size={17}/></a></section>
+      <p className="paddle-tax-note">Subscription credits reset each monthly anniversary and do not roll over. Annual plans are billed for the full year and release credits monthly. Purchased top-up credits never expire. Subscriptions renew automatically until canceled; credit packs do not renew.</p>
       <footer className="paddle-footer"><span>Built for your next chapter.</span><div><a href="/privacy">Privacy Policy</a><a href="/terms">Terms & Conditions</a><a href="/refund">Refund policy</a><a href="mailto:kamzewac@gmail.com">Contact support</a></div></footer>
     </div>
   </main>;

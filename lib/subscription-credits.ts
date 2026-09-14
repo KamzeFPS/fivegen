@@ -4,11 +4,11 @@ import {monthlyWindow} from './credit-policy';
 export function spendableGrant(now:number) {
   // Negative balances from refunded, already-spent credits remain debts after
   // expiry or cancellation. Paused/past-due credits resume only with actual status.
-  return `(g.remaining<0 OR (g.starts_at<=${now} AND g.expires_at>${now} AND EXISTS(SELECT 1 FROM paddle_subscriptions s WHERE s.subscription_id=g.subscription_id AND s.environment=g.environment AND s.status IN ('active','trialing'))))`;
+  return `(g.remaining<0 OR (g.starts_at<=${now} AND g.expires_at>${now} AND (EXISTS(SELECT 1 FROM paddle_subscriptions s WHERE s.subscription_id=g.subscription_id AND s.environment=g.environment AND s.status IN ('active','trialing')) OR EXISTS(SELECT 1 FROM wallet_subscriptions s WHERE s.subscription_id=g.subscription_id AND s.environment=g.environment AND s.status IN ('active','trialing')))))`;
 }
 export async function refreshSubscriptionCredits(owner:string,environment='production',now=Date.now()) {
   const db=database();
-  const periods=await db.prepare(`SELECT p.* FROM paddle_subscription_periods p JOIN paddle_subscriptions s ON s.subscription_id=p.subscription_id AND s.environment=p.environment WHERE p.owner=? AND p.environment=? AND p.starts_at<=? AND p.ends_at>? AND s.status IN ('active','trialing')`).bind(owner,environment,now,now).all();
+  const periods=await db.prepare(`SELECT p.transaction_id,p.subscription_id,p.credits,p.starts_at,p.ends_at FROM paddle_subscription_periods p JOIN paddle_subscriptions s ON s.subscription_id=p.subscription_id AND s.environment=p.environment WHERE p.owner=? AND p.environment=? AND p.starts_at<=? AND p.ends_at>? AND s.status IN ('active','trialing') UNION ALL SELECT p.id AS transaction_id,p.subscription_id,p.credits,p.starts_at,p.ends_at FROM wallet_payments p JOIN wallet_subscriptions s ON s.subscription_id=p.subscription_id AND s.environment=p.environment WHERE p.owner=? AND p.environment=? AND p.credited=1 AND p.starts_at<=? AND p.ends_at>? AND s.status IN ('active','trialing')`).bind(owner,environment,now,now,owner,environment,now,now).all();
   const statements:D1PreparedStatement[]=[];
   for(const period of periods.results){
     const cycle=monthlyWindow(Number(period.starts_at),Number(period.ends_at),now);
@@ -22,6 +22,8 @@ export async function refreshSubscriptionCredits(owner:string,environment='produ
   const total=`(SELECT CAST(total AS INTEGER) FROM paddle_transactions t WHERE t.transaction_id=g.transaction_id AND t.environment=g.environment)`;
   const target=`min(g.credits,max(0,CAST((g.credits*max(0,${refunded})+${total}-1)/${total} AS INTEGER)))`;
   statements.push(db.prepare(`UPDATE subscription_credit_grants AS g SET remaining=remaining-((${target})-reversed),reversed=${target} WHERE owner=? AND environment=? AND ${total}>0`).bind(owner,environment));
+  const walletTarget=`(SELECT p.reversed FROM wallet_payments p WHERE p.id=g.transaction_id AND p.environment=g.environment AND p.credited=1)`;
+  statements.push(db.prepare(`UPDATE subscription_credit_grants AS g SET remaining=remaining-(${walletTarget}-reversed),reversed=${walletTarget} WHERE owner=? AND environment=? AND ${walletTarget} IS NOT NULL`).bind(owner,environment));
   await db.batch(statements);
 }
 export async function subscriptionCreditBalance(owner:string,environment='production',now=Date.now()) {

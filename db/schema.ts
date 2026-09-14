@@ -1,4 +1,25 @@
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sql } from 'drizzle-orm';
+
+// Wallet checkout records are permanent, including test-mode records.
+export const walletCustomers = sqliteTable('wallet_customers', {
+  key:text('key').primaryKey(),owner:text('owner').notNull(),environment:text('environment').notNull(),customerId:text('customer_id').notNull().unique(),
+});
+export const walletCheckoutIntents = sqliteTable('wallet_checkout_intents', {
+  id:text('id').primaryKey(),owner:text('owner').notNull(),environment:text('environment').notNull(),offerId:text('offer_id').notNull(),email:text('email').notNull(),amount:integer('amount').notNull(),credits:integer('credits').notNull(),billingInterval:text('billing_interval'),sessionId:text('session_id').unique(),status:text('status').notNull().default('open'),createdAt:integer('created_at').notNull(),
+},t=>[uniqueIndex('idx_wallet_open_checkout').on(t.owner,t.environment).where(sql`${t.status} = 'open'`)]);
+export const walletSubscriptions = sqliteTable('wallet_subscriptions', {
+  subscriptionId:text('subscription_id').primaryKey(),owner:text('owner').notNull(),environment:text('environment').notNull(),customerId:text('customer_id').notNull(),intentId:text('intent_id').notNull(),status:text('status').notNull(),cancelAt:integer('cancel_at'),periodEnd:integer('period_end'),updatedAt:integer('updated_at').notNull(),
+},t=>[index('idx_wallet_subscriptions_owner').on(t.owner,t.environment)]);
+export const walletPayments = sqliteTable('wallet_payments', {
+  id:text('id').primaryKey(),owner:text('owner').notNull(),environment:text('environment').notNull(),intentId:text('intent_id').notNull(),paymentIntent:text('payment_intent').unique(),subscriptionId:text('subscription_id'),amount:integer('amount').notNull(),credits:integer('credits').notNull(),credited:integer('credited').notNull().default(0),reversed:integer('reversed').notNull().default(0),startsAt:integer('starts_at'),endsAt:integer('ends_at'),createdAt:integer('created_at').notNull(),
+},t=>[index('idx_wallet_payments_owner').on(t.owner,t.environment)]);
+export const walletChargeState = sqliteTable('wallet_charge_state', {
+  chargeId:text('charge_id').primaryKey(),environment:text('environment').notNull(),paymentIntent:text('payment_intent').notNull(),amount:integer('amount').notNull(),reversedAmount:integer('reversed_amount').notNull(),eventTime:integer('event_time').notNull(),
+});
+export const walletTestBalances = sqliteTable('wallet_test_balances', {
+  owner:text('owner').primaryKey(),credits:integer('credits').notNull().default(0),
+});
 export const studioConversations = sqliteTable('studio_conversations', {
   id:text('id').primaryKey(),owner:text('owner').notNull(),title:text('title').notNull(),messages:text('messages').notNull().default('[]'),plan:text('plan'),productId:text('product_id'),lease:integer('lease').notNull().default(0),updatedAt:integer('updated_at').notNull(),
 },t=>[index('idx_studio_conversations_owner').on(t.owner,t.updatedAt)]);

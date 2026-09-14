@@ -8,4 +8,4 @@ export async function GET(req:Request){try{
  const [history,settings,balance]=await Promise.all([database().prepare('SELECT operation,cost,state,created_at FROM credit_usage WHERE owner=? ORDER BY created_at DESC LIMIT 30').bind(user.userId).all(),providerSettings(),creditBalance(user.userId)]);
  return Response.json({balance,history:history.results,costs:{text:textCredits(settings.config.textProvider),image:creditPolicy.image,video:creditPolicy.video}});
 }catch(error){return failure(error);}}
-export async function POST(){return Response.json({error:'Use Plans & credits to purchase securely with Paddle.',url:'/pricing?type=packs'},{status:410});}
+export async function POST(){return Response.json({error:'Use Plans & credits to purchase with Apple Pay or Google Pay.',url:'/pricing?type=packs'},{status:410});}

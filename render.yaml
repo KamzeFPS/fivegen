@@ -36,6 +36,14 @@ services:
         sync: false
       - key: STRIPE_MODE
         value: live
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_WALLET_CHECKOUT_ENABLED
+        value: "false"
+      - key: STRIPE_WALLET_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_WALLET_PORTAL_CONFIGURATION
+        sync: false
       - key: ADMIN_EMAILS
         value: kamzewac@gmail.com
       - key: AI_DAILY_BUDGET_USD

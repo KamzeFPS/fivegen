@@ -10,7 +10,7 @@ export default async function Welcome({searchParams}:{searchParams:Promise<{retu
  const returnTo=path.startsWith('/welcome')?'/':path;
  const user=await getChatGPTUser();
  // Explicit onboarding return paths retain their existing consent flow.
- // Paddle returns to /welcome without a query, which remains a stable page.
+ // Checkout returns without an onboarding return path.
  if(!q.return_to)return <CheckoutWelcome signedIn={Boolean(user)} continueTo={user?'/':chatGPTSignInPath('/welcome?return_to=%2F')}/>;
  if(!user)redirect(chatGPTSignInPath(`/welcome?return_to=${encodeURIComponent(returnTo)}`));
  if(await acceptedTerms(user.userId))redirect(returnTo);

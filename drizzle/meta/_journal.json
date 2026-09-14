@@ -71,6 +71,13 @@
       "when": 1789294339414,
       "tag": "0009_flippant_goliath",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1789384708714,
+      "tag": "0010_smart_bloodscream",
+      "breakpoints": true
     }
   ]
 }
