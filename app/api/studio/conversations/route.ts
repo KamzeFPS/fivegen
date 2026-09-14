@@ -4,6 +4,7 @@ import { ApiError, database, failure, identity, sameOrigin } from '@/lib/server'
 import { providerSettings, textGeneration } from '@/lib/ai';
 import { refundCredits, reserveCredits } from '@/lib/credits';
 import { textCredits } from '@/lib/credit-policy';
+import {hasUnlimitedGeneration} from '@/lib/generation-access';
 import { planningAllowance, planningResponseSchema, type StudioMessage } from '@/lib/studio-plan';
 
 export async function GET(req: Request) {
@@ -53,7 +54,9 @@ export async function POST(req: Request) {
     if (!claimTurn.meta.changes) throw new ApiError('Another planning message is running in your account. Wait for it to finish.', 409);
     turnId = input.requestId;
     const turn = await db.prepare('SELECT mode FROM studio_plan_turns WHERE id=?').bind(turnId).first();
-    const cost = turn?.mode === 'included' ? 0 : textCredits(ai.config.textProvider);
+    const unlimited=await hasUnlimitedGeneration(owner);
+    if(unlimited)await db.prepare("UPDATE studio_plan_turns SET mode='unlimited' WHERE id=? AND owner=?").bind(turnId,owner).run();
+    const cost = unlimited||turn?.mode === 'included' ? 0 : textCredits(ai.config.textProvider);
     if (cost > input.maxCredits) throw new ApiError(`Your 20 included planning messages are used. This message needs ${cost} credits. Review the cost and send again.`, 402);
     if (cost) { await reserveCredits(owner, turnId, 'planning', cost); charged = true; }
     const messages = JSON.parse(String(row.messages)) as StudioMessage[];

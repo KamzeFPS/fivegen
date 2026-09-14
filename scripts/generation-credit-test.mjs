@@ -14,6 +14,7 @@ class ApiError extends Error{constructor(message,status=400){super(message);this
 const owner='generation-credits',deps={z,zodToJsonSchema,ApiError,database:()=>db,creditPolicy,creditPacks,textCredits,monthlyWindow,mcpCreditLimit:new AsyncLocalStorage(),binding:()=>'',stripe:()=>{throw Error('No payments in this test');}};
 async function load(path){const key='test'+crypto.randomUUID().replaceAll('-','');globalThis[key]={...deps};const source=fs.readFileSync(path,'utf8').replace(/^import[\s\S]*?;\r?\n/gm,'');const code=`const {${Object.keys(deps).join(',')}}=globalThis.${key};\n`+ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;const loaded=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));delete globalThis[key];return loaded;}
 Object.assign(deps,await load('lib/product.ts'),await load('lib/product-recipes.ts'));
+Object.assign(deps,await load('lib/generation-access.ts'));
 Object.assign(deps,await load('lib/product-allowance.ts'));
 Object.assign(deps,await load('lib/subscription-credits.ts'));
 Object.assign(deps,await load('lib/credits.ts'));
@@ -42,4 +43,9 @@ assert.equal((await deps.creditBalance(owner)).purchased,50,'Only five completed
 await step(fourth,true);assert.equal((await deps.creditBalance(owner)).purchased,50,'Completed job cannot charge twice');
 await route.DELETE(new Request('http://local/api/generate',{method:'DELETE'}),{params:Promise.resolve({id:fourth})});
 await step(fourth,false,402);assert.equal((await deps.productAllowance(owner)).used,3,'Stopping does not erase used monthly allowance');
-sqlite.close();console.log('Passed: real staged generation route produces three complete products at zero credits, requires credit consent and funds after quota, refunds failed steps, charges only completed paid steps, and preserves allowance across cancellation. Provider transport uses isolated fixtures.');
+sqlite.prepare('INSERT INTO terms_acceptances VALUES (?,?,?,?,?)').run('owner-access',owner,'fixture','kamzewac@gmail.com',Date.now());
+const walletBefore=(await deps.creditBalance(owner)).purchased;
+for(let n=0;n<2;n++){const id=add();let complete=false;while(!complete){const d=await step(id);assert.equal(d.mode,'unlimited');complete=d.done;}}
+assert.equal((await deps.creditBalance(owner)).purchased,walletBefore,'Unlimited full products do not deduct existing credits');
+assert.equal((await deps.productAllowance(owner)).used,3,'Previous included usage is retained');
+sqlite.close();console.log('Passed: staged generation, normal quotas and credit consent, owner unlimited full products without deductions, refunds, and retries. Provider transport uses isolated fixtures.');

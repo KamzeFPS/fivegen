@@ -63,7 +63,7 @@ export async function POST(
     const { config } = await providerSettings(u.userId);
     id = crypto.randomUUID();
     await reserveCredits(u.userId,id,d.kind,creditPolicy[d.kind]);
-    await reserveAIBudget(d.kind==="image"?60000:700000);
+    await reserveAIBudget(d.kind==="image"?60000:700000,u.userId);
     await db
       .prepare(
         "INSERT INTO assets (id,owner,product_id,kind,name,prompt,status,created_at) VALUES (?,?,?,?,?,?,?,?)",

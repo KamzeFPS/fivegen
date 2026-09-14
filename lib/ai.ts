@@ -107,7 +107,7 @@ export async function textGeneration(
   const inputBytes=new TextEncoder().encode(system+requestPrompt+schemaText).length;
   if(inputBytes>64000)throw new ApiError("This request is too large. Shorten the brief or instructions.");
   const inputRate=config.textProvider==="anthropic"?1:0.4,outputRate=config.textProvider==="anthropic"?5:1.6;
-  await reserveAIBudget(Math.ceil(inputBytes*inputRate+maxTokens*outputRate));
+  await reserveAIBudget(Math.ceil(inputBytes*inputRate+maxTokens*outputRate),owner);
   let output = "";
   if (config.textProvider === "openai") {
     const r = await fetch("https://api.openai.com/v1/responses", {

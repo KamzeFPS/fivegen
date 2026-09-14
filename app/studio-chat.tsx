@@ -7,12 +7,12 @@ import type {StudioConversation,StudioPlan} from '@/lib/studio-plan';
 
 type Props={
   conversation:StudioConversation|null; message:string; sent:string; busy:string;
-  name:string; remaining:number; cost:number; credits:number|undefined; allowance:number; aiReady:boolean;
+  name:string; remaining:number; cost:number; credits:number|undefined; allowance:number; aiReady:boolean; unlimited?:boolean;
   onMessage:(value:string)=>void; onSend:(prompt:string)=>Promise<boolean>; onGenerate:()=>void; onOpenProduct:()=>void;
 };
 
 export function StudioChat(props:Props){
-  const {conversation,message,sent,busy,name,remaining,cost,credits,allowance,aiReady,onMessage,onSend,onGenerate,onOpenProduct}=props;
+  const {conversation,message,sent,busy,name,remaining,cost,credits,allowance,aiReady,unlimited,onMessage,onSend,onGenerate,onOpenProduct}=props;
   const messages=conversation?.messages||[];
   const latest=messages.at(-1);
   const questions=latest?.role==='assistant'&&!conversation?.productId?latest.questions||[]:[];
@@ -36,7 +36,7 @@ export function StudioChat(props:Props){
   const answerText=questions.filter(q=>answerFor(q).trim()).map(q=>`${q}\nMy answer: ${answerFor(q).trim()}`).join('\n\n');
   const reply=[answerText,message.trim()].filter(Boolean).join('\n\n');
   const tooLong=reply.length>3000;
-  const canSend=reply.length>=3&&!tooLong&&!busy&&(remaining>0||credits===undefined||credits>=cost);
+  const canSend=reply.length>=3&&!tooLong&&!busy&&(unlimited||remaining>0||credits===undefined||credits>=cost);
   const hasDraft=Boolean(answered||message.trim());
 
   function updateAnswer(question:string,value:string){
@@ -77,12 +77,12 @@ export function StudioChat(props:Props){
   }
   const plan=conversation?.plan;
   const planAction=<div className="chat-plan-action">
-    <p>{conversation?.productId?'Your product is saved in your library.':hasDraft?'Send your reply first to include your latest answers.':allowance>0?'Included in your free product allowance.':`${cost} credits per generation step.`}</p>
+    <p>{conversation?.productId?'Your product is saved in your library.':hasDraft?'Send your reply first to include your latest answers.':unlimited?'Unlimited generation included for your account.':allowance>0?'Included in your free product allowance.':`${cost} credits per generation step.`}</p>
     <button className="button primary" disabled={!!busy||(!conversation?.productId&&(hasDraft||!aiReady))} onClick={()=>{setPlanOpen(false);conversation?.productId?onOpenProduct():onGenerate();}}>
       {busy==='create'?<Loader2 size={17} className="spin"/>:conversation?.productId?<CheckCircle2 size={17}/>:<Sparkles size={17}/>}
       {conversation?.productId?'Open product':'Generate product'}<ArrowRight size={16}/>
     </button>
-    {!conversation?.productId&&<small>Images and video use credits separately.</small>}
+    {!conversation?.productId&&<small>{unlimited?'Images and video are included too.':'Images and video use credits separately.'}</small>}
   </div>;
 
   return <div className="chat-workspace" ref={shellRef}>
@@ -112,7 +112,7 @@ export function StudioChat(props:Props){
             {answered>0&&<button className="chat-draft-summary" onClick={()=>reveal(questionsRef.current)}><CheckCircle2 size={14}/>{answered} of {questions.length} answers included<span>Review</span></button>}
             <form className="chat-composer" onSubmit={e=>{e.preventDefault();void submit();}}>
               <textarea ref={inputRef} rows={2} aria-label="Message FiveGen" placeholder={answered?'Add anything else (optional)…':'Reply to FiveGen or refine your idea…'} value={message} maxLength={3000} disabled={!!busy} onChange={e=>onMessage(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing&&!window.matchMedia('(pointer: coarse)').matches){e.preventDefault();void submit();}}}/>
-              <div className="chat-compose-bottom"><span>{busy==='planning'?'FiveGen is thinking…':remaining>0?`${remaining} included messages left`:`${cost} credits per message`}</span><button type="submit" disabled={!canSend} aria-label={answered?'Send answers':'Send message'}>{busy==='planning'?<Loader2 size={18} className="spin"/>:<ArrowUp size={18}/>}<span>{busy==='planning'?'Thinking…':answered?'Send answers':'Send'}</span></button></div>
+              <div className="chat-compose-bottom"><span>{busy==='planning'?'FiveGen is thinking…':unlimited?'Unlimited planning':remaining>0?`${remaining} included messages left`:`${cost} credits per message`}</span><button type="submit" disabled={!canSend} aria-label={answered?'Send answers':'Send message'}>{busy==='planning'?<Loader2 size={18} className="spin"/>:<ArrowUp size={18}/>}<span>{busy==='planning'?'Thinking…':answered?'Send answers':'Send'}</span></button></div>
             </form>
             {tooLong?<p className="chat-reply-error" role="alert">Shorten your combined reply by {reply.length-3000} characters to send it.</p>:<div className="chat-compose-hint"><span>{questions.length?'Answers are sent together in one message.':'Your conversation is saved privately.'}</span><span className="chat-keyboard-hint">Enter to send · Shift + Enter for a new line</span></div>}
           </>}

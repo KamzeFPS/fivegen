@@ -15,4 +15,4 @@ export function monthlyWindow(start:number,end:number,now=Date.now()){
   if(at(n)>now)n=Math.max(0,n-1);
   return {start:at(n),end:Math.min(end,at(n+1))};
 }
-export type CreditBalance={starter:number;included:number;purchased:number;total:number;media:number;renewsAt:number|null;products:{used:number;remaining:number;limit:number;resetsAt:number}};
+export type CreditBalance={unlimited?:boolean;starter:number;included:number;purchased:number;total:number;media:number;renewsAt:number|null;products:{unlimited?:boolean;used:number;remaining:number;limit:number;resetsAt:number}};

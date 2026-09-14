@@ -11,6 +11,7 @@ const root=resolve('outputs/studio-subscription-qa',randomUUID()),storage=create
 class ApiError extends Error{constructor(message,status=400){super(message);this.status=status;}}
 const deps={ApiError,database:()=>db,binding:()=>'',creditPolicy,creditPacks,textCredits,monthlyWindow,mcpCreditLimit:new AsyncLocalStorage(),stripe:()=>{throw Error('No external payments in this test');}};
 async function load(path){const key='qa'+randomUUID().replaceAll('-','');globalThis[key]={...deps};const source=fs.readFileSync(path,'utf8').replace(/^import[\s\S]*?;\r?\n/gm,'');const code=`const {${Object.keys(deps).join(',')}}=globalThis.${key};\n`+ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;const result=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));delete globalThis[key];return result;}
+Object.assign(deps,await load('lib/generation-access.ts'));
 Object.assign(deps,await load('lib/product-allowance.ts'),await load('lib/subscription-credits.ts'));
 const credits=await load('lib/credits.ts');
 const now=Date.now(),owner='subscription-fixture';

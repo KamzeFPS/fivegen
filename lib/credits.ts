@@ -3,6 +3,7 @@ import {creditPacks,type CreditBalance} from "./credit-policy";
 import {productAllowance} from "./product-allowance";
 import {mcpCreditLimit} from "./mcp-context";
 import {subscriptionCreditBalance,spendableGrant} from './subscription-credits';
+import {hasUnlimitedGeneration} from './generation-access';
 
 export async function creditBalance(owner:string):Promise<CreditBalance>{
   const db=database();
@@ -10,11 +11,20 @@ export async function creditBalance(owner:string):Promise<CreditBalance>{
   const w=(await db.prepare("SELECT purchased FROM wallets WHERE owner=?").bind(owner).first())!;
   const purchased=Number(w.purchased);
   const subscription=await subscriptionCreditBalance(owner);
-  return {starter:0,...subscription,purchased,total:purchased+subscription.included,media:Math.max(0,purchased+subscription.included),products:await productAllowance(owner)};
+  const products=await productAllowance(owner);
+  return {unlimited:!!products.unlimited,starter:0,...subscription,purchased,total:purchased+subscription.included,media:Math.max(0,purchased+subscription.included),products};
 }
 
 // The ledger claim, balance deduction, and state transition commit atomically in D1.
 export async function reserveCredits(owner:string,id:string,operation:string,cost:number){
+  if(!Number.isSafeInteger(cost)||cost<1)throw new Error("Invalid credit cost");
+  if(await hasUnlimitedGeneration(owner)){
+    const db=database();
+    await db.prepare("INSERT OR IGNORE INTO credit_usage (id,owner,operation,cost,state,starter_used,included_used,purchased_used,cycle,created_at) VALUES (?,?,?,0,'reserved',0,0,0,'unlimited',?)").bind(id,owner,operation,Date.now()).run();
+    const usage=await db.prepare('SELECT owner,operation,cost,state,cycle FROM credit_usage WHERE id=?').bind(id).first();
+    if(usage?.owner!==owner||usage.operation!==operation||usage.cost!==0||usage.cycle!=='unlimited'||usage.state!=='reserved')throw new ApiError('This generation request has already been processed.',409);
+    return;
+  }
   const limit=mcpCreditLimit.getStore();
   if(limit){if(cost>limit.remaining)throw new ApiError("This generation exceeds the credit limit approved for this MCP call.",402);limit.remaining-=cost;}
   if(!Number.isSafeInteger(cost)||cost<1)throw new Error("Invalid credit cost");
@@ -48,13 +58,17 @@ export async function refundCredits(id:string){
   ]);
 }
 // A conservative daily cost ceiling includes failed calls; it is not a provider invoice.
-export async function reserveAIBudget(micros:number){
+export async function reserveAIBudget(micros:number,owner?:string){
   const db=database(),row=await db.prepare("SELECT config FROM providers WHERE owner='__fivegen_platform__'").first();
   const config=JSON.parse(String(row?.config||"{}"));
   if(config.paused)throw new ApiError("AI generation is temporarily paused. Your work and credits are safe.",503);
   const limit=Number(config.dailyBudget??binding("AI_DAILY_BUDGET_USD"))||10;
   const day=new Date().toISOString().slice(0,10);
   await db.prepare("INSERT OR IGNORE INTO ai_budget (day) VALUES (?)").bind(day).run();
+  if(owner&&await hasUnlimitedGeneration(owner)){
+    await db.prepare('UPDATE ai_budget SET reserved_micros=reserved_micros+? WHERE day=?').bind(micros,day).run();
+    return;
+  }
   const result=await db.prepare("UPDATE ai_budget SET reserved_micros=reserved_micros+? WHERE day=? AND reserved_micros+?<=?").bind(micros,day,micros,Math.round(limit*1e6)).run();
   if(!result.meta.changes)throw new ApiError("Today's AI capacity has been reached. Please try again tomorrow. Credits have not been spent.",429);
 }

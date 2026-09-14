@@ -16,6 +16,7 @@ const deps={z,zodToJsonSchema,ApiError,database:()=>storage.DB,identity:async()=
  textGeneration:async(_owner,_system,input)=>{calls++;if(hold)await hold;if(fail)throw new ApiError('Provider temporarily unavailable',503);lastProviderInput=JSON.parse(input);const prompt=lastProviderInput.message;return {answer:'I suggest a focused, practical product tailored to your intended audience.',questions:['What experience should the reader already have?'],plan:{title:prompt.slice(0,95),description:'A complete, practical product with concrete exercises and reusable resources.',audience:'New independent illustrators',format:'Guide',language:'English',duration:7,deliverables:[{name:'Detailed guide',detail:'Original chapters with useful real examples.'},{name:'Working checklist',detail:'A complete editable checklist in Markdown.'},{name:'Email template',detail:'A fully written editable client email.'}],direction:'A clear, practical handoff system tailored to independent illustrators.',assumptions:['No external integrations required.']}};},
 };
 async function load(path){const key='qa'+randomUUID().replaceAll('-','');globalThis[key]={...deps};const source=fs.readFileSync(path,'utf8').replace(/^import[\s\S]*?;\r?\n/gm,'');const code=`const {${Object.keys(deps).join(',')}}=globalThis.${key};\n`+ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;const result=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));delete globalThis[key];return result;}
+Object.assign(deps,await load('lib/generation-access.ts'));
 Object.assign(deps,await load('lib/studio-plan.ts'));
 const route=await load('app/api/studio/conversations/route.ts');
 const post=input=>route.POST(new Request('http://localhost/api/studio/conversations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input)}));
@@ -36,6 +37,10 @@ try{
  const active=post({...paid,requestId:randomUUID(),expectedUpdatedAt:second.conversation.updatedAt,maxCredits:10});
  await new Promise(done=>setTimeout(done,25));
  assert.equal((await post({...paid,requestId:randomUUID(),expectedUpdatedAt:second.conversation.updatedAt,maxCredits:10})).status,409,'Concurrent planning is rejected before a provider call');release();assert.equal((await active).status,200);hold=null;
+ storage.sqlite.prepare('INSERT INTO terms_acceptances VALUES (?,?,?,?,?)').run(randomUUID(),owner,'fixture','kamzewac@gmail.com',Date.now());
+ const unlimitedRevision=storage.sqlite.prepare('SELECT updated_at FROM studio_conversations WHERE id=?').get(input.id).updated_at;
+ const reservedBefore=reserved;
+ response=await post({...paid,requestId:randomUUID(),expectedUpdatedAt:unlimitedRevision,maxCredits:0});assert.equal(response.status,200);assert.equal((await response.json()).spent,0,'Owner plans beyond monthly limit with no credits');assert.equal(reserved,reservedBefore);
  const row=storage.sqlite.prepare('SELECT * FROM studio_conversations WHERE id=?').get(input.id);storage.sqlite.prepare('UPDATE studio_conversations SET product_id=? WHERE id=?').run(randomUUID(),input.id);
  assert.equal((await post({...paid,requestId:randomUUID(),expectedUpdatedAt:row.updated_at,maxCredits:10})).status,409,'A completed plan remains linked to its product');
  console.log('Passed: persistent AI planning, ownership, idempotency, conflict handling, monthly quota, paid consent, failure refunds, concurrency and product linkage. AI transport uses fixtures.');

@@ -21,8 +21,11 @@ const db={prepare:statement,async batch(items){sqlite.exec('BEGIN');try{const re
 class ApiError extends Error{constructor(message,status=400){super(message);this.status=status;}}
 let charge={payment_intent:'pi_test',amount_refunded:0,dispute:null};
 globalThis.__creditTest={ApiError,binding:()=>'',database:()=>db,stripe:async path=>{assert.ok(path.startsWith('charges/'));return charge;},planFor:async owner=>{const m=sqlite.prepare('SELECT * FROM memberships WHERE owner=?').get(owner);return {tier:m?.status==='active'&&m.period_end*1000>Date.now()?'pro':'free'};},creditPacks,creditPolicy,monthlyWindow};
+const accessSource=fs.readFileSync('lib/generation-access.ts','utf8').replace(/^import .*;\r?\n/gm,'');
+const accessCode='const {database}=globalThis.__creditTest;\n'+ts.transpileModule(accessSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
+Object.assign(globalThis.__creditTest,await import('data:text/javascript;base64,'+Buffer.from(accessCode).toString('base64')));
 const allowanceSource=fs.readFileSync('lib/product-allowance.ts','utf8').replace(/^import .*;\r?\n/gm,'');
-const allowanceCode='const {ApiError,database,creditPolicy}=globalThis.__creditTest;\n'+ts.transpileModule(allowanceSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
+const allowanceCode='const {ApiError,database,creditPolicy,hasUnlimitedGeneration}=globalThis.__creditTest;\n'+ts.transpileModule(allowanceSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
 const a=await import('data:text/javascript;base64,'+Buffer.from(allowanceCode).toString('base64'));
 globalThis.__creditTest.productAllowance=a.productAllowance;
 const subscriptionSource=fs.readFileSync('lib/subscription-credits.ts','utf8').replace(/^import .*;\r?\n/gm,'');
@@ -30,7 +33,7 @@ const subscriptionCode='const {database,monthlyWindow}=globalThis.__creditTest;\
 Object.assign(globalThis.__creditTest,await import('data:text/javascript;base64,'+Buffer.from(subscriptionCode).toString('base64')));
 const source=fs.readFileSync('lib/credits.ts','utf8').replace(/^import .*;\r?\n/gm,'');
 globalThis.__creditTest.mcpCreditLimit=new AsyncLocalStorage();
-const code='const {ApiError,binding,database,stripe,planFor,creditPacks,creditPolicy,monthlyWindow,mcpCreditLimit,productAllowance,subscriptionCreditBalance,spendableGrant}=globalThis.__creditTest;\n'+ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
+const code='const {ApiError,binding,database,stripe,planFor,creditPacks,creditPolicy,monthlyWindow,mcpCreditLimit,productAllowance,subscriptionCreditBalance,spendableGrant,hasUnlimitedGeneration}=globalThis.__creditTest;\n'+ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
 const c=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
 const owner='credit-test';
 await assert.rejects(()=>globalThis.__creditTest.mcpCreditLimit.run({remaining:9},()=>c.reserveCredits(owner,'over-mcp-cap','text',10)),e=>e.status===402);
@@ -82,5 +85,28 @@ const failed=await a.claimProductRun(quotaOwner,'p5',null,false,nextMonth);await
 assert.equal((await a.productAllowance(quotaOwner,nextMonth)).remaining,3,'Failure before outline returns allowance');
 const crash=await a.claimProductRun(quotaOwner,'p5',null,false,nextMonth);sqlite.prepare('UPDATE generation SET lease=0 WHERE product_id=?').run('p5');
 assert.equal((await a.productAllowance(quotaOwner,nextMonth)).remaining,3,'Expired unstarted leases recover allowance');
+const unlimitedOwner='verified-platform-owner';
+sqlite.prepare('INSERT INTO terms_acceptances VALUES (?,?,?,?,?)').run('unlimited-owner',unlimitedOwner,'fixture',' KAMZEWAC@gmail.com ',Date.now());
+sqlite.prepare('INSERT INTO terms_acceptances VALUES (?,?,?,?,?)').run('other-owner','other-admin','fixture','other@example.test',Date.now());
+assert.equal(await globalThis.__creditTest.hasUnlimitedGeneration(unlimitedOwner),true);
+assert.equal(await globalThis.__creditTest.hasUnlimitedGeneration('kamzewac@gmail.com'),false,'A client-supplied email as owner is not a verified account');
+assert.equal(await globalThis.__creditTest.hasUnlimitedGeneration('other-admin'),false,'Other accounts are not exempt');
+assert.equal((await c.creditBalance(unlimitedOwner)).unlimited,true);
+assert.equal((await c.creditBalance(unlimitedOwner)).total,0,'Access does not mint fake credits');
+for(const [operation,cost] of [['text',30],['image',12],['video',160]]){
+ const id='unlimited-'+operation;
+ await globalThis.__creditTest.mcpCreditLimit.run({remaining:0},()=>c.reserveCredits(unlimitedOwner,id,operation,cost));
+ assert.equal(sqlite.prepare('SELECT cost FROM credit_usage WHERE id=?').get(id).cost,0);
+ if(operation==='video'){await c.refundCredits(id);await c.refundCredits(id);}else{await c.completeCredits(id);await assert.rejects(()=>c.reserveCredits(unlimitedOwner,id,operation,cost),e=>e.status===409);}
+ assert.equal((await c.creditBalance(unlimitedOwner)).total,0,'Completion/refund must never create a credit balance');
+}
+for(let n=0;n<6;n++)assert.equal((await a.claimProductRun(unlimitedOwner,'unlimited-p'+n,null,false)).mode,'unlimited');
+assert.equal((await a.productAllowance(unlimitedOwner)).used,0,'Unlimited products do not consume monthly slots');
+await assert.rejects(()=>c.reserveAIBudget(1,unlimitedOwner),e=>e.status===503,'Platform pause still applies');
+sqlite.prepare("UPDATE providers SET config=? WHERE owner='__fivegen_platform__'").run(JSON.stringify({paused:false,dailyBudget:1}));
+await assert.rejects(()=>c.reserveAIBudget(1,'other-admin'),e=>e.status===429);
+await c.reserveAIBudget(2e6,unlimitedOwner);
+assert.equal(sqlite.prepare('SELECT reserved_micros FROM ai_budget WHERE day=?').get(new Date().toISOString().slice(0,10)).reserved_micros,11e6,'Owner provider usage is still recorded');
+await assert.rejects(()=>c.reserveCredits('other-admin','still-paid','image',12),e=>e.status===402);
 sqlite.close();delete globalThis.__creditTest;
 console.log('Passed: actual credit SQL, concurrent spending, idempotent refunds/top-ups, refund and dispute reversals, monthly product quota, concurrent claims, retries, UTC rollover, crash recovery, no plan grants, budget cap, fee rounding, and leap-month windows.');

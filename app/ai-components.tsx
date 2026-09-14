@@ -79,7 +79,7 @@ export function AIProviders({signedIn,onUpdate}:{signedIn:boolean;onUpdate:()=>v
     <div className="admin-key-grid">{(["openai","anthropic","fal","resend"] as const).map(key=><label key={key}>{key==="resend"?"Resend email key":key==="fal"?"fal.ai master key":key==="openai"?"OpenAI master key":"Anthropic master key"}<span className="field-help">{s.connected[key]?"Connected · leave blank to keep":"Not connected"}</span><input type="password" autoComplete="new-password" value={keys[key]} placeholder="Paste master API key" onChange={e=>setKeys({...keys,[key]:e.target.value})}/>{s.connected[key]&&<button className="text-link" disabled={busy} onClick={()=>void save(key)}>Remove stored key</button>}</label>)}</div>
     <label>Support email sender<input type="email" value={s.config.emailFrom||""} placeholder="hello@fivegen.ai" onChange={e=>setS({...s,config:{...s.config,emailFrom:e.target.value}})}/><small>Verify this sender’s domain in Resend before enabling transactional email.</small></label><label className="admin-pause"><input type="checkbox" checked={s.config.paused} onChange={e=>setS({...s,config:{...s.config,paused:e.target.checked}})}/>Pause all new AI generation</label>
     <button className="button primary" disabled={busy||!s.secure} onClick={()=>void save()}>{busy?<Loader2 className="spin" size={16}/>:<ShieldCheck size={16}/>}Save platform settings</button>{!s.secure&&<p className="field-help">Encrypted credential storage needs to be configured on the server.</p>}
-    <details className="credit-history"><summary>Credit pricing and capacity</summary><p>One-time packs: $15 for 1,000 credits, $35 for 2,500, or $75 for 6,000. Three complete AI product runs per account are included each UTC month. The daily AI spending cap applies to all generation; monitor usage and provider costs as your audience grows.</p><p>Subscription credits and one-time packs power images, videos, and individual rewrites. AI products beyond the monthly allowance use credits per completed step.</p></details>
+    <details className="credit-history"><summary>Credit pricing and capacity</summary><p>One-time packs: $15 for 1,000 credits, $35 for 2,500, or $75 for 6,000. Three complete AI product runs per account are included each UTC month. The daily AI spending cap applies to standard accounts; unlimited owner access is exempt, with provider usage still recorded; monitor usage and provider costs as your audience grows.</p><p>Subscription credits and one-time packs power images, videos, and individual rewrites. AI products beyond the monthly allowance use credits per completed step.</p></details>
   </section>}</>;
 }
 type Job = {
@@ -120,15 +120,15 @@ export function GenerationProgress({
   const inProgress = useRef(false);
   const productRef = useRef(product);
   productRef.current = product;
-  const [creditConfirm,setCreditConfirm]=useState(false),[confirmedCost,setConfirmedCost]=useState(textCost),[allowance,setAllowance]=useState<{remaining:number}|null>(null),[paymentMode,setPaymentMode]=useState<string|null>(null);
+  const [creditConfirm,setCreditConfirm]=useState(false),[confirmedCost,setConfirmedCost]=useState(textCost),[allowance,setAllowance]=useState<{remaining:number;unlimited?:boolean}|null>(null),[paymentMode,setPaymentMode]=useState<string|null>(null);
   async function run(allowCredits=false) {
     if (inProgress.current) return;
     if (!aiReady) { onSetup(); return; }
     inProgress.current = true;
     try {
-      const status=await request<{mode:string|null;allowance:{remaining:number}}>(`/api/products/${product.id}/generate`);
+      const status=await request<{mode:string|null;allowance:{remaining:number;unlimited?:boolean}}>(`/api/products/${product.id}/generate`);
       setAllowance(status.allowance);setPaymentMode(status.mode);
-      if(status.mode==='credits'||(status.mode!=='included'&&status.allowance.remaining===0)){
+      if(!status.allowance.unlimited&&(status.mode==='credits'||(status.mode!=='included'&&status.allowance.remaining===0))){
         if(!allowCredits){const pricing=await request<{costs:{text:number}}>('/api/credits');setConfirmedCost(pricing.costs.text);setCreditConfirm(true);return;}
       }
       if (!(await onBeforeGenerate())) return;
@@ -175,7 +175,7 @@ export function GenerationProgress({
   useEffect(() => {
     mounted.current = true;
     stop.current = false;
-    void request<{ job: Job | null;mode:string|null;allowance:{remaining:number} }>(`/api/products/${product.id}/generate`)
+    void request<{ job: Job | null;mode:string|null;allowance:{remaining:number;unlimited?:boolean} }>(`/api/products/${product.id}/generate`)
       .then((d) => {
         if (!mounted.current) return;
         setJob(d.job);
@@ -230,7 +230,7 @@ export function GenerationProgress({
               ? "Review your content, explore your supporting files, and generate your marketing visuals."
               : running
                 ? "Each completed step is saved. You can pause after the current step."
-                : aiReady ? paymentMode==='included' ? 'This complete product is included in your monthly allowance. Resume at no credit cost.' : allowance&&allowance.remaining>0 ? `${allowance.remaining} of 3 included AI products remaining this month. Images and videos use separate credits.` : `Your next AI product uses ${textCost} credits per step. Review the cost before starting.` : "Add your expertise here, or view your AI credits to generate a complete product."}
+                : aiReady ? allowance?.unlimited ? 'Unlimited product generation is included for your account.' : paymentMode==='included' ? 'This complete product is included in your monthly allowance. Resume at no credit cost.' : allowance&&allowance.remaining>0 ? `${allowance.remaining} of 3 included AI products remaining this month. Images and videos use separate credits.` : `Your next AI product uses ${textCost} credits per step. Review the cost before starting.` : "Add your expertise here, or view your AI credits to generate a complete product."}
           </p>
         </div>
         <div className="generation-actions">
@@ -302,7 +302,8 @@ type Asset = {
 export function MediaStudio({ product, onSetup }: { product: Product; onSetup: () => void }) {
   const [mediaReady, setMediaReady] = useState<boolean | null>(null);
   const [balance,setBalance]=useState(0);
-  useEffect(() => { void request<Settings>("/api/providers").then((settings) => {setMediaReady(settings.connected.fal&&!settings.config.paused);setBalance(settings.credits.media);}).catch(() => setMediaReady(false)); }, []);
+  const [unlimited,setUnlimited]=useState(false);
+  useEffect(() => { void request<Settings>("/api/providers").then((settings) => {setMediaReady(settings.connected.fal&&!settings.config.paused);setBalance(settings.credits.media);setUnlimited(!!settings.credits.unlimited);}).catch(() => setMediaReady(false)); }, []);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [kind, setKind] = useState<"image" | "video">("image");
   const [aspect, setAspect] = useState("1:1");
@@ -320,7 +321,7 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
         `/api/products/${product.id}/assets`,
       );
       setAssets(d.assets);
-      const c=await request<{balance:CreditBalance}>("/api/credits");setBalance(c.balance.media);
+      const c=await request<{balance:CreditBalance}>("/api/credits");setBalance(c.balance.media);setUnlimited(!!c.balance.unlimited);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -368,7 +369,7 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
     }
   }
   async function campaign() {
-    if(balance<196){setError("This campaign needs 196 credits. Add credits first.");return;}
+    if(!unlimited&&balance<196){setError("This campaign needs 196 credits. Add credits first.");return;}
     setBusy(true);
     setError("");
     try {
@@ -397,7 +398,7 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
     }
   }
   return (
-    <div className="media-studio"><div className="media-credit-bar"><span><Sparkles size={16}/> {balance.toLocaleString()} image/video credits</span><button className="button secondary" onClick={onSetup}>Add credits <ArrowRight size={15}/></button></div>
+    <div className="media-studio"><div className="media-credit-bar"><span><Sparkles size={16}/> {unlimited?'Unlimited image & video generation':`${balance.toLocaleString()} image/video credits`}</span>{!unlimited&&<button className="button secondary" onClick={onSetup}>Add credits <ArrowRight size={15}/></button>}</div>
       {mediaReady === false && <div className="checkout-setup media-setup"><ImagePlus size={21}/><div><strong>Your FiveGen media studio</strong><p>Image and video generation opens when the administrator connects the platform AI. Your product stays saved.</p></div><button className="button primary" onClick={onSetup}>View AI & credits <ArrowRight size={15}/></button></div>}
       <section className="media-create panel">
         <div className="panel-heading">
@@ -460,11 +461,11 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
               {kind === "image"
                 ? "FLUX 1.1 Pro Ultra"
                 : "Kling 2.6 Pro · 5 seconds"}
-              <small>{kind === "image" ? "12 credits per image" : "160 credits · includes audio"}</small>
+              <small>{unlimited ? "Included with your unlimited access" : kind === "image" ? "12 credits per image" : "160 credits · includes audio"}</small>
             </span>
             <button
               className="button primary"
-              disabled={busy || prompt.length < 15 || !mediaReady || balance<(kind==="image"?12:160)}
+              disabled={busy || prompt.length < 15 || !mediaReady || (!unlimited&&balance<(kind==="image"?12:160))}
               onClick={() => void generate()}
             >
               {busy ? (
@@ -482,7 +483,7 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
           <Layers3 size={24} />
         </span>
         <div>
-          <h3>A whole campaign · 196 credits.</h3>
+          <h3>{unlimited?'A whole campaign · included.':'A whole campaign · 196 credits.'}</h3>
           <p>
             A square post, a story creative, a website banner, and a 5-second
             promo video.
@@ -494,7 +495,7 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
           onClick={() => mediaReady ? void campaign() : onSetup()}
         >
           <WandSparkles size={16} />
-          {mediaReady === false ? "AI status & credits" : "Generate campaign · 196 credits"}
+          {mediaReady === false ? "AI status & credits" : unlimited ? "Generate campaign" : "Generate campaign · 196 credits"}
         </button>
       </section>
       {error && (
