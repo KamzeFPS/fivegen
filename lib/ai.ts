@@ -123,7 +123,11 @@ export async function textGeneration(
         input: requestPrompt,
         max_output_tokens: maxTokens,
         store: false,
-        text: { format: outputSchema ? {type:'json_schema',name:outputSchema.name,schema:outputSchema.schema,strict:true} : { type: "json_object" } },
+        // OpenAI strict Structured Outputs rejects several constraints produced
+        // by zod-to-json-schema (for example trimmed string refinements). All
+        // callers validate the returned object with their own Zod schema, so
+        // use the supported JSON-object mode consistently across every flow.
+        text: { format: { type: "json_object" } },
       }),
     });
     const d = (await r.json()) as any;
