@@ -26,9 +26,9 @@ function CardPaymentForm({setConfirming,subscription}:{setConfirming:(busy:boole
     <div className="wallet-total"><span>Total due today</span><strong>{state.checkout.total.total.amount}</strong></div>
     <form className="stripe-card-form" onSubmit={confirm} aria-busy={busy} aria-describedby={error?'card-payment-error':undefined}>
       <p className="stripe-card-label"><CreditCard size={17}/> Credit or debit card</p>
-      <div className="stripe-card-element"><PaymentElement options={cardCheckoutOptions} onReady={()=>setReady(true)} onLoadError={event=>{setReady(false);setError(event.error.message||'The payment form could not load. Reload checkout and try again.');}}/></div>
+      <div className="stripe-card-element"><PaymentElement options={cardCheckoutOptions} onReady={()=>{setReady(true);setError('');}} onLoadError={event=>{setReady(false);setError(event.error.message||'The payment form could not load. Reload checkout and try again.');}}/></div>
       {!ready&&!error&&<p className="wallet-loading" role="status"><Loader2 className="animate-spin" size={18}/> Loading card details…</p>}
-      {error&&<p id="card-payment-error" className="wallet-error" role="alert">{error}</p>}
+      {error&&<div id="card-payment-error" className="wallet-error" role="alert">{error}{!ready&&<button type="button" onClick={()=>location.reload()}>Reload payment form</button>}</div>}
       <button className="stripe-card-submit" type="submit" disabled={!ready||!state.checkout.canConfirm||busy}>{busy?<><Loader2 className="animate-spin" size={18}/> Processing payment…</>:<><LockKeyhole size={17}/>{subscription?'Subscribe':'Pay'} with credit or debit card</>}</button>
       {busy&&<p className="stripe-card-status" role="status">Follow any verification instructions from your bank.</p>}
     </form>
