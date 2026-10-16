@@ -1,10 +1,10 @@
 'use client';
 
 import {useCallback,useEffect,useRef,useState} from 'react';
-import {Banknote,Brain,FlaskConical,Mail,Megaphone,TrendingUp,ArrowDownToLine,ArrowLeft,ArrowRight,ArrowUp,BookOpen,Check,ChevronRight,Coins,FileText,FolderOpen,ImagePlus,Layers3,Link2,Loader2,MessageSquare,Plus,Search,ShieldCheck,Sparkles,Users,Video,X} from 'lucide-react';
+import {Banknote,Brain,FlaskConical,Mail,Megaphone,TrendingUp,ArrowDownToLine,ArrowLeft,ArrowRight,ArrowUp,BookOpen,Check,FileText,FolderOpen,ImagePlus,Layers3,Loader2,Plus,Search,Sparkles,Users,Video,X} from 'lucide-react';
 import {Toaster,toast} from 'sonner';
 import {Dialog,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle} from '@/components/ui/dialog';
-import {Brand,Cover} from './ui-brand';
+import {Cover} from './ui-brand';
 import {AIProviders,MediaStudio} from './ai-components';
 import {CreditsPanel} from './credits-panel';
 import {ConnectionsPanel} from './connections-panel';
@@ -20,9 +20,11 @@ import CommercePanel from './commerce-panel';
 import {AutomationStudio} from './automation-studio';
 import {CreatorVoiceLibrary} from './creator-voice-library';
 import {CampaignStudio} from './campaign-studio';
+import {WorkspaceNavigation} from './workspace-navigation';
 import {productTypes,type Product} from '@/lib/product';
 import {studioFormats,type StudioConversation} from '@/lib/studio-plan';
 import type {CreditBalance} from '@/lib/credit-policy';
+import {clearWorkspaceDrafts} from '@/lib/workspace-drafts';
 
 type Workspace={admin:boolean;products:Product[];credits:CreditBalance;textCost:number;capabilities:{ai:boolean;media:boolean}};
 type View='create'|'overview'|'library'|'marketing'|'vsl'|'funnel'|'crm'|'credits'|'connections'|'admin';
@@ -39,7 +41,6 @@ const startingPoints=[
   {icon:Users,name:'Sell my expertise',prompt:'Help me build a consulting or mentorship offer. I help people with '},
   {icon:Layers3,name:'Launch a resource',prompt:'Help me launch a digital resource I have created. It helps '},
 ];
-const nav=[{id:'overview' as const,label:'Overview',icon:TrendingUp},{id:'library' as const,label:'Products',icon:FolderOpen},{id:'marketing' as const,label:'Marketing',icon:Megaphone},{id:'crm' as const,label:'Customers',icon:Users}];
 const marketingTabs:EditorTab[]=['voice','vsl','funnel','campaigns','automations'];
 const viewForTab=(tab:EditorTab):View=>marketingTabs.includes(tab)?'marketing':'library';
 const tabs:[EditorTab,typeof FileText,string][]=[['content',BookOpen,'Content'],['offer',FlaskConical,'Offer Lab'],['commerce',Banknote,'Checkout & access'],['files',FileText,'Resources'],['media',ImagePlus,'Creative assets'],['voice',Brain,'Creator voice'],['vsl',Video,'VSL'],['funnel',Layers3,'Funnel'],['campaigns',Megaphone,'Campaigns'],['automations',Mail,'Automations']];
@@ -52,7 +53,7 @@ export default function GeneratorStudio({user}:{user:{name:string;email:string}|
   const [childDirty,setChildDirty]=useState(false),[childBusy,setChildBusy]=useState(false);
   const [search,setSearch]=useState(''),[manual,setManual]=useState(false),[manualTitle,setManualTitle]=useState(''),[manualFormat,setManualFormat]=useState<(typeof studioFormats)[number]>('Video course');
   const [leave,setLeave]=useState<(()=>void)|null>(null);
-  const inputRef=useRef<HTMLTextAreaElement>(null),busyRef=useRef(false),initialRoute=useRef(false),routeRevision=useRef(0);
+  const inputRef=useRef<HTMLTextAreaElement>(null),busyRef=useRef(false),initialRoute=useRef(false),routeRevision=useRef(0),leavingWorkspace=useRef(false);
   const dirty=!!product&&JSON.stringify(product)!==baseline;
   const receiveProduct=useCallback((p:Product)=>{setProduct(p);setBaseline(JSON.stringify(p));setWorkspace(w=>w?{...w,products:[p,...w.products.filter(v=>v.id!==p.id)]}:w);},[]);
   const load=useCallback(async()=>{
@@ -81,7 +82,7 @@ export default function GeneratorStudio({user}:{user:{name:string;email:string}|
         setMessage(draft);
         if(conversationResult.status==='fulfilled'&&conversationResult.value){setConversation(conversationResult.value.conversation);setRemaining(conversationResult.value.remaining);}
         if(query.has('billing'))setView('credits');else if(query.get('connect')==='mcp')setView('connections');
-        else if(['create','overview','marketing','vsl','funnel','crm','library'].includes(query.get('view')||''))setView(query.get('view') as View);
+        else if(['create','overview','marketing','vsl','funnel','crm','library','credits','connections','admin'].includes(query.get('view')||''))setView(query.get('view') as View);
         const p=data?.products.find(value=>value.id===query.get('project'));
         if(p){const area=query.get('area'),tab=tabs.some(([key])=>key===area)?area as EditorTab:'content';receiveProduct(p);setEditorTab(tab);setView(viewForTab(tab));}
         const failed=[workspaceResult,plansResult,conversationResult].find(result=>result.status==='rejected');
@@ -93,7 +94,7 @@ export default function GeneratorStudio({user}:{user:{name:string;email:string}|
     return()=>{active=false;};
   },[user,receiveProduct]);
   useEffect(()=>{if(!draftReady)return;try{sessionStorage.setItem('fivegen:idea:'+(conversation?.id||'new'),message);}catch{}},[message,conversation?.id,draftReady]);
-  useEffect(()=>{const handler=(event:BeforeUnloadEvent)=>{if(dirty||childDirty||childBusy||busy){event.preventDefault();event.returnValue='';}};window.addEventListener('beforeunload',handler);return()=>window.removeEventListener('beforeunload',handler);},[dirty,childDirty,childBusy,busy]);
+  useEffect(()=>{const handler=(event:BeforeUnloadEvent)=>{if(!leavingWorkspace.current&&(dirty||childDirty||childBusy||busy)){event.preventDefault();event.returnValue='';}};window.addEventListener('beforeunload',handler);return()=>window.removeEventListener('beforeunload',handler);},[dirty,childDirty,childBusy,busy]);
   function navigate(action:()=>void){
     if(busyRef.current||childBusy){toast.info('Wait for the current operation to finish.');return;}
     if(childDirty){toast.info('Save your changes in this panel before moving on.');return;}
@@ -108,6 +109,11 @@ export default function GeneratorStudio({user}:{user:{name:string;email:string}|
     else{setProduct(null);window.history.replaceState(null,'',next==='create'?'/':'/?view='+next);}
   });}
   function newIdea(){navigate(()=>{setProduct(null);setConversation(null);setMessage('');setView('create');setError('');replaceRoute();inputRef.current?.focus();});}
+  function leaveWorkspace(path:string,clearDrafts=false){navigate(()=>{
+    if(clearDrafts)clearWorkspaceDrafts();
+    leavingWorkspace.current=true;
+    location.assign(path);
+  });}
   function openProduct(p:Product,tab:EditorTab='content'){navigate(()=>{receiveProduct(p);setEditorTab(tab);setView(viewForTab(tab));setError('');replaceRoute(tab,p.id);});}
   function switchTab(tab:EditorTab){navigate(()=>{setEditorTab(tab);setView(viewForTab(tab));replaceRoute(tab,product?.id);});}
   function openConversation(id:string){navigate(()=>{setDraftReady(false);setBusy('history');busyRef.current=true;void request<{conversation:StudioConversation;remaining:number}>('/api/studio/conversations?id='+encodeURIComponent(id)).then(data=>{setConversation(data.conversation);setMessage(readMessageDraft(data.conversation.id));setRemaining(data.remaining);setProduct(null);setView('create');setError('');window.history.replaceState(null,'','/?conversation='+encodeURIComponent(id));}).catch(e=>setError(e.message)).finally(()=>{setDraftReady(true);setBusy('');busyRef.current=false;});});}
@@ -136,18 +142,9 @@ export default function GeneratorStudio({user}:{user:{name:string;email:string}|
   const label=product?product.title:{create:'Create your product',overview:'Growth overview',marketing:'Marketing',library:'My products',vsl:'VSL studio',funnel:'Funnels',crm:'Your CRM',credits:'AI credits',connections:'Connected assistants',admin:'Platform settings'}[view];
   return <div className={`gen-app growth-app ${view==='create'&&!product&&(conversation||sent)?'gen-chat-active':''}`}>
     <Toaster position="bottom-right" theme="dark" richColors/>
-    <aside className="gen-sidebar"><button type="button" className="gen-logo" onClick={newIdea} aria-label="FiveGen home"><Brand/></button><span className="gen-workspace-label">YOUR AI GROWTH OPERATOR</span>
-      <button className="gen-new" onClick={newIdea}><Plus size={17}/>Create your product</button>
-      <nav aria-label="Main navigation">{nav.map(n=><button key={n.id} className={view===n.id?'active':''} aria-current={view===n.id?'page':undefined} onClick={()=>changeView(n.id)}><n.icon size={18}/>{n.label}{n.id==='library'&&!!workspace?.products.length&&<small>{workspace.products.length}</small>}</button>)}</nav>
-      {!!history.length&&<div className="gen-recents"><span>RECENT PLANS</span>{history.slice(0,4).map(h=><button key={h.id} title={h.title} onClick={()=>openConversation(h.id)}><MessageSquare size={14}/><span>{h.title}</span></button>)}</div>}
-      <div className="gen-sidebar-bottom"><div className="growth-sidebar-note"><Sparkles size={17}/><p>Your voice. Your expertise.<br/><strong>We build the launch around it.</strong></p></div>
-        <button className="gen-admin-link" onClick={()=>changeView('credits')}><Coins size={15}/>AI credits</button><button className="gen-admin-link" onClick={()=>changeView('connections')}><Link2 size={15}/>Connect assistant</button>
-        {workspace?.admin&&<button className="gen-admin-link" onClick={()=>changeView('admin')}><ShieldCheck size={15}/>Platform settings</button>}
-        <div className="gen-account"><span>{user?.name?.[0]||'F'}</span><div><strong>{user?.name||'Your next chapter'}</strong><a href={user?'/account/billing':'/signin-with-chatgpt?return_to=%2F'}>{user?'Account & billing':'Sign in to FiveGen'}</a></div></div>
-      </div>
-    </aside>
-    <div className="gen-main"><header className="gen-topbar"><div><span className="gen-brand-mobile"><Brand/></span><span className="gen-breadcrumb">Workspace <ChevronRight size={13}/><strong>{label}</strong></span></div><div className="gen-topbar-actions"><span className="gen-private"><ShieldCheck size={14}/>You control what goes live</span><button className="gen-credit-pill" onClick={()=>changeView('credits')}><Coins size={15}/>{unlimited?'Unlimited':`${workspace?workspace.credits.total.toLocaleString():'AI'} credits`}</button>{!user&&<a className="gen-signin" href="/signin-with-chatgpt?return_to=%2F">Sign in <ArrowRight size={14}/></a>}</div></header>
-      <div className="gen-mobile-nav"><button aria-label="Create your product" className={view==='create'?'active':''} onClick={newIdea}><Plus size={16}/>Create</button>{nav.map(n=><button key={n.id} className={view===n.id?'active':''} onClick={()=>changeView(n.id)}><n.icon size={16}/>{n.id==='library'?'Products':n.label}</button>)}</div>
+    <div className="gen-main">
+      <WorkspaceNavigation user={user} view={view} label={label} admin={!!workspace?.admin} productCount={workspace?.products.length||0} creditsLabel={unlimited?'Unlimited':workspace?`${workspace.credits.total.toLocaleString()} credits`:'AI credits'} history={history} onCreate={newIdea} onView={changeView} onConversation={openConversation} onVisit={path=>leaveWorkspace(path)} onSignOut={()=>leaveWorkspace('/signout-with-chatgpt',true)}/>
+      <main className="workspace-content" id="workspace-content" tabIndex={-1}>
       {error&&<div className="gen-error" role="alert"><span>{error}</span><button aria-label="Dismiss error" onClick={()=>setError('')}><X size={16}/></button></div>}
       {loading||busy==='history'?<div className="gen-loading"><Loader2 size={28} className="spin"/><p>Opening your workspace…</p></div>:product?<div className="gen-editor gen-enter">
         <div className="gen-editor-heading"><button className="gen-back" onClick={()=>changeView('library')}><ArrowLeft size={16}/>All products</button><div className="gen-save-actions"><span aria-live="polite">{dirty?'Unsaved product changes':'Product saved privately'}</span><button className="button secondary" disabled={!dirty||!!busy||childBusy} onClick={()=>void save()}>{busy==='save'?<Loader2 className="spin" size={15}/>:<Check size={15}/>}Save product</button><button className="button secondary" disabled={!!busy||childBusy||(!product.content.sections.some(s=>s.body.trim())&&!product.content.files?.some(f=>f.content.trim()))} onClick={async()=>{if(await save())location.assign(`/api/products/${product.id}/bundle`);}}><ArrowDownToLine size={15}/>Download</button></div></div>
@@ -172,6 +169,7 @@ export default function GeneratorStudio({user}:{user:{name:string;email:string}|
         </section>
         <section className="gen-workflow"><div><span>01</span><strong>Find your message.</strong><p>Define your audience, their beliefs, and the story only you can tell.</p></div><div><span>02</span><strong>Build your launch.</strong><p>Shape a VSL script, review your landing page, and publish your funnel.</p></div><div><span>03</span><strong>Start the conversation.</strong><p>Capture real leads in your CRM. Follow up with a personal touch.</p></div></section>
       </div>:view==='library'||selector?<div className="gen-library gen-enter"><div className="gen-page-heading"><div><span className="gen-tag">{selector?'CHOOSE A PRODUCT TO CONTINUE':'YOUR EXPERTISE, READY TO GROW'}</span><h1>{view==='vsl'?'VSL studio':view==='funnel'?'Your funnels':view==='marketing'?'Your marketing':'My products'}<span>{workspace?.products.length||0}</span></h1><p>{selector?'Choose a product to work on its voice, VSL, funnel, campaigns, and automations.':'Your original content and the launch system around it.'}</p></div><button className="button primary" onClick={newIdea}><Plus size={16}/>Create your product</button></div><div className="gen-library-tools"><label><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Find a product…" aria-label="Search products"/></label><button className="button secondary" onClick={()=>setManual(true)}><FileText size={16}/>Create manually</button></div><div className="gen-product-grid">{visibleProducts.map(p=><button className="gen-product-card" key={p.id} onClick={()=>openProduct(p,selector?(view==='marketing'?'voice':view as 'vsl'|'funnel'):'content')}><Cover product={p}/><div><span className="gen-product-type">{p.format}<span>Creator owned</span></span><h2>{p.title}</h2><p>{p.content.sections.length} lessons / sections · {p.content.sections.filter(s=>s.videoId).length} videos</p><span className="gen-product-open">{selector?'Open '+(view==='marketing'?'marketing':view==='vsl'?'VSL':'funnel'):'Open product'}<ArrowRight size={16}/></span></div></button>)}</div>{!workspace?.products.length&&<div className="gen-empty"><span><FolderOpen size={32}/></span><h2>Start with what you know.</h2><p>Create your product, then build the message and funnel to bring it to people.</p><button className="button primary" onClick={newIdea}>Create your product <ArrowRight size={16}/></button></div>}{!!workspace?.products.length&&!visibleProducts.length&&<div className="gen-empty"><Search size={28}/><h2>No matching products.</h2><button className="button secondary" onClick={()=>setSearch('')}>Clear search</button></div>}</div>:<div className="gen-settings gen-enter">{view==='overview'?(user?<GrowthDashboard/>:<div className="gen-empty"><TrendingUp size={32}/><h2>See your launch grow.</h2><p>Sign in to track visits, customers, and sales.</p><a className="button primary" href="/signin-with-chatgpt?return_to=%2F%3Fview%3Doverview">Sign in</a></div>):view==='crm'?(user?<GrowthCRM onDirtyChange={setChildDirty} onBusyChange={setChildBusy}/>:<div className="gen-empty"><Users size={32}/><h2>Your next customer starts here.</h2><p>Sign in to capture leads and manage your follow-up.</p><a className="button primary" href="/signin-with-chatgpt?return_to=%2F%3Fview%3Dcrm">Sign in</a></div>):view==='credits'?<CreditsPanel signedIn={!!user}/>:view==='connections'?<ConnectionsPanel signedIn={!!user}/>:workspace?.admin?<AIProviders signedIn={!!user} onUpdate={()=>void load()}/>:null}</div>}
+      </main>
       <footer className="gen-footer"><span>FiveGen · Your expertise. Your next chapter.</span><div><a href="/pricing">Plans & credits</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refund">Refunds</a><a href="mailto:kamzewac@gmail.com">Contact</a></div></footer>
     </div>
     <Dialog open={manual} onOpenChange={v=>{if(!busy)setManual(v);}}><DialogContent><DialogHeader><DialogTitle>Create your product, your way.</DialogTitle><DialogDescription>Bring your own lessons, recordings, or resources. Set up your growth tools whenever you’re ready.</DialogDescription></DialogHeader><form className="gen-manual-form" onSubmit={e=>{e.preventDefault();void create(true);}}><label>Product name<input autoFocus minLength={3} maxLength={100} required value={manualTitle} onChange={e=>setManualTitle(e.target.value)} placeholder="Give your expertise a home"/></label><label>Product type<select value={manualFormat} onChange={e=>setManualFormat(e.target.value as typeof manualFormat)}>{studioFormats.map(f=><option key={f}>{f}</option>)}</select></label><p className="growth-muted">{productTypes.find(t=>t.value===manualFormat)?.description}</p><button className="button primary full" disabled={!!busy||manualTitle.trim().length<3}>{busy==='create'?<Loader2 size={16} className="spin"/>:<Plus size={16}/>}Create product</button></form></DialogContent></Dialog>

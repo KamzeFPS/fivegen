@@ -12,6 +12,8 @@ import "./growth-design.css";
 import "./growth-strategy.css";
 import "./commerce-design.css";
 import "./automation-design.css";
+import "./workspace-navigation.css";
+import "./workspace-content.css";
 
 export const metadata: Metadata = {
   title: "FiveGen — Your AI growth operator",

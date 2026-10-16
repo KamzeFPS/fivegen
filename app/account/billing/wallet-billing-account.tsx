@@ -1,10 +1,11 @@
 'use client';
 import {useState} from 'react';
-import {ArrowLeft,ArrowUpRight,CreditCard,Loader2,ReceiptText} from 'lucide-react';
+import {ArrowLeft,ArrowUpRight,CreditCard,Loader2,LogOut,ReceiptText} from 'lucide-react';
 import {Brand} from '@/app/ui-brand';
 import {Button} from '@/components/ui/button';
 import type {walletAccount} from '@/lib/wallet-billing';
 import type {paddleAccount} from '@/lib/paddle/account';
+import {clearWorkspaceDrafts} from '@/lib/workspace-drafts';
 type Account=Awaited<ReturnType<typeof walletAccount>>;
 type Previous=Awaited<ReturnType<typeof paddleAccount>>;
 export function WalletBillingAccount({email,account,previous}:{email:string;account:Account|null;previous:Previous|null}) {
@@ -16,7 +17,7 @@ export function WalletBillingAccount({email,account,previous}:{email:string;acco
   }
   const hasPrevious=Boolean(previous?.customers.length);
   return <main className="paddle-pricing"><nav className="paddle-nav"><a href="/" aria-label="FiveGen home"><Brand/></a><a href="/pricing" className="paddle-back"><ArrowLeft size={16}/> Plans & credits</a></nav><div className="paddle-content paddle-account">
-    <header><span className="paddle-eyebrow">YOUR ACCOUNT</span><h1>Billing & receipts</h1><p>{email}</p></header>
+    <header><span className="paddle-eyebrow">YOUR ACCOUNT</span><h1>Billing & receipts</h1><div className="workspace-billing-identity"><p>{email}</p><button type="button" disabled={!!busy} onClick={()=>{clearWorkspaceDrafts();location.assign('/signout-with-chatgpt');}}><LogOut size={15}/>Sign out</button></div></header>
     {account?.environment==='sandbox'&&<div className="paddle-sandbox"><span>Test billing</span> Separate from your production AI balance.</div>}
     {error&&<p className="paddle-error" role="alert">{error}</p>}
     <section className="paddle-account-card"><CreditCard size={24}/><h2>Your purchases, in one place.</h2><p>Manage your Stripe subscription, update payment details, and download invoices and receipts.</p><Button disabled={!!busy||!account?.hasCustomer} onClick={()=>portal('wallet')}>{busy==='wallet'?<Loader2 size={17} className="animate-spin"/>:<ArrowUpRight size={17}/>}Manage billing</Button>{!account?.hasCustomer&&<small>Your billing profile appears after your first purchase.</small>}</section>
