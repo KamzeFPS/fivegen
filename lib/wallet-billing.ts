@@ -56,8 +56,10 @@ export async function createWalletCheckout(owner:string,email:string,offerId:str
   // Prices are server-owned. Wallets tokenize cards; no standalone card form is mounted.
   const session=await sdk.checkout.sessions.create({
     ui_mode:'elements',mode:offer.interval?'subscription':'payment',customer,
-    // Stripe Managed Payments rejects `payment_method_types`; let the account's
-    // configured methods apply to this Checkout Session.
+    // This integration settles direct merchant payments at the fixed USD price.
+    // Override the account default: Managed Payments requires adaptive pricing
+    // and controls invoicing and payment methods, which this flow owns.
+    managed_payments:{enabled:false},payment_method_types:['card'],
     allow_promotion_codes:false,
     adaptive_pricing:{enabled:false},
     line_items:[{quantity:1,price_data:{currency:'usd',unit_amount:intent.amount,
@@ -66,9 +68,7 @@ export async function createWalletCheckout(owner:string,email:string,offerId:str
     metadata,client_reference_id:intent.id,
     ...(offer.interval?{subscription_data:{metadata}}:{payment_intent_data:{metadata},invoice_creation:{enabled:true}}),
     return_url:`${origin}/welcome?session_id={CHECKOUT_SESSION_ID}`,
-  // v2 gives intents that previously cached a Stripe 400 a fresh idempotency
-  // key after the Managed Payments-compatible payload change.
-  },{idempotencyKey:`fivegen-wallet-checkout:v2:${intent.id}`});
+  },{idempotencyKey:`fivegen-wallet-checkout:v3-direct:${intent.id}`});
   await db.prepare('UPDATE wallet_checkout_intents SET session_id=? WHERE id=?').bind(session.id,intent.id).run();
   return {clientSecret:session.client_secret!,sessionId:session.id};
 }

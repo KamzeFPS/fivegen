@@ -16,6 +16,8 @@ const sdk={
   accounts:{retrieve:async()=>({charges_enabled:true})},
   customers:{create:async({email})=>({id:'cus_'+email.split('@')[0]})},
   checkout:{sessions:{retrieve:async id=>structuredClone(sessions.get(id)),listLineItems:async id=>({data:lineItems.get(id),has_more:false}),expire:async id=>{sessions.get(id).status='expired';},create:async(params,options)=>{
+    // Match Stripe accounts where Managed Payments is enabled by default.
+    if((params.managed_payments?.enabled??true)&&(params.payment_method_types||params.adaptive_pricing?.enabled===false||params.invoice_creation))throw new Error('Unsupported Checkout settings when Managed Payments is enabled');
     const id='cs_live_'+options.idempotencyKey.split(':').at(-1).replaceAll('-','');
     lastCheckoutParams=structuredClone(params);lastCheckoutOptions=structuredClone(options);if(!sessions.has(id))sessions.set(id,{id,client_secret:'secret_fixture',metadata:params.metadata,status:'open',client_reference_id:params.client_reference_id});return sessions.get(id);
   }}},
@@ -101,12 +103,30 @@ try {
   await assert.rejects(()=>billing.createWalletCheckout('new','new@example.test','pack:free-forged','https://example.test'),e=>e.status===400);
   const concurrent=await Promise.all(Array.from({length:6},()=>billing.createWalletCheckout('new','new@example.test','pack:starter','https://example.test')));
   assert.equal(new Set(concurrent.map(s=>s.sessionId)).size,1,'Concurrent tabs reuse one pending checkout');
-  assert.equal(lastCheckoutParams.payment_method_types,undefined,'Stripe account-managed payment methods are left enabled for Managed Payments compatibility');
-  assert.match(lastCheckoutOptions.idempotencyKey,/^fivegen-wallet-checkout:v2:/,'A fresh key version bypasses cached Stripe errors from the old payload');
+  assert.deepEqual(lastCheckoutParams.managed_payments,{enabled:false},'Direct wallet checkout overrides the account Managed Payments default');
+  assert.deepEqual(lastCheckoutParams.payment_method_types,['card']);
+  assert.deepEqual(lastCheckoutParams.adaptive_pricing,{enabled:false},'Fixed USD prices remain fixed through settlement');
+  assert.match(lastCheckoutOptions.idempotencyKey,/^fivegen-wallet-checkout:v3-direct:/,'A fresh key version bypasses cached Stripe errors from the old payload');
   assert.equal(sql.prepare("SELECT COUNT(*) n FROM wallet_checkout_intents WHERE owner='new' AND status='open'").get().n,1);
   await billing.closeWalletCheckout('new',concurrent[0].sessionId);
   const changed=await billing.createWalletCheckout('new','new@example.test','pack:studio','https://example.test');
   assert.notEqual(changed.sessionId,concurrent[0].sessionId,'Changing the selection expires the old session and starts a new intent');
+  for(const interval of ['month','year']){
+    const retryOwner='failed-subscription-'+interval,email=retryOwner+'@example.test',intentId=randomUUID(),offerId='subscription:pro:'+interval,amount=interval==='month'?2900:29000;
+    sql.prepare('INSERT INTO wallet_checkout_intents (id,owner,environment,offer_id,email,amount,credits,billing_interval,created_at) VALUES (?,?,?,?,?,?,?,?,?)').run(intentId,retryOwner,'production',offerId,email,amount,2500,interval,now);
+    const recovered=await billing.createWalletCheckout(retryOwner,email,offerId,'https://example.test');
+    assert.equal(lastCheckoutOptions.idempotencyKey,'fivegen-wallet-checkout:v3-direct:'+intentId,'Recover a session-less failed checkout with a fresh, deterministic Stripe key');
+    assert.equal(lastCheckoutParams.client_reference_id,intentId);
+    assert.deepEqual(lastCheckoutParams.managed_payments,{enabled:false});
+    assert.deepEqual(lastCheckoutParams.adaptive_pricing,{enabled:false});
+    assert.deepEqual(lastCheckoutParams.payment_method_types,['card']);
+    assert.equal(lastCheckoutParams.ui_mode,'elements');assert.equal(lastCheckoutParams.mode,'subscription');
+    assert.equal(lastCheckoutParams.line_items[0].price_data.currency,'usd');assert.equal(lastCheckoutParams.line_items[0].price_data.unit_amount,amount);
+    assert.deepEqual(lastCheckoutParams.line_items[0].price_data.recurring,{interval});
+    assert.ok(lastCheckoutParams.subscription_data);assert.equal(lastCheckoutParams.payment_intent_data,undefined);assert.equal(lastCheckoutParams.invoice_creation,undefined);
+    assert.equal((await billing.createWalletCheckout(retryOwner,email,offerId,'https://example.test')).sessionId,recovered.sessionId,'Reloading recovers the same session');
+    assert.equal(sql.prepare('SELECT COUNT(*) n FROM wallet_checkout_intents WHERE owner=?').get(retryOwner).n,1,'Recovery keeps the original purchase intent');
+  }
   await assert.rejects(()=>billing.createWalletCheckout(annual.id,'qa@example.test','subscription:pro:month','https://example.test'),e=>e.status===409);
   await assert.rejects(()=>billing.closeWalletCheckout('attacker',pack.session),e=>e.status===404);
   await assert.rejects(()=>billing.walletPortal('attacker','https://example.test'),e=>e.status===404);
