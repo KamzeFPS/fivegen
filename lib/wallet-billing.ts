@@ -56,7 +56,9 @@ export async function createWalletCheckout(owner:string,email:string,offerId:str
   // Prices are server-owned. Wallets tokenize cards; no standalone card form is mounted.
   const session=await sdk.checkout.sessions.create({
     ui_mode:'elements',mode:offer.interval?'subscription':'payment',customer,
-    payment_method_types:['card'],allow_promotion_codes:false,
+    // Stripe Managed Payments rejects `payment_method_types`; let the account's
+    // configured methods apply to this Checkout Session.
+    allow_promotion_codes:false,
     adaptive_pricing:{enabled:false},
     line_items:[{quantity:1,price_data:{currency:'usd',unit_amount:intent.amount,
       product_data:{name:`FiveGen ${offer.name}${offer.interval?'':' credits'}`,metadata:{fivegen_offer:offer.id}},

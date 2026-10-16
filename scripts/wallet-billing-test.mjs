@@ -10,14 +10,14 @@ import {subscriptionPlans} from '../lib/subscriptions.ts';
 
 const root=resolve('outputs/wallet-billing-qa',randomUUID()),storage=createStorage(root),db=storage.DB,sql=storage.sqlite;
 let environment='production',enabled=true;
-const sessions=new Map(),invoices=new Map(),subscriptions=new Map(),intents=new Map(),charges=new Map(),lineItems=new Map(),invoiceLines=new Map();
+const sessions=new Map(),invoices=new Map(),subscriptions=new Map(),intents=new Map(),charges=new Map(),lineItems=new Map(),invoiceLines=new Map();let lastCheckoutParams=null;
 class ApiError extends Error{constructor(message,status=400){super(message);this.status=status;}}
 const sdk={
   accounts:{retrieve:async()=>({charges_enabled:true})},
   customers:{create:async({email})=>({id:'cus_'+email.split('@')[0]})},
   checkout:{sessions:{retrieve:async id=>structuredClone(sessions.get(id)),listLineItems:async id=>({data:lineItems.get(id),has_more:false}),expire:async id=>{sessions.get(id).status='expired';},create:async(params,options)=>{
     const id='cs_live_'+options.idempotencyKey.split(':')[1].replaceAll('-','');
-    if(!sessions.has(id))sessions.set(id,{id,client_secret:'secret_fixture',metadata:params.metadata,status:'open',client_reference_id:params.client_reference_id});return sessions.get(id);
+    lastCheckoutParams=structuredClone(params);if(!sessions.has(id))sessions.set(id,{id,client_secret:'secret_fixture',metadata:params.metadata,status:'open',client_reference_id:params.client_reference_id});return sessions.get(id);
   }}},
   subscriptions:{retrieve:async id=>structuredClone(subscriptions.get(id))},
   invoices:{retrieve:async id=>structuredClone(invoices.get(id)),listLineItems:async id=>({data:invoiceLines.get(id),has_more:false})},
@@ -101,6 +101,7 @@ try {
   await assert.rejects(()=>billing.createWalletCheckout('new','new@example.test','pack:free-forged','https://example.test'),e=>e.status===400);
   const concurrent=await Promise.all(Array.from({length:6},()=>billing.createWalletCheckout('new','new@example.test','pack:starter','https://example.test')));
   assert.equal(new Set(concurrent.map(s=>s.sessionId)).size,1,'Concurrent tabs reuse one pending checkout');
+  assert.equal(lastCheckoutParams.payment_method_types,undefined,'Stripe account-managed payment methods are left enabled for Managed Payments compatibility');
   assert.equal(sql.prepare("SELECT COUNT(*) n FROM wallet_checkout_intents WHERE owner='new' AND status='open'").get().n,1);
   await billing.closeWalletCheckout('new',concurrent[0].sessionId);
   const changed=await billing.createWalletCheckout('new','new@example.test','pack:studio','https://example.test');
