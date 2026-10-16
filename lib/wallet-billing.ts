@@ -26,7 +26,7 @@ export async function createWalletCheckout(owner:string,email:string,offerId:str
   const config=assertWalletCheckout(),sdk=walletStripe(),db=database();
   const offer=walletCatalog().find(o=>o.id===offerId);
   if(!offer)throw new ApiError('Choose an available credit pack or subscription.');
-  if(config.environment==='production'&&!(await sdk.accounts.retrieve(null)).charges_enabled)throw new ApiError('Wallet payments are not available yet. Your account has not been charged.',503);
+  if(config.environment==='production'&&!(await sdk.accounts.retrieve(null)).charges_enabled)throw new ApiError('Card payments are not available yet. Your account has not been charged.',503);
   const existing=await db.prepare("SELECT * FROM wallet_checkout_intents WHERE owner=? AND environment=? AND status='open'").bind(owner,config.environment).first<Intent>();
   if(existing){
     if(existing.session_id){
@@ -53,7 +53,7 @@ export async function createWalletCheckout(owner:string,email:string,offerId:str
   if(intent.offer_id!==offerId)throw new ApiError('Another checkout is open. Close it before switching your selection.',409);
   const customer=await ownedCustomer(owner,email);
   const metadata={purpose,fivegen_intent:intent.id};
-  // Prices are server-owned. Wallets tokenize cards; no standalone card form is mounted.
+  // Prices are server-owned; Stripe collects and tokenizes card details.
   const session=await sdk.checkout.sessions.create({
     ui_mode:'elements',mode:offer.interval?'subscription':'payment',customer,
     // This integration settles direct merchant payments at the fixed USD price.
@@ -147,7 +147,7 @@ export async function fulfillWalletInvoice(invoiceId:string) {
   if(lines.has_more||lines.data.length!==1||item.quantity!==1||item.amount!==intent.amount||invoice.currency!=='usd'||invoice.amount_paid<=0||invoice.amount_remaining!==0||!item.period.start||item.period.end<=item.period.start)throw new ApiError('Invoice does not match the subscription allowance.',400);
   const payments=invoice.payments?.data.filter(p=>p.status==='paid')??[];
   const pi=payments.length===1?walletObjectId(payments[0].payment.payment_intent):null;
-  if(!pi)throw new ApiError('A verified wallet payment is required for subscription credits.',400);
+  if(!pi)throw new ApiError('A verified card payment is required for subscription credits.',400);
   await saveWalletPayment(intent,invoice.id,pi,invoice.amount_paid,subId,item.period.start*1000,item.period.end*1000);
 }
 
@@ -156,9 +156,8 @@ async function saveWalletPayment(intent:Intent,id:string,paymentIntent:string,am
   assertMode(pi.livemode);
   const charge=pi.latest_charge as Stripe.Charge|null;
   if(pi.status!=='succeeded'||pi.currency!=='usd'||pi.amount_received!==amount||!charge||typeof charge==='string'||charge.status!=='succeeded')throw new ApiError('Payment is not settled.',400);
-  // Only wallet buttons are exposed at checkout. Honor every settled payment
-  // for the issued session, including later off-session card-token renewals
-  // whose charge may not retain the initial wallet annotation.
+  // Honor settled card payments for the issued session, including later
+  // off-session subscription renewals and earlier wallet-token purchases.
   if(!charge.payment_method_details?.card)throw new ApiError('The card-token payment could not be verified.',400);
   const db=database();
   await db.prepare('INSERT OR IGNORE INTO wallet_payments (id,owner,environment,intent_id,payment_intent,subscription_id,amount,credits,starts_at,ends_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)').bind(id,intent.owner,intent.environment,intent.id,paymentIntent,sub,amount,intent.credits,start,end,Date.now()).run();

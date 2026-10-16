@@ -33,7 +33,7 @@ async function load(path){const key='qa'+randomUUID().replaceAll('-','');globalT
 Object.assign(deps,await load('lib/wallet-catalog.ts'),await load('lib/subscription-credits.ts'));
 const billing=await load('lib/wallet-billing.ts');
 const now=Date.now(),owner='wallet-fixture';
-function fixture(id,{mode=environment,interval=null,credits=1000,amount=1500,wallet='apple_pay',status='active'}={}){
+function fixture(id,{mode=environment,interval=null,credits=1000,amount=1500,wallet=null,status='active'}={}){
   const customer='cus_'+id,session='cs_'+(mode==='production'?'live':'test')+'_'+id,pi='pi_'+id,charge='ch_'+id,sub=interval?'sub_'+id:null,invoice=interval?'in_'+id:null;
   const start=now-10000,endDate=new Date(start);endDate.setUTCMonth(endDate.getUTCMonth()+(interval==='year'?12:1));const end=endDate.getTime();
   sql.prepare('INSERT INTO wallet_customers VALUES (?,?,?,?)').run(mode+':'+id,owner,mode,customer);
@@ -41,7 +41,7 @@ function fixture(id,{mode=environment,interval=null,credits=1000,amount=1500,wal
   const metadata={purpose:'fivegen_wallet',fivegen_intent:id};
   sessions.set(session,{id:session,metadata,client_reference_id:id,customer,mode:interval?'subscription':'payment',status:'complete',payment_status:'paid',currency:'usd',amount_subtotal:amount,amount_total:amount,total_details:{amount_discount:0},payment_intent:pi,subscription:sub,invoice,livemode:mode==='production'});
   lineItems.set(session,[{quantity:1,price:{unit_amount:amount,currency:'usd',recurring:interval?{interval}:null}}]);
-  charges.set(charge,{id:charge,livemode:mode==='production',payment_intent:pi,amount,amount_refunded:0,status:'succeeded',disputed:false,payment_method_details:{card:{wallet:{type:wallet}}}});
+  charges.set(charge,{id:charge,livemode:mode==='production',payment_intent:pi,amount,amount_refunded:0,status:'succeeded',disputed:false,payment_method_details:{card:{...(wallet?{wallet:{type:wallet}}:{})}}});
   intents.set(pi,{id:pi,livemode:mode==='production',status:'succeeded',currency:'usd',amount_received:amount,charge});
   if(interval){
     subscriptions.set(sub,{id:sub,metadata,livemode:mode==='production',customer,status,cancel_at:null,cancel_at_period_end:false,items:{data:[{quantity:1,price:{unit_amount:amount,currency:'usd',recurring:{interval}},current_period_end:end/1000}]}});
@@ -56,7 +56,7 @@ const balance=id=>sql.prepare('SELECT purchased FROM wallets WHERE owner=?').get
 try {
   const pack=fixture('pack');selectOwner(pack);
   await Promise.all(Array.from({length:8},()=>billing.fulfillWalletSession(pack.session)));
-  assert.equal(balance(pack.id),1000,'Concurrent webhook and welcome callbacks grant exactly once');
+  assert.equal(balance(pack.id),1000,'A standard card purchase grants credits exactly once across concurrent webhook and welcome callbacks');
   assert.equal(sql.prepare('SELECT COUNT(*) n FROM wallet_payments WHERE intent_id=?').get(pack.id).n,1);
   charges.get(pack.charge).amount_refunded=750;
   await Promise.all([billing.recordWalletCharge(pack.charge),billing.recordWalletCharge(pack.charge)]);
@@ -137,12 +137,11 @@ try {
   assert.equal((await sdkReal.webhooks.constructEventAsync(payload,signature,secret)).id,'evt_fixture');
   await assert.rejects(()=>sdkReal.webhooks.constructEventAsync(payload+' ',signature,secret));
   const route=fs.readFileSync('app/api/webhooks/wallet/route.ts','utf8');assert.match(route,/await req.text\(\)/);assert.match(route,/constructEventAsync/);assert.doesNotMatch(route,/JSON\.parse/);
-  const ui=fs.readFileSync('app/checkout/wallet-checkout.tsx','utf8');assert.match(ui,/ExpressCheckoutElement/);assert.doesNotMatch(ui,/<PaymentElement|initializePaddle/);
-  const {walletOnlyOptions}=await load('lib/wallet-checkout-options.ts');
-  for(const name of ['link','amazonPay','paypal','klarna'])assert.equal(walletOnlyOptions.paymentMethods[name],'never');
-  assert.deepEqual(walletOnlyOptions.paymentMethodOrder,['apple_pay','google_pay']);
-  assert.ok(walletOnlyOptions.layout.overflow!=='never'||walletOnlyOptions.layout.maxRows===0,'Stripe requires maxRows=0 when overflow is never; an invalid combination prevents wallet readiness');
+  const ui=fs.readFileSync('app/checkout/wallet-checkout.tsx','utf8');assert.match(ui,/<PaymentElement/);assert.doesNotMatch(ui,/ExpressCheckoutElement|initializePaddle/);
+  const {cardCheckoutOptions}=await load('lib/wallet-checkout-options.ts');
+  assert.deepEqual(cardCheckoutOptions.wallets,{applePay:'never',googlePay:'never',link:'never'},'Standard Stripe card checkout suppresses wallet payment buttons');
+  assert.deepEqual(cardCheckoutOptions.paymentMethodOrder,['card']);
   assert.match(fs.readFileSync('app/api/paddle/checkout/route.ts','utf8'),/status:410/);
-  console.log('Passed: wallet-only checkout, owner/amount/quantity validation, paid-state checks, exact-once credit delivery, refund ordering, disputes/debt, monthly annual grants, cancellation/status, test isolation, portal ownership, actual SDK signature verification and Paddle retirement.');
+  console.log('Passed: Stripe card checkout, account-default override, failed-intent recovery, monthly/annual checkout creation, exact-once card credit delivery, refund ordering, disputes/debt, monthly annual grants, cancellation/status, test isolation, portal ownership, SDK webhook signature verification and Paddle retirement.');
   console.log('Permanent QA records retained: '+root);
 }finally{storage.close();}
