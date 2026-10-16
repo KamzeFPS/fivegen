@@ -12,7 +12,7 @@ type Props={
 };
 
 export function StudioChat(props:Props){
-  const {conversation,message,sent,busy,name,remaining,cost,credits,allowance,aiReady,unlimited,onMessage,onSend,onGenerate,onOpenProduct}=props;
+  const {conversation,message,sent,busy,name,remaining,cost,credits,unlimited,onMessage,onSend,onGenerate,onOpenProduct}=props;
   const messages=conversation?.messages||[];
   const latest=messages.at(-1);
   const questions=latest?.role==='assistant'&&!conversation?.productId?latest.questions||[]:[];
@@ -77,20 +77,20 @@ export function StudioChat(props:Props){
   }
   const plan=conversation?.plan;
   const planAction=<div className="chat-plan-action">
-    <p>{conversation?.productId?'Your product is saved in your library.':hasDraft?'Send your reply first to include your latest answers.':unlimited?'Unlimited generation included for your account.':allowance>0?'Included in your free product allowance.':`${cost} credits per generation step.`}</p>
-    <button className="button primary" disabled={!!busy||(!conversation?.productId&&(hasDraft||!aiReady))} onClick={()=>{setPlanOpen(false);conversation?.productId?onOpenProduct():onGenerate();}}>
+    <p>{conversation?.productId?'Your product is saved in your library.':hasDraft?'Send your reply first to include your latest answers.':'Creating your product workspace is free. Generate your launch copy when you’re ready.'}</p>
+    <button className="button primary" disabled={!!busy||(!conversation?.productId&&hasDraft)} onClick={()=>{setPlanOpen(false);conversation?.productId?onOpenProduct():onGenerate();}}>
       {busy==='create'?<Loader2 size={17} className="spin"/>:conversation?.productId?<CheckCircle2 size={17}/>:<Sparkles size={17}/>}
-      {conversation?.productId?'Open product':'Generate product'}<ArrowRight size={16}/>
+      {conversation?.productId?'Open product':'Create your product'}<ArrowRight size={16}/>
     </button>
-    {!conversation?.productId&&<small>{unlimited?'Images and video are included too.':'Images and video use credits separately.'}</small>}
+    {!conversation?.productId&&<small>Your recordings and lessons stay in your voice.</small>}
   </div>;
 
   return <div className="chat-workspace" ref={shellRef}>
-    <header className="chat-heading"><div><span><Sparkles size={14}/>PRODUCT PLANNING</span><h1>{plan?.title||'Let’s shape your idea.'}</h1></div>
+    <header className="chat-heading"><div><span><Sparkles size={14}/>YOUR GROWTH OPERATOR</span><h1>{plan?.title||'Let’s shape your idea.'}</h1></div>
       {plan&&<button className="chat-plan-toggle" onClick={()=>setPlanOpen(true)}><Layers3 size={17}/><span>View plan</span><ChevronDown size={15}/></button>}
     </header>
     <div className={`chat-layout ${plan?'has-plan':''}`}>
-      <section className="chat-thread" aria-label="Product planning conversation">
+      <section className="chat-thread" aria-label="Growth planning conversation">
         <div className="chat-transcript" ref={scrollRef} onWheel={()=>{manualScrollRef.current=true;}} onTouchMove={()=>{manualScrollRef.current=true;}} onPointerDown={e=>{if(e.target===e.currentTarget)manualScrollRef.current=true;}} onKeyDown={e=>{if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End'].includes(e.key))manualScrollRef.current=true;}} onScroll={()=>{const pane=scrollRef.current;if(pane&&manualScrollRef.current)followRef.current=pane.scrollHeight-pane.scrollTop-pane.clientHeight<100;}} tabIndex={0} aria-label="Conversation history">
           {messages.map((m,index)=><article className={`chat-message ${m.role}`} key={m.id} ref={!sent&&index===messages.length-1?latestRef:undefined}>
             <span className="chat-avatar">{m.role==='assistant'?<Sparkles size={17}/>:name[0]||'Y'}</span>
@@ -118,12 +118,12 @@ export function StudioChat(props:Props){
           </>}
         </div>
       </section>
-      {plan&&<aside className="chat-plan-desktop" aria-label="Current product plan"><div className="chat-plan-label"><Layers3 size={17}/>YOUR PRODUCT PLAN</div><div className="chat-plan-scroll"><PlanDetails plan={plan}/></div>{planAction}</aside>}
+      {plan&&<aside className="chat-plan-desktop" aria-label="Current product plan"><div className="chat-plan-label"><Layers3 size={17}/>YOUR LAUNCH PLAN</div><div className="chat-plan-scroll"><PlanDetails plan={plan}/></div>{planAction}</aside>}
     </div>
-    <Dialog open={planOpen} onOpenChange={setPlanOpen}><DialogContent className="chat-plan-dialog"><DialogHeader><DialogTitle>Your product plan</DialogTitle><DialogDescription>Review the direction and deliverables before generating.</DialogDescription></DialogHeader><div className="chat-plan-scroll">{plan&&<PlanDetails plan={plan}/>}</div>{planAction}</DialogContent></Dialog>
+    <Dialog open={planOpen} onOpenChange={setPlanOpen}><DialogContent className="chat-plan-dialog"><DialogHeader><DialogTitle>Your launch plan</DialogTitle><DialogDescription>Review the direction and deliverables before creating your workspace.</DialogDescription></DialogHeader><div className="chat-plan-scroll">{plan&&<PlanDetails plan={plan}/>}</div>{planAction}</DialogContent></Dialog>
   </div>;
 }
 
 function PlanDetails({plan}:{plan:StudioPlan}){
-  return <div className="chat-plan-details"><div className="chat-plan-tags"><span>{plan.format}</span><span>{plan.language}</span></div><h2>{plan.title}</h2><p>{plan.description}</p><section><h3>Made for</h3><p>{plan.audience}</p></section><section><h3>What we’ll create</h3>{plan.deliverables.map((d,i)=><details key={i}><summary><span>{String(i+1).padStart(2,'0')}</span>{d.name}<ChevronDown size={14}/></summary><p>{d.detail}</p></details>)}</section>{plan.assumptions.length>0&&<details className="chat-plan-assumptions"><summary>Working assumptions<ChevronDown size={14}/></summary><ul>{plan.assumptions.map(a=><li key={a}>{a}</li>)}</ul></details>}</div>;
+  return <div className="chat-plan-details"><div className="chat-plan-tags"><span>{plan.format}</span><span>{plan.language}</span></div><h2>{plan.title}</h2><p>{plan.description}</p><section><h3>Made for</h3><p>{plan.audience}</p></section><section><h3>Your launch deliverables</h3>{plan.deliverables.map((d,i)=><details key={i}><summary><span>{String(i+1).padStart(2,'0')}</span>{d.name}<ChevronDown size={14}/></summary><p>{d.detail}</p></details>)}</section>{plan.assumptions.length>0&&<details className="chat-plan-assumptions"><summary>Working assumptions<ChevronDown size={14}/></summary><ul>{plan.assumptions.map(a=><li key={a}>{a}</li>)}</ul></details>}</div>;
 }

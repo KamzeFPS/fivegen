@@ -1,5 +1,11 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from 'drizzle-orm';
+export * from './growth-schema';
+export * from './growth-funnel-schema';
+export * from './growth-strategy-schema';
+export * from './commerce-v2-schema';
+export * from './automation-schema';
+export * from './creator-voice-schema';
 
 // Wallet checkout records are permanent, including test-mode records.
 export const walletCustomers = sqliteTable('wallet_customers', {

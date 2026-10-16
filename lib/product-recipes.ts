@@ -11,7 +11,11 @@ export const productRecipes = {
   Community: { label: "Community", unit: "Resource", description: "A private member space with discussions and shared resources.", outcome: "Why will members return and help each other?", example: "Create a private practice community for freelance illustrators sharing weekly portfolio critiques.", deliverables: ["Member onboarding", "Private discussions", "Resource library"], architecture: "Build a community launch package: member promise and scope, onboarding, respectful discussion rules, a weekly participation rhythm and useful member resources. Write prompts as suggestions for the host, never as fake member posts or testimonials. Include community-guidelines.md and a host-calendar.csv." },
 } as const;
 
-export function recipeFor(format: Brief["format"]) { return productRecipes[format] || productRecipes["Custom product"]; }
+export function recipeFor(format: Brief["format"]) {
+  if (format === "Video course") return productRecipes["Mini course"];
+  if (format === "Consulting / Mentorship") return productRecipes["Coaching session"];
+  return productRecipes[format] || productRecipes["Custom product"];
+}
 export function generationDirection(brief: Brief, id: string) {
   return `Follow the explicitly agreed scope and unit count in the creator brief before these format defaults. Supporting files are separate resources, not extra chapters or lessons. ${recipeFor(brief.format).architecture}\nCreator's differentiating angle: ${brief.angle || "Develop a specific approach grounded in this audience and outcome; avoid generic advice."}\nProject creative seed: ${id}. Use a distinctive structure, named examples and visual direction for THIS brief. Do not repeat stock examples or claim guaranteed earnings. Challenge duration: ${brief.duration || 7} days. Language: ${brief.language || "English"}.`;
 }

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID, randomBytes, createHmac } from 'node:crypto';
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { createStorage } from '../runtime/render/storage.mjs';
 import { digest } from '../runtime/render/auth.mjs';
 
@@ -24,7 +25,7 @@ Object.assign(process.env,{
 });
 const seed=createStorage(root),token=randomBytes(32).toString('base64url'),owner='paddle-runtime-fixture',now=new Date().toISOString();
 seed.sqlite.prepare('INSERT INTO render_sessions VALUES (?,?,?,?,?)').run(digest(token),owner,'runtime@example.test','Runtime test',Date.now()+3600000);
-seed.sqlite.prepare('INSERT INTO terms_acceptances VALUES (?,?,?,?,?)').run(randomUUID(),owner,'2026-09-13-studio','runtime@example.test',Date.now());
+seed.sqlite.prepare('INSERT INTO terms_acceptances VALUES (?,?,?,?,?)').run(randomUUID(),owner,readFileSync('lib/terms.ts','utf8').match(/TERMS_VERSION='([^']+)'/)[1],'runtime@example.test',Date.now());
 seed.sqlite.prepare('INSERT INTO paddle_customers (customer_id,environment,email,owner,created_at,updated_at) VALUES (?,?,?,?,?,?)').run('ctm_runtime','sandbox','runtime@example.test',owner,now,now);
 seed.sqlite.prepare('INSERT INTO paddle_test_wallets VALUES (?,?)').run(owner,1000);
 seed.sqlite.prepare('INSERT INTO paddle_transactions (transaction_id,environment,customer_id,owner,status,currency,total,credits,credited,created_at,updated_at,event_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').run('txn_runtime','sandbox','ctm_runtime',owner,'completed','USD','1500',1000,1,now,now,Date.now());
@@ -41,7 +42,7 @@ try {
   const page=await fetch(base+'/account/billing',{headers});
   const html=await page.text();
   assert.equal(page.status,200);
-  assert.ok(html.includes('Manage billing')&&html.includes('Recent purchases')&&!html.includes('We couldn’t load this page'), 'Authenticated billing SSR must render actual SQLite account data');
+  assert.ok(html.includes('Manage billing')&&html.includes('Recent wallet purchases')&&html.includes('Earlier purchases')&&!html.includes('We couldn’t load this page'), 'Authenticated billing SSR must render actual SQLite account data');
   assert.equal((await fetch(base+'/api/paddle/account')).status,401);
   assert.equal((await fetch(base+'/api/paddle/portal',{method:'POST',body:'{"customerId":"ctm_runtime"}'})).status,401);
   const account=await (await fetch(base+'/api/paddle/account',{headers})).json();
@@ -71,7 +72,7 @@ try {
     assert.equal((await fetch(base+path)).status,410,'Retired commerce must be unavailable at '+path);
   }
   const privateHome=await (await fetch(base+'/',{headers})).text();
-  assert.ok(privateHome.includes('Create with AI')&&privateHome.includes('Opening your creative workspace'));
+  assert.ok(privateHome.includes('Create your product')&&privateHome.includes('Opening your workspace'));
   assert.ok(!privateHome.includes('Connect Stripe')&&!privateHome.includes('Revenue analytics'));
   const jsonHeaders={...headers,origin:base,'content-type':'application/json'},created=[];
   for(const format of ['Guide','Mini course','Template kit','Challenge','Playbook','Custom product']){

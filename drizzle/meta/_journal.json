@@ -78,6 +78,34 @@
       "when": 1789384708714,
       "tag": "0010_smart_bloodscream",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1792120868386,
+      "tag": "0011_growth_operator",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1792123725941,
+      "tag": "0012_creator_growth_suite",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1792124155021,
+      "tag": "0013_offer_research_rounds",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1792127603710,
+      "tag": "0014_commerce_offer_modes",
+      "breakpoints": true
     }
   ]
 }

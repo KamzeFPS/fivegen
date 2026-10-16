@@ -23,7 +23,12 @@
     "test:wallets": "node scripts/wallet-billing-test.mjs",
     "test:paddle:live": "node scripts/paddle-live-test.mjs",
     "start:paddle:staging": "node --env-file=.env.render.local --env-file=.env.paddle-live.local scripts/paddle-staging.mjs",
-    "test:studio": "node scripts/studio-planning-test.mjs && node scripts/studio-subscription-test.mjs"
+    "test:studio": "node scripts/studio-planning-test.mjs && node scripts/studio-subscription-test.mjs",
+    "test:growth": "node scripts/growth-ai-test.mjs && node scripts/growth-funnel-test.mjs && node scripts/creator-content-test.mjs",
+    "test:growth:runtime": "node scripts/growth-runtime-test.mjs",
+    "test:growth:suite": "node scripts/commerce-v2-test.mjs && node scripts/automation-test.mjs && node scripts/voice-campaign-test.mjs && node scripts/growth-strategy-test.mjs",
+    "test:growth:suite:runtime": "node scripts/creator-suite-runtime-test.mjs",
+    "preview:connect": "node --env-file-if-exists=.env.render.local scripts/stripe-connect-preview.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

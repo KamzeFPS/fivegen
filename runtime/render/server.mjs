@@ -97,6 +97,12 @@ export async function start() {
       if (await auth.handle(req, res, url)) return;
       // Authenticated responses must never enter an intermediary shared cache.
       if (req.headers['oai-authenticated-user-id']) res.setHeader('Cache-Control', 'private, no-store');
+      // Revoked landing pages and VSLs must disappear immediately, including for
+      // anonymous visitors. Never cache a previously published snapshot.
+      if (/^\/(?:g|o|customer|unsubscribe)(?:\/|$)/.test(routePath) || /^\/api\/(?:growth|commerce|automations|offer-lab)(?:\/|$)/.test(routePath)) {
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.setHeader('Referrer-Policy', 'no-referrer');
+      }
       for (const handler of handlers) handler.call(server, req, res);
     } catch {
       console.error('FiveGen could not handle a request.');
@@ -111,9 +117,24 @@ export async function start() {
     server.listen(config.port, '0.0.0.0', resolve);
   });
   console.log(`FiveGen production server listening on port ${config.port}`);
+  // The durable queue lives in SQLite. Only explicitly configured deployments
+  // dispatch; missed ticks catch up after restart, and the route claims leases.
+  let dispatching = false;
+  const dispatch = async () => {
+    if (stopping || dispatching || process.env.AUTOMATIONS_WORKER_ENABLED === 'false' || (process.env.AUTOMATION_DISPATCH_SECRET || '').length < 32) return;
+    dispatching = true;
+    try {
+      const response = await fetch(`http://127.0.0.1:${config.port}/api/automations/dispatch`, { method: 'POST', headers: { Host: new URL(config.origin).host, Authorization: `Bearer ${process.env.AUTOMATION_DISPATCH_SECRET}` }, signal: AbortSignal.timeout(90000) });
+      if (!response.ok) console.error('Automation dispatch did not complete:', response.status);
+    } catch { if (!stopping) console.error('Automation dispatch temporarily unavailable. Pending jobs will retry.'); }
+    finally { dispatching = false; }
+  };
+  const dispatchTimer = setInterval(() => { void dispatch(); }, 60000);
+  dispatchTimer.unref();
   const shutdown = () => {
     if (stopping) return;
     stopping = true;
+    clearInterval(dispatchTimer);
     server.close(() => { storage.close(); process.exit(0); });
     server.closeIdleConnections();
     // Exit before Render's default 30-second limit for disk-backed services.

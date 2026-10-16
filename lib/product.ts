@@ -4,13 +4,27 @@ import type { Experience } from "./experience";
 export const formats = [
   "Guide",
   "Mini course",
+  "Video course",
   "Template kit",
   "Challenge",
   "Playbook",
   "Custom product",
   "Coaching session",
+  "Consulting / Mentorship",
   "Community",
 ] as const;
+export const productTypes: {value: (typeof formats)[number]; description: string}[] = [
+  {value: "Guide", description: "Share your expertise in a written guide or ebook."},
+  {value: "Mini course", description: "Teach one focused outcome in a short series of lessons."},
+  {value: "Video course", description: "Organize your own recorded lessons into modules."},
+  {value: "Template kit", description: "Give customers reusable templates, worksheets, or resources."},
+  {value: "Challenge", description: "Lead a time-bound sequence of practical tasks."},
+  {value: "Playbook", description: "Document your repeatable process with concrete steps."},
+  {value: "Consulting / Mentorship", description: "Package your personal advice and ongoing expert guidance."},
+  {value: "Coaching session", description: "Offer a focused session with preparation resources."},
+  {value: "Community", description: "Plan a membership around shared expertise and resources."},
+  {value: "Custom product", description: "Build a format that fits your own offer."},
+];
 export const colors = ["orange", "violet", "blue", "green", "pink"] as const;
 export const sectionSchema = z.object({
   title: z.string().min(1).max(150),
@@ -18,6 +32,7 @@ export const sectionSchema = z.object({
   objective: z.string().max(1500).optional(),
   id: z.string().uuid().optional(),
   videoId: z.string().uuid().optional(),
+  category: z.string().trim().min(1).max(80).optional(),
 });
 export const fileSchema = z.object({
   name: z

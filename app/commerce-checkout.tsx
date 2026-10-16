@@ -1,0 +1,8 @@
+'use client';
+import { useState } from 'react';
+import { commerceMoney,commerceResponse,commerceCampaign } from '@/lib/commerce-v2';
+export function CommerceCheckout({slug,amount,currency,mode}:{slug:string;amount:number;currency:string;mode:string}){
+ const [email,setEmail]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ async function checkout(event:React.FormEvent){event.preventDefault();setBusy(true);setError('');try{const response=await fetch('/api/commerce/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug,email,requestId:crypto.randomUUID(),campaign:commerceCampaign(location.search)})}),data=await commerceResponse<{url:string}>(response);location.assign(data.url);}catch(e){setError(e instanceof Error?e.message:'Checkout is unavailable.');setBusy(false);}}
+ return <form onSubmit={checkout} className="commerce-buy"><span className="eyebrow">{mode==='test'?'TEST CHECKOUT · NO REAL PAYMENT':'YOUR PRODUCT, READY AFTER PAYMENT'}</span><h2>{commerceMoney(amount,currency)}</h2><p>One payment. Your product and resources are available in your customer portal after payment.</p><label>Email for your purchase<input type="email" required autoComplete="email" maxLength={254} value={email} onChange={e=>setEmail(e.target.value)} disabled={busy}/></label><button className="button primary" disabled={busy}>{busy?'Opening secure checkout…':`Buy now · ${commerceMoney(amount,currency)}`}</button>{error&&<p role="alert">{error}</p>}<small>Secure payment through Stripe. Keep this browser open for immediate access, or sign in with your purchase email later.</small></form>;
+}

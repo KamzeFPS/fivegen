@@ -9,8 +9,9 @@ import {existsSync,readFileSync,writeFileSync} from 'node:fs';
 // Explicit local-only QA harness. It is never used by the production start command.
 assert.equal(process.env.PADDLE_ENVIRONMENT,'sandbox','Studio QA requires sandbox billing');
 assert.ok(!process.env.RENDER,'Do not run local QA on a public host');
+assert.ok(process.env.STRIPE_MODE!=='live'&&!/^(sk|rk)_live_/.test(process.env.STRIPE_SECRET_KEY||''),'Local fixture previews cannot use live Stripe credentials. Use the separate test profile.');
 const root=resolve('outputs/studio-preview');
-Object.assign(process.env,{APP_ORIGIN:'http://localhost:5184',PORT:'5184',FIVEGEN_DATA_DIR:root,FIVEGEN_RUNTIME:'render',NODE_ENV:'production',RENDER_EXTERNAL_URL:'',PRODUCT_DOMAIN:'',GOOGLE_CLIENT_ID:'local-studio-qa',GOOGLE_CLIENT_SECRET:'local-studio-qa'});
+Object.assign(process.env,{APP_ORIGIN:'http://localhost:5184',PORT:'5184',FIVEGEN_DATA_DIR:root,FIVEGEN_RUNTIME:'render',NODE_ENV:'production',RENDER_EXTERNAL_URL:'',PRODUCT_DOMAIN:'',GOOGLE_CLIENT_ID:'local-studio-qa',GOOGLE_CLIENT_SECRET:'local-studio-qa',AUTOMATIONS_WORKER_ENABLED:'false'});
 const storage=createStorage(root),token=randomBytes(32).toString('base64url'),owner='local-studio-qa';
 const keyPath=resolve(root,'local-encryption.key');
 if(!existsSync(keyPath))writeFileSync(keyPath,randomBytes(32).toString('base64url'),{mode:0o600});

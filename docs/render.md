@@ -1,65 +1,77 @@
-# Current deployment: private AI studio
+# Deploy the FiveGen growth studio on Render
 
-For the current product, pricing and release gates, read [creation-studio.md](creation-studio.md) and [Paddle setup](paddle.md). New storefronts, seller checkout/onboarding, funnels, CRM and referrals are disabled in the runtime. Stripe settings and the commerce guidance below are retained for historical fulfillment; do not enable new seller payments. Keep existing Stripe and Paddle destinations, secrets and transaction data. The public service stays on Paddle sandbox until live verification is complete.
+The current application helps creators build and operate their own products: VSL scripting, landing pages, CRM, Stripe Connect checkout and customer access, approved email automations, a Creator Voice Library, Campaign Studio, Offer Lab, and a growth dashboard. See the [README](../README.md) for current feature scope, configuration, and validation commands.
 
-# Deploy FiveGen with a Render Blueprint
+The new growth suite uses `/g`, `/customer`, `/api/commerce`, and related routes. Historical storefront, seller-payment, referral, and billing routes are not repurposed. Preserve existing Stripe and Paddle webhook destinations, secrets, transaction records, and encrypted provider configuration when updating an existing deployment. Deploying this release does not enable live sales or email delivery.
 
-`render.yaml` runs FiveGen as a production Node service. It uses a paid single instance in Singapore and a 10 GB persistent disk for SQLite and private media. It does not run a Vite development server or Wrangler emulation. The existing Sites build remains available with `npm run build`.
+## Render service configuration
 
-## Before creating the Blueprint
+`render.yaml` defines a production Node service with one paid instance in Singapore and a 10 GB persistent disk for SQLite and private media. It does not run a Vite development server or Wrangler emulation. The existing Cloudflare build remains available with `npm run build`.
 
-1. Put this checkout in a GitHub, GitLab, or Bitbucket repository that your Render account can access. The current Sites source repository is not automatically linked to Render. Keep `.dev.vars`, `.env*`, `.wrangler`, and `outputs` out of the repository.
-2. Create a **Web application** OAuth client in Google Cloud, configure its consent screen, and obtain `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Render sign-in uses Google; Sites-specific sign-in cannot run on another host. In Google, add the exact authorized redirect URI `https://www.fivegen.ai/callback`. If using a custom domain, use that domain instead and set `APP_ORIGIN` to its HTTPS origin. Publish the Google consent app for external users, or add your test users while it is in testing.
-3. In Render, choose **New → Blueprint**, select that repository, and use the root `render.yaml`. Enter the two Google credentials and your Stripe secret key when prompted. Render generates `CREDENTIAL_ENCRYPTION_KEY`; preserve it for the lifetime of the database and include it in secure disaster recovery. Review the paid service and disk costs before creating resources.
-4. Deploy. The start command applies each SQL migration exactly once, checks existing migration checksums, and then starts the public server on `0.0.0.0:$PORT`. Migrations run at startup because Render does not mount service disks during build or pre-deploy commands. `/healthz` verifies database access and available disk space.
+For an existing service, update that service and preserve its disk, `FIVEGEN_DATA_DIR`, sign-in configuration, and `CREDENTIAL_ENCRYPTION_KEY`. Do not replace it with an empty deployment or regenerate its encryption key. The Blueprint describes the intended configuration; it is not proof that an existing service is hosted in the currently connected Render workspace.
 
-The Blueprint deliberately leaves automatic deployment off. Enable it in Render after the first verified release if desired.
+For a new deployment:
 
-## Fixing 421 on the custom domain
+1. Put this checkout in a repository that the intended Render account can access. Keep `.dev.vars`, `.env*`, `.wrangler`, and `outputs` out of version control; `.env.example` contains names and defaults only.
+2. Create a Google **Web application** OAuth client and configure its consent screen. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Render sign-in uses Google. Register the exact redirect URI `https://www.fivegen.ai/callback`, or the corresponding callback on your canonical domain, and set `APP_ORIGIN` to that HTTPS origin. Publish the Google consent app for external users or add test users while it is in testing.
+3. In Render, choose **New → Blueprint**, select the repository, and use the root `render.yaml`. Review the service and persistent-disk costs before creating resources. Render generates `CREDENTIAL_ENCRYPTION_KEY` for a new database; preserve it in secure disaster recovery.
+4. Deploy. Startup applies pending SQL migrations transactionally, checks existing migration checksums, and starts the server on `0.0.0.0:$PORT`. Migrations run at startup because service disks are unavailable during build and pre-deploy commands. `/healthz` checks database access and free disk space.
 
-If the page responds with 421 and the body `Unrecognized host` while `/healthz` returns 200, DNS and TLS have already reached FiveGen. The application's configured origin does not match the domain.
+Automatic deployment is off in the Blueprint. Commerce, wallet checkout, and the automation worker also default to disabled. Enable each only after its configuration and intended behavior have been verified.
 
-1. Open the existing Render service's **Environment** settings.
-2. Set `APP_ORIGIN=https://www.fivegen.ai` (no trailing path) and save with a deploy. For Blueprint-managed services, syncing this updated Blueprint applies the same setting.
-3. Register `https://www.fivegen.ai/callback` as the exact Google OAuth authorized redirect URI. Existing sign-in sessions on another hostname require a new sign-in.
-4. In Render **Settings → Custom Domains**, keep `www.fivegen.ai` verified. Render redirects `fivegen.ai` to `www.fivegen.ai`.
+## Custom domain and sign-in
 
-## Production behavior
+If the page returns 421 with `Unrecognized host` while `/healthz` returns 200, the request reached FiveGen but its host does not match the configured origin.
 
-- Workspaces start empty. Revenue, sales, customers, charts, and CSV exports use stored transactions; there is no sample-data toggle or fabricated growth.
-- AI creation requires a configured, unpaused provider. Unavailable AI returns an error without creating a product or consuming a product slot.
-- Manual creation is an explicit choice and creates one empty section without consuming AI credits. Blank sections and empty supporting files cannot be published. AI outlines stay incomplete until their content is written.
-- `STRIPE_MODE=live` requires a live Stripe secret for payment requests. Signed test webhooks are rejected by the live configuration. A separate staging deployment with its own database and `STRIPE_MODE=test` should be used for Stripe tests; test and live billing data must not share a database.
-- Paid product checkout requires a configured sales webhook and a connected account with charges and payouts enabled. Credit purchases require the platform billing webhook. Missing setup produces actionable errors rather than simulated success.
+1. Set `APP_ORIGIN=https://www.fivegen.ai`, with no path, in the existing service's Environment settings.
+2. Register `https://www.fivegen.ai/callback` as the exact Google OAuth redirect URI.
+3. Verify `www.fivegen.ai` under Render **Settings → Custom Domains** and configure the apex-domain redirect. Existing sign-in sessions on a different hostname require a new sign-in.
 
-## Enable payments and AI
+`RENDER_EXTERNAL_URL` is a fallback only when `APP_ORIGIN` is absent. The known Render hostname and recognized apex alias redirect to the canonical origin; unrelated hosts are rejected. Never expose secrets through `NEXT_PUBLIC_` variables. Startup requires sign-in credentials, persistent storage, and an encryption key of at least 32 characters.
 
-- Sign in as `kamzewac@gmail.com` to access FiveGen administration. Admin access requires a Google-verified email, not an email typed into a form. For an alternate administrator, update `ADMIN_EMAILS` in Render.
-- Add the shared OpenAI/Anthropic and fal.ai keys in FiveGen's administrator settings. Alternatively, use the server environment variables `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `FAL_KEY`. Ordinary customers never supply keys.
-- Set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `STRIPE_BILLING_WEBHOOK_SECRET` in Render Environment. Both Stripe webhook destinations use `https://www.fivegen.ai/api/webhooks/stripe`: one for connected-account sales and one for platform subscriptions/credit purchases. Use the event lists in [monetization.md](monetization.md) and [commerce.md](commerce.md), then validate test-mode payments before enabling live payments.
-- Creators connect their Stripe accounts in **Payments**. The workspace is free with three complete AI product runs per month, credit usage beyond that allowance, and a flat 5% seller transaction commission. Stripe processes creator sales; Paddle processes platform AI credit packs. See [paddle-live-readiness.md](paddle-live-readiness.md) before enabling live Paddle payments.
-- The MCP URL becomes `https://www.fivegen.ai/api/mcp`; discovery and authorization use the Render origin automatically. Reconnect Claude/ChatGPT to this new URL.
+## AI configuration
 
-The Blueprint sets `APP_ORIGIN=https://www.fivegen.ai` and `STRIPE_MODE=live`. Optional environment variables: `PRODUCT_DOMAIN` (configured wildcard product domain), `AI_DAILY_BUDGET_USD`, and the secrets above. `RENDER_EXTERNAL_URL` is only a fallback when `APP_ORIGIN` is unset. The known Render hostname and the apex domain redirect to the configured canonical origin; unrelated hosts are rejected. Never expose secrets through `NEXT_PUBLIC_` variables. The Render runtime refuses to start without sign-in credentials, persistent storage configuration, and an encryption key of at least 32 characters.
+Sign in with a Google-verified email listed in `ADMIN_EMAILS` to use administration. Add the shared AI credentials there, or use server environment variables such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `FAL_KEY`. Ordinary creators do not supply API keys. Preserve existing provider settings when deploying this release.
+
+Manual product creation does not consume AI credits. Paid AI actions use the existing credit controls and configured providers. Creator-authored lessons and recordings stay private; publishing a funnel exposes an explicit landing-page snapshot and selected VSL. Course checkout checks that the saved content is ready, including completed lesson recordings.
+
+The MCP endpoint is `https://www.fivegen.ai/api/mcp`; discovery and authorization use `APP_ORIGIN`. Reconnect integrations when changing the canonical origin.
+
+## Creator checkout and customer access
+
+Use Stripe Accounts v2 with full Dashboard access and direct charges to each creator's account. The implementation does not add a seller commission. Current checkout supports one-time card payments; customer access and consulting bookings are served at `/customer`.
+
+1. Test in a separate staging deployment and database using `STRIPE_MODE=test` and a matching `STRIPE_SECRET_KEY`. The existing wallet integration shares these two variables, so changing them affects both systems.
+2. Configure a **connected-account snapshot** webhook at `https://www.fivegen.ai/api/commerce/webhook` for production, or the corresponding staging origin. Set its signing secret as `STRIPE_CONNECT_WEBHOOK_SECRET`. Subscribe to `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `charge.refunded`, `charge.dispute.created`, `charge.dispute.closed`, and `account.updated`.
+3. Keep `STRIPE_COMMERCE_ENABLED=false` until webhook delivery, onboarding, payment verification, customer access, and refunds have been checked in test mode. Live activation additionally requires the matching live key, live webhook, and completed creator onboarding.
+4. Each creator opens **Product → Checkout & access**, supplies their actual business country, and completes Stripe-hosted onboarding. They publish their funnel, finish the product, set its price, and explicitly enable sales. Product activation is mode-specific: a test-enabled offer cannot accept live payments until explicitly enabled and saved in live mode.
+
+Restricted keys require Accounts v2 and Account Links v2 write access, plus connected-account Checkout write and Payment Intent/Charge read access. Read-only API checks cannot prove write permissions. Hosted creator Checkout does not need a publishable key in the frontend.
+
+Wallet checkout remains separately controlled by `STRIPE_WALLET_CHECKOUT_ENABLED`, `STRIPE_WALLET_WEBHOOK_SECRET`, and `STRIPE_WALLET_PORTAL_CONFIGURATION`. Its webhook is `/api/webhooks/wallet`. Do not replace historical Stripe or Paddle signing secrets or destinations with the new commerce webhook. Existing billing and transaction records remain intact; this release does not change pricing or claim that live billing is enabled.
+
+## Email automations
+
+Email delivery requires the administrator's Resend configuration, a verified `EMAIL_FROM` address, canonical `APP_ORIGIN`, and an `AUTOMATION_DISPATCH_SECRET` of at least 32 characters. Creators provide their sender name, reply-to address, and mailing address, then review and explicitly activate each sequence. Saving drafts does not send messages.
+
+The Blueprint keeps `AUTOMATIONS_WORKER_ENABLED=false`. When deliberately enabled with a worker secret, the Render process dispatches at most five queued messages once per minute. Marketing messages require consent and stop after unsubscribe or a verified live purchase. Purchase onboarding requires a verified live order. Durable jobs catch up after restarts; paused sequences do not send.
+
+An external scheduler can also call `/api/automations/dispatch` with the worker secret. Disabling the Render timer does not disable a separately configured scheduler, so inspect both when pausing delivery. See the [README email configuration](../README.md#email-delivery-and-runtime) for details.
 
 ## Data and operations
 
-This is a **new, empty deployment**. Sites products, orders, credit balances, provider settings, media, customer access tokens, and MCP connections are not copied automatically. Google account IDs differ from Sites account IDs. Moving the existing business requires an explicit database/media export, preservation of the existing encryption key, ownership mapping, and a planned Stripe webhook/domain cutover. Do not direct existing customers to the new instance until that migration is complete.
+Only files under `/var/data/fivegen` persist. The SQLite database, WAL, private media, and sign-in state live there. Keep one instance; local-disk deployments cannot horizontally scale. Deploying or restarting a disk-backed service involves brief downtime. Maintain independent database/media backups and monitor disk space.
 
-Only files under `/var/data/fivegen` persist. The SQLite database, WAL, media files, and sign-in state all live there. Do not remove the disk or use a free/ephemeral service. Keep a single instance; this deployment cannot horizontally scale with a local disk. Restarting/deploying a disk-backed service involves brief downtime. Configure independent backups of the database and media before accepting live sales, and monitor disk usage as generated video accumulates.
+Migrations `0011`–`0014` add the growth-suite tables, offer-research rounds, and mode-specific checkout activation. They do not replace historical migrations or transaction records. Startup refuses to run if an already-applied migration has changed. Preserve the database and encryption key together when restoring a backup.
+
+A newly created Render service starts empty. Data, encrypted provider settings, media, access tokens, and account ownership are not copied from another host automatically. Google identities can differ from previous hosting identities. A host migration requires an explicit database/media transfer, ownership mapping, and a planned domain/webhook cutover before sending existing customers to it.
 
 ## Local validation
 
-Security maintenance (September 11, 2026): updated Next.js to 16.3.4, React/React DOM/React Server Components to 19.2.8, Vinext to beta.9, Vite to 8.3.0, the Cloudflare tooling, fflate, and affected transitive dependencies. `npm audit --omit=dev` reports zero advisories. The full audit retains four moderate findings in the development-only Drizzle migration tool's esbuild dependency chain; that development server is never started by FiveGen. Do not use `npm audit fix --force` to downgrade Drizzle and risk incompatible migration tooling.
+Use Node 24.13 or newer. Build with `npm run build:render`; then run the validation commands in the [README](../README.md#validation), including the growth-suite route/database tests and built-server HTTP tests. Legacy journey/commerce tests describe retired functionality and are not acceptance tests for the new suite.
 
-Use Node 24.13 or newer. `npm run build:render` builds the Node target, and `npm run test:render` verifies migrations, persistence, transaction rollback, private media, OAuth protections, and header spoofing. `npm run test:render:integration` starts the actual production server against a temporary database to test product publishing, checkout gates, delivery, and restart persistence. It never uses real provider keys. With the environment variables above set, run `npm run start:render`. The start command optionally loads the ignored `.env.render.local`; Render's actual environment takes precedence. Local testing permits `APP_ORIGIN=http://localhost:10000`; Render requires HTTPS. Local preview identity cookies are never accepted by the production server.
+`npm run start:render` optionally loads ignored `.env.render.local`; Render's process environment takes precedence. A separate ignored `.env.stripe-live.local` profile can store prepared live configuration, but it is inactive unless explicitly loaded. Keep its sales and worker switches disabled during setup. Local fixture previews reject live Stripe credentials and disable the email worker. `npm run preview:connect` supports test-only Stripe CLI forwarding, with its webhook secret held in memory.
 
-Stripe credentials for local use belong only in ignored `.env.render.local`, not in `render.yaml` or version control. Enter the secret directly in Render when importing the Blueprint. Hosted Stripe Checkout does not need a publishable key in the frontend. Stripe webhook signing secrets start with `whsec_` and are separate from API keys.
+Never put credentials in `render.yaml` or version control. The default `npm run dev` and `npm run build` use the Cloudflare target. Both targets share `dist`, so rebuild for the intended target before starting it. The Render start command checks the build marker to reject Worker artifacts.
 
-The default `npm run dev` and `npm run build` continue to use the existing Sites/Cloudflare target. Both targets share source and the `dist` output directory; run the appropriate build before starting a target. The Render start command checks a build marker to prevent starting a Worker artifact accidentally.
-
-References: [Render Blueprint fields](https://render.com/docs/blueprint-spec), [persistent disk restrictions](https://render.com/docs/disks), [Google OpenID Connect setup](https://developers.google.com/identity/openid-connect/openid-connect).
-
-## Customer experience release
-
-See [customer-experience.md](customer-experience.md) for course uploads, communities, booking and free-guide funnels, CRM metrics, referral terms, and Resend setup. Add `charge.refunded` and `charge.dispute.created` to the connected-account sales webhook before enabling referral partnerships. Optional server settings: `RESEND_API_KEY` and `EMAIL_FROM`; the sender must be verified with Resend.
+References: [Render Blueprint fields](https://render.com/docs/blueprint-spec), [persistent disks](https://render.com/docs/disks), [Google OpenID Connect](https://developers.google.com/identity/openid-connect/openid-connect), [Stripe Accounts v2 configuration](https://docs.stripe.com/connect/accounts-v2/connected-account-configuration), [Connect webhooks](https://docs.stripe.com/connect/webhooks), [restricted API keys](https://docs.stripe.com/keys/restricted-api-keys).

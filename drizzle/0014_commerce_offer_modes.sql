@@ -1,0 +1,1 @@
+ALTER TABLE `commerce_offers` ADD `enabled_mode` text DEFAULT 'test' NOT NULL;
