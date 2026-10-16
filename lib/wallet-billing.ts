@@ -7,6 +7,9 @@ import {refreshSubscriptionCredits, subscriptionCreditBalance} from './subscript
 type Intent={id:string;owner:string;environment:string;offer_id:string;email:string;amount:number;credits:number;billing_interval:'month'|'year'|null;session_id:string|null;status:string;created_at:number};
 const purpose='fivegen_wallet';
 const paidStatuses="'active','trialing','past_due','paused','unpaid','incomplete'";
+function supportsExpressCurrency(session:Stripe.Checkout.Session) {
+  return session.ui_mode==='elements'&&session.managed_payments?.enabled===false&&session.adaptive_pricing?.enabled===true&&session.payment_method_types.length===2&&session.payment_method_types.includes('card')&&session.payment_method_types.includes('link');
+}
 async function intentById(id:string) {
   return database().prepare('SELECT * FROM wallet_checkout_intents WHERE id=? AND environment=?').bind(id,walletEnvironment()).first<Intent>();
 }
@@ -36,7 +39,7 @@ export async function createWalletCheckout(owner:string,email:string,offerId:str
         throw new ApiError('Your previous purchase is complete. View Billing & receipts before making another purchase.',409);
       }
       if(session.status==='expired')await db.prepare("UPDATE wallet_checkout_intents SET status='expired' WHERE id=?").bind(existing.id).run();
-      else if(existing.offer_id===offerId)return {clientSecret:session.client_secret!,sessionId:session.id};
+      else if(existing.offer_id===offerId&&supportsExpressCurrency(session))return {clientSecret:session.client_secret!,sessionId:session.id};
       else if((await closeWalletCheckout(owner,session.id)).completed)throw new ApiError('Your previous purchase is complete. View Billing & receipts.',409);
     } else if(existing.offer_id!==offerId)throw new ApiError('Another checkout is being prepared. Try again in a moment.',409);
   }
@@ -53,22 +56,22 @@ export async function createWalletCheckout(owner:string,email:string,offerId:str
   if(intent.offer_id!==offerId)throw new ApiError('Another checkout is open. Close it before switching your selection.',409);
   const customer=await ownedCustomer(owner,email);
   const metadata={purpose,fivegen_intent:intent.id};
-  // Prices are server-owned; Stripe collects and tokenizes card details.
+  // Prices stay server-owned in USD. Stripe handles local presentment and
+  // reports integration amounts in the API, with FX under presentment_details.
   const session=await sdk.checkout.sessions.create({
     ui_mode:'elements',mode:offer.interval?'subscription':'payment',customer,
-    // This integration settles direct merchant payments at the fixed USD price.
-    // Override the account default: Managed Payments requires adaptive pricing
-    // and controls invoicing and payment methods, which this flow owns.
-    managed_payments:{enabled:false},payment_method_types:['card'],
+    // Keep direct merchant settlement and our own invoices regardless of the
+    // account default. Card also enables eligible Apple Pay / Google Pay tokens.
+    managed_payments:{enabled:false},payment_method_types:['card','link'],
     allow_promotion_codes:false,
-    adaptive_pricing:{enabled:false},
+    adaptive_pricing:{enabled:true},
     line_items:[{quantity:1,price_data:{currency:'usd',unit_amount:intent.amount,
       product_data:{name:`FiveGen ${offer.name}${offer.interval?'':' credits'}`,metadata:{fivegen_offer:offer.id}},
       ...(offer.interval?{recurring:{interval:offer.interval}}:{})}}],
     metadata,client_reference_id:intent.id,
     ...(offer.interval?{subscription_data:{metadata}}:{payment_intent_data:{metadata},invoice_creation:{enabled:true}}),
     return_url:`${origin}/welcome?session_id={CHECKOUT_SESSION_ID}`,
-  },{idempotencyKey:`fivegen-wallet-checkout:v3-direct:${intent.id}`});
+  },{idempotencyKey:`fivegen-wallet-checkout:v4-adaptive:${intent.id}`});
   await db.prepare('UPDATE wallet_checkout_intents SET session_id=? WHERE id=?').bind(session.id,intent.id).run();
   return {clientSecret:session.client_secret!,sessionId:session.id};
 }
@@ -78,7 +81,16 @@ export async function closeWalletCheckout(owner:string,sessionId:string) {
   if(!row)throw new ApiError('Checkout not found.',404);
   const sdk=walletStripe(),session=await sdk.checkout.sessions.retrieve(sessionId);
   if(session.status==='complete'){await fulfillWalletSession(sessionId);return {completed:true};}
-  if(session.status==='open')await sdk.checkout.sessions.expire(sessionId);
+  if(session.status==='open'){
+    try { await sdk.checkout.sessions.expire(sessionId); }
+    catch(error){
+      // Payment may complete in another tab while an old checkout is being
+      // replaced. Never discard its intent or allow a second purchase then.
+      const current=await sdk.checkout.sessions.retrieve(sessionId);
+      if(current.status==='complete'){await fulfillWalletSession(sessionId);return {completed:true};}
+      if(current.status!=='expired')throw error;
+    }
+  }
   await db.prepare("UPDATE wallet_checkout_intents SET status='expired' WHERE id=?").bind(row.id).run();
   return {completed:false};
 }
@@ -89,6 +101,8 @@ async function verifySession(session:Stripe.Checkout.Session,intent:Intent) {
   if(session.id!==intent.session_id||session.metadata?.purpose!==purpose||session.metadata.fivegen_intent!==intent.id||session.client_reference_id!==intent.id||walletObjectId(session.customer)!==customer?.customer_id)throw new ApiError('Checkout identity did not match its purchase record.',400);
   const lines=await walletStripe().checkout.sessions.listLineItems(session.id,{limit:2});
   const item=lines.data[0];
+  // Adaptive Pricing localizes Stripe.js display values, not these REST API
+  // integration amounts. MNT presentment must never bypass the USD price check.
   if(lines.has_more||lines.data.length!==1||item.quantity!==1||item.price?.unit_amount!==intent.amount||item.price.currency!=='usd'||(item.price.recurring?.interval??null)!==intent.billing_interval||session.currency!=='usd'||session.amount_subtotal!==intent.amount||session.total_details?.amount_discount)throw new ApiError('Checkout does not match the selected offer.',400);
   if(session.mode!==(intent.billing_interval?'subscription':'payment'))throw new ApiError('Invalid checkout mode.');
 }
@@ -147,7 +161,7 @@ export async function fulfillWalletInvoice(invoiceId:string) {
   if(lines.has_more||lines.data.length!==1||item.quantity!==1||item.amount!==intent.amount||invoice.currency!=='usd'||invoice.amount_paid<=0||invoice.amount_remaining!==0||!item.period.start||item.period.end<=item.period.start)throw new ApiError('Invoice does not match the subscription allowance.',400);
   const payments=invoice.payments?.data.filter(p=>p.status==='paid')??[];
   const pi=payments.length===1?walletObjectId(payments[0].payment.payment_intent):null;
-  if(!pi)throw new ApiError('A verified card payment is required for subscription credits.',400);
+  if(!pi)throw new ApiError('A verified payment is required for subscription credits.',400);
   await saveWalletPayment(intent,invoice.id,pi,invoice.amount_paid,subId,item.period.start*1000,item.period.end*1000);
 }
 
@@ -155,11 +169,16 @@ async function saveWalletPayment(intent:Intent,id:string,paymentIntent:string,am
   const sdk=walletStripe(),pi=await sdk.paymentIntents.retrieve(paymentIntent,{expand:['latest_charge']});
   assertMode(pi.livemode);
   const charge=pi.latest_charge as Stripe.Charge|null;
-  if(pi.status!=='succeeded'||pi.currency!=='usd'||pi.amount_received!==amount||!charge||typeof charge==='string'||charge.status!=='succeeded')throw new ApiError('Payment is not settled.',400);
-  // Honor settled card payments for the issued session, including later
-  // off-session subscription renewals and earlier wallet-token purchases.
-  if(!charge.payment_method_details?.card)throw new ApiError('The card-token payment could not be verified.',400);
   const db=database();
+  const customer=await db.prepare('SELECT customer_id FROM wallet_customers WHERE owner=? AND environment=?').bind(intent.owner,intent.environment).first<{customer_id:string}>();
+  if(pi.status!=='succeeded'||pi.currency!=='usd'||pi.amount!==amount||pi.amount_received!==amount||!charge||typeof charge==='string'||charge.status!=='succeeded'||!charge.paid||!charge.captured||charge.currency!=='usd'||charge.amount!==amount||charge.amount_captured!==amount)throw new ApiError('Payment is not settled.',400);
+  assertMode(charge.livemode);
+  if(pi.id!==paymentIntent||walletObjectId(pi.customer)!==customer?.customer_id||walletObjectId(charge.customer)!==customer?.customer_id||walletObjectId(charge.payment_intent)!==pi.id)throw new ApiError('Payment identity did not match its purchase record.',400);
+  // Link can settle from cards or its other supported funding sources. Stripe
+  // reports those under type=link (or a card wallet); only a fully captured,
+  // successful payment for this customer and exact USD amount funds credits.
+  const details=charge.payment_method_details;
+  if(!((details?.type==='card'&&details.card)||(details?.type==='link'&&details.link)))throw new ApiError('The payment method could not be verified.',400);
   await db.prepare('INSERT OR IGNORE INTO wallet_payments (id,owner,environment,intent_id,payment_intent,subscription_id,amount,credits,starts_at,ends_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)').bind(id,intent.owner,intent.environment,intent.id,paymentIntent,sub,amount,intent.credits,start,end,Date.now()).run();
   await recordWalletCharge(charge.id);
   const table=intent.environment==='production'?'wallets':'wallet_test_balances',column=intent.environment==='production'?'purchased':'credits';
