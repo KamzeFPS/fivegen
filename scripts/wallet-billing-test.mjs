@@ -137,7 +137,11 @@ try {
   assert.equal((await sdkReal.webhooks.constructEventAsync(payload,signature,secret)).id,'evt_fixture');
   await assert.rejects(()=>sdkReal.webhooks.constructEventAsync(payload+' ',signature,secret));
   const route=fs.readFileSync('app/api/webhooks/wallet/route.ts','utf8');assert.match(route,/await req.text\(\)/);assert.match(route,/constructEventAsync/);assert.doesNotMatch(route,/JSON\.parse/);
-  const ui=fs.readFileSync('app/checkout/wallet-checkout.tsx','utf8');assert.match(ui,/ExpressCheckoutElement/);assert.doesNotMatch(ui,/<PaymentElement|initializePaddle/);for(const name of ['link','amazonPay','paypal','klarna'])assert.match(ui,new RegExp(name+":'never'"));
+  const ui=fs.readFileSync('app/checkout/wallet-checkout.tsx','utf8');assert.match(ui,/ExpressCheckoutElement/);assert.doesNotMatch(ui,/<PaymentElement|initializePaddle/);
+  const {walletOnlyOptions}=await load('lib/wallet-checkout-options.ts');
+  for(const name of ['link','amazonPay','paypal','klarna'])assert.equal(walletOnlyOptions.paymentMethods[name],'never');
+  assert.deepEqual(walletOnlyOptions.paymentMethodOrder,['apple_pay','google_pay']);
+  assert.ok(walletOnlyOptions.layout.overflow!=='never'||walletOnlyOptions.layout.maxRows===0,'Stripe requires maxRows=0 when overflow is never; an invalid combination prevents wallet readiness');
   assert.match(fs.readFileSync('app/api/paddle/checkout/route.ts','utf8'),/status:410/);
   console.log('Passed: wallet-only checkout, owner/amount/quantity validation, paid-state checks, exact-once credit delivery, refund ordering, disputes/debt, monthly annual grants, cancellation/status, test isolation, portal ownership, actual SDK signature verification and Paddle retirement.');
   console.log('Permanent QA records retained: '+root);

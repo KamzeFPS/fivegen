@@ -2,18 +2,12 @@
 import {useEffect,useMemo,useState} from 'react';
 import {loadStripe} from '@stripe/stripe-js/pure';
 import {CheckoutElementsProvider,ExpressCheckoutElement,useCheckoutElements} from '@stripe/react-stripe-js/checkout';
-import type {StripeExpressCheckoutElementConfirmEvent,StripeCheckoutExpressCheckoutElementOptions} from '@stripe/stripe-js';
+import type {StripeExpressCheckoutElementConfirmEvent} from '@stripe/stripe-js';
 import {ArrowLeft,Check,Loader2,LockKeyhole,Smartphone} from 'lucide-react';
 import {Brand} from '../ui-brand';
 import type {WalletOffer} from '@/lib/wallet-catalog';
 import type {walletPublicConfig} from '@/lib/wallet-stripe';
-
-export const walletOnlyOptions:StripeCheckoutExpressCheckoutElementOptions={
-  paymentMethods:{applePay:'auto',googlePay:'auto',link:'never',amazonPay:'never',paypal:'never',klarna:'never'},
-  paymentMethodOrder:['apple_pay','google_pay'],buttonHeight:52,
-  buttonType:{applePay:'buy',googlePay:'buy'},
-  buttonTheme:{applePay:'white',googlePay:'white'},layout:{maxColumns:1,maxRows:2,overflow:'never'},
-};
+import {walletOnlyOptions} from '@/lib/wallet-checkout-options';
 
 function WalletButtons({setConfirming}:{setConfirming:(busy:boolean)=>void}) {
   const state=useCheckoutElements(),[available,setAvailable]=useState<boolean|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
