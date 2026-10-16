@@ -20,7 +20,7 @@ const deps = {
   ownedProduct: async (id, account) => { const row = await storage.DB.prepare('SELECT * FROM products WHERE id=? AND owner=?').bind(id, account).first(); if (!row) throw new ApiError('Product not found.', 404); return row; },
   providerSettings: async () => ({ connected: { openai: transcriptionAvailable }, config: { textProvider: 'openai', paused: false } }),
   textGeneration: async (_owner, system, prompt, _tokens, schema) => {
-    calls++; lastSystem = system; lastPrompt = JSON.parse(prompt); assert.equal(schema.name, 'fivegen_creator_campaign');
+    calls++; lastSystem = system; lastPrompt = JSON.parse(prompt); assert.equal(schema, undefined, 'Campaign results use JSON-object mode and are validated with Zod before saving.');
     if (hold) await hold;
     if (fail) throw new ApiError('Provider failed', 502);
     return { items: (invalid ? ['social'] : ['social', 'short_video', 'email']).map(channel => ({ channel, title: 'An honest launch draft', body: 'I learned this process in my own studio. Request workshop details.', subject: channel === 'email' ? 'Your workshop invitation' : '', sourceIds: [invented ? randomUUID() : lastPrompt.sources[0].id] })) };
