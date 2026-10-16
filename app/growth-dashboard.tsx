@@ -1,18 +1,126 @@
 'use client';
+
 import { useEffect, useState } from 'react';
-import { ArrowUpRight, BarChart3, Loader2, RefreshCw } from 'lucide-react';
+import { ArrowRight, ChevronDown, CircleCheck, CircleDashed, Loader2, RefreshCw } from 'lucide-react';
 import type { GrowthDashboardData } from '@/lib/growth-analytics';
-export function GrowthDashboard(){
-  const [days,setDays]=useState(30),[refresh,setRefresh]=useState(0),[data,setData]=useState<GrowthDashboardData|null>(null),[error,setError]=useState('');
-  const [loading,setLoading]=useState(true);
-  useEffect(()=>{let active=true;async function load(){setLoading(true);setError('');try{const response=await fetch(`/api/growth/dashboard?days=${days}`);const result=await response.json() as GrowthDashboardData & {error?:string};if(!response.ok)throw new Error(result.error||'Could not load your activity.');if(active)setData(result);}catch(e){if(active)setError((e as Error).message);}finally{if(active)setLoading(false);}}void load();return()=>{active=false;};},[days,refresh]);
-  const max=Math.max(1,...(data?.trend.map(day=>Math.max(day.visits,day.leads,day.purchases))||[]));
-  return <section className="strategy-workspace growth-overview"><div className="strategy-heading"><div><span className="eyebrow">YOUR NEXT CUSTOMER STARTS HERE</span><h1>Growth overview</h1><p>Your launch activity, and a few useful things to do next.</p></div><div className="strategy-actions"><label className="sr-only" htmlFor="dashboard-period">Reporting period</label><select id="dashboard-period" value={days} onChange={e=>setDays(Number(e.target.value))}><option value={7}>Last 7 days</option><option value={30}>Last 30 days</option><option value={90}>Last 90 days</option></select><button className="button secondary" disabled={loading} onClick={()=>setRefresh(n=>n+1)} aria-label="Refresh dashboard"><RefreshCw size={16}/></button></div></div>
-    {error&&<p role="alert" className="error-banner">{error}</p>}{loading&&!data&&<p><Loader2 className="spin" size={18}/>Loading your activity…</p>}
-    {data&&<><div className="strategy-mode"><span className={data.mode==='test'?'strategy-badge':'strategy-badge live'}>{data.mode==='test'?'STRIPE TEST MODE':'LIVE PAYMENTS'}</span><p>{data.mode==='test'?'Purchase, booking, and revenue totals show test records only.':'Purchase, booking, and revenue totals show live records only.'}</p></div>
-    <div className="growth-metric-grid">{[['Tracked visits',data.visits],['New leads',data.leads],['Bookings',data.bookings],['Paid orders',data.purchases]].map(([label,value])=><div className="strategy-card growth-metric" key={label}><span>{label}</span><strong>{Number(value).toLocaleString()}</strong></div>)}</div><p className="growth-help">Activity during these UTC calendar days, not a single visitor cohort. Visits are anonymous daily sessions and respect Do Not Track. Paid orders exclude revoked access; sales of FiveGen credits are excluded.</p>
-    <div className="strategy-two dashboard-columns"><section className="strategy-card"><div className="strategy-heading"><div><span className="eyebrow">KEEP MOVING</span><h2>Your next steps</h2></div><ArrowUpRight size={24}/></div>{data.actions.map(action=><article className="dashboard-action" key={action.title}><h3>{action.title}</h3><p>{action.reason}</p><a href={action.href}>{action.label}<ArrowUpRight size={15}/></a></article>)}</section><section className="strategy-card"><span className="eyebrow">PRODUCT SALES</span><h2>Revenue</h2>{data.revenue.length?data.revenue.map(r=><div className="revenue-row" key={r.currency}><strong>{new Intl.NumberFormat('en-US',{style:'currency',currency:r.currency.toUpperCase()}).format(r.amount/100)}</strong><span>{r.orders} paid orders · {r.currency.toUpperCase()}</span></div>):<div className="strategy-empty"><BarChart3 size={32}/><h3>Your first sale will appear here.</h3><p>Connect Stripe, enable a product checkout, and complete a payment to see verified sales.</p></div>}<p className="growth-help">Gross amounts on currently paid orders. Different currencies are kept separate. Provider fees and taxes are not deducted.</p><div className="dashboard-small-metrics"><span><strong>{data.plays}</strong> VSL plays</span><span><strong>{data.clicks}</strong> CTA clicks</span></div></section></div>
-    <section className="strategy-card"><div className="strategy-heading"><div><span className="eyebrow">THE LAUNCH OVER TIME</span><h2>Daily activity</h2></div><span className="chart-legend"><i/>Visits <i/>Leads <i/>Orders</span></div><div className="growth-bar-chart" role="img" aria-label={`Daily activity: ${data.visits} visits, ${data.leads} new leads, ${data.purchases} paid orders over ${data.days} days.`}>{data.trend.map(day=><div className="growth-day" key={day.day} title={`${day.day}: ${day.visits} visits, ${day.leads} leads, ${day.purchases} paid orders`}><i style={{height:`${day.visits/max*100}%`}}/><i style={{height:`${day.leads/max*100}%`}}/><i style={{height:`${day.purchases/max*100}%`}}/></div>)}</div><div className="chart-range"><span>{data.trend[0]?.day}</span><span>{data.trend.at(-1)?.day}</span></div><details className="growth-chart-data"><summary>View daily figures</summary><table><thead><tr><th>Date</th><th>Visits</th><th>Leads</th><th>Paid orders</th></tr></thead><tbody>{data.trend.map(day=><tr key={day.day}><td>{day.day}</td><td>{day.visits}</td><td>{day.leads}</td><td>{day.purchases}</td></tr>)}</tbody></table></details></section>
-    <div className="strategy-two dashboard-columns"><section className="strategy-card"><h2>Products</h2>{data.products.length?<div className="strategy-table-wrap"><table><thead><tr><th>Product</th><th>Visits</th><th>Leads</th><th>Orders</th></tr></thead><tbody>{data.products.map(p=><tr key={p.id}><td><a href={`/?project=${p.id}&area=content`}>{p.title}</a><small>{p.published?'Funnel live':'Funnel not published'}</small></td><td>{p.visits}</td><td>{p.leads}</td><td>{p.purchases}</td></tr>)}</tbody></table></div>:<p>Create your first product to start tracking a launch.</p>}</section><section className="strategy-card"><h2>Campaign traffic</h2><p>Use a campaign’s tracked link to see which messages bring visitors.</p>{data.sources.length?<table><thead><tr><th>Campaign tag</th><th>Visits</th><th>Clicks</th></tr></thead><tbody>{data.sources.map(s=><tr key={s.campaign}><td>{s.campaign}</td><td>{s.visits}</td><td>{s.clicks}</td></tr>)}</tbody></table>:<p className="growth-muted">No tracked campaign visits in this period.</p>}</section></div></>}
+
+const number = (value: number) => value.toLocaleString('en-US');
+const count = (value: number, singular: string, plural = `${singular}s`) => `${number(value)} ${value === 1 ? singular : plural}`;
+const money = (amount: number, currency: string) => new Intl.NumberFormat('en-US', {
+  style: 'currency', currency: currency.toUpperCase(), currencyDisplay: 'code',
+}).format(amount / 100);
+const date = (day: string, includeYear = false) => new Intl.DateTimeFormat('en-US', {
+  month: 'short', day: 'numeric', ...(includeYear ? { year: 'numeric' as const } : {}), timeZone: 'UTC',
+}).format(new Date(`${day}T00:00:00Z`));
+
+export function GrowthDashboard() {
+  const [days, setDays] = useState(30);
+  const [refresh, setRefresh] = useState(0);
+  const [data, setData] = useState<GrowthDashboardData | null>(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    async function load() {
+      setLoading(true);
+      setError('');
+      try {
+        const response = await fetch(`/api/growth/dashboard?days=${days}`, { signal: controller.signal });
+        const result = await response.json() as GrowthDashboardData & { error?: string };
+        if (!response.ok) throw new Error(result.error || 'Could not load your activity.');
+        if (result.days !== days) throw new Error('The reporting period did not match. Please try again.');
+        if (active) setData(result);
+      } catch (cause) {
+        if (active) setError(cause instanceof Error ? cause.message : 'Could not load your activity.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    void load();
+    return () => { active = false; controller.abort(); };
+  }, [days, refresh]);
+
+  function reload() {
+    setLoading(true);
+    setError('');
+    setRefresh(value => value + 1);
+  }
+
+  // Hide the old figures as soon as the period changes, before the next request starts.
+  const report = !loading && !error && data?.days === days ? data : null;
+  const published = report?.products.filter(product => product.published).length || 0;
+  const firstProduct = report?.products[0];
+  const nextStep = report?.actions[0] || (firstProduct ? {
+    title: 'Share your product with your audience',
+    reason: 'Open your product to prepare and share its landing page.',
+    label: 'Open product', href: `/?project=${firstProduct.id}&area=content`,
+  } : {
+    title: 'Create your first product',
+    reason: 'Add your expertise, then build a landing page to share it with your audience.',
+    label: 'Create your product', href: '/?view=create',
+  });
+  const firstDay = report?.trend[0]?.day;
+  const lastDay = report?.trend.at(-1)?.day;
+  const dateRange = firstDay && lastDay ? `${date(firstDay)} – ${date(lastDay, true)}` : '';
+
+  return <section className="overview-dashboard" aria-busy={loading}>
+    <header className="overview-heading">
+      <div><h1>Overview</h1><p>Your products, your results, and what to do next.</p></div>
+      <div className="overview-period-tools">
+        <label htmlFor="dashboard-period"><span>Reporting period</span><select id="dashboard-period" value={days} onChange={event => {
+          setLoading(true);
+          setError('');
+          setDays(Number(event.target.value));
+        }}><option value={7}>Last 7 days</option><option value={30}>Last 30 days</option><option value={90}>Last 90 days</option></select></label>
+        <button className="overview-refresh" disabled={loading} onClick={reload} aria-label="Refresh overview" title="Refresh overview"><RefreshCw size={17} /></button>
+      </div>
+    </header>
+
+    {error ? <div className="overview-load-state overview-load-error" role="alert"><h2>Your overview couldn’t load</h2><p>{error}</p><button className="button secondary" onClick={reload}>Try again <RefreshCw size={15} /></button></div>
+      : loading ? <div className="overview-load-state" role="status"><Loader2 className="spin" size={22} /><p>Loading your last {days} days…</p></div> : null}
+
+    {report && <>
+      {report.mode === 'test' && <p className="overview-test-notice"><strong>Test payments are on.</strong> Sales, revenue, and bookings below use test records.</p>}
+
+      <section className="overview-next-step" aria-labelledby="overview-next-heading">
+        <div className="overview-next-copy"><span className="overview-kicker">Recommended next step · your workspace</span><h2 id="overview-next-heading">{nextStep.title}</h2><p>{nextStep.reason}</p></div>
+        <a className="button primary" href={nextStep.href}>{nextStep.label}<ArrowRight size={17} /></a>
+      </section>
+
+      <section className="overview-results" aria-labelledby="overview-results-heading">
+        <div className="overview-section-heading"><h2 id="overview-results-heading">Your results</h2><p>Last {report.days} days{dateRange && <span> · {dateRange}</span>}</p></div>
+        <div className="overview-metrics">
+          <article className="overview-metric"><h3>Page visits</h3><strong>{number(report.visits)}</strong><p>Recorded visits to your landing pages.</p></article>
+          <article className="overview-metric"><h3>New contacts</h3><strong>{number(report.leads)}</strong><p>New signups from your landing pages.</p></article>
+          <article className="overview-metric"><h3>Product sales</h3><strong>{number(report.purchases)}</strong><p>Paid orders for your products.</p></article>
+          <article className="overview-metric overview-revenue"><h3>Revenue</h3>{report.revenue.length ? <div className="overview-revenue-values">{report.revenue.map(item => <strong key={item.currency}>{money(item.amount, item.currency)}</strong>)}</div> : <strong className="overview-no-sales">No sales in this period</strong>}<p>{report.revenue.length > 1 ? 'Product sales, shown separately by currency.' : 'Money from your paid product orders.'}</p></article>
+        </div>
+        {report.visits === 0 && report.leads === 0 && report.purchases === 0 && <p className="overview-results-hint">{!report.products.length ? 'Create a product to start. Visits, contacts, and sales will appear here as your audience responds.' : published ? 'Share a published landing page with your audience. Visits, contacts, and sales will appear here as they come in.' : 'Publish a product’s landing page, then share it with your audience to start seeing results.'}</p>}
+      </section>
+
+      <section className="overview-products" aria-labelledby="overview-products-heading">
+        <div className="overview-section-heading"><div><h2 id="overview-products-heading">Recent products</h2><p>Landing page status and results for the last {report.days} days.</p></div><a className="overview-text-link" href="/?view=library">All products <ArrowRight size={15} /></a></div>
+        {report.products.length ? <div className="overview-product-list">{report.products.slice(0,4).map(product => <article className="overview-product" key={product.id}>
+          <div className="overview-product-info"><h3><a href={`/?project=${product.id}&area=content`}>{product.title}</a></h3><span className={`overview-product-status ${product.published ? 'published' : ''}`}>{product.published ? <CircleCheck size={14} /> : <CircleDashed size={14} />}{product.published ? 'Landing page published' : 'Landing page not published'}</span></div>
+          <p className="overview-product-activity" aria-label={`Last ${report.days} days: ${count(product.visits, 'visit')}, ${count(product.leads, 'contact')}, ${count(product.purchases, 'sale')}`}><span>{count(product.visits, 'visit')}</span><span>{count(product.leads, 'contact')}</span><span>{count(product.purchases, 'sale')}</span></p>
+          <a className="overview-product-open" href={`/?project=${product.id}&area=content`}>Open product<ArrowRight size={16} /></a>
+        </article>)}</div> : <div className="overview-products-empty"><h3>Everything starts with one product.</h3><p>Add your lessons, downloads, or mentorship. Your marketing tools will be inside the product.</p><a className="overview-text-link" href="/?view=create">Create your product <ArrowRight size={16} /></a></div>}
+      </section>
+
+      <details className="overview-details">
+        <summary><span><strong>More details</strong><span>Daily activity, campaigns, and how your results are counted</span></span><ChevronDown size={19} /></summary>
+        <div className="overview-details-content">
+          {report.actions.length > 1 && <section className="overview-other-actions"><h3>Other next steps <span>· your workspace</span></h3><div>{report.actions.slice(1).map(action => <article key={action.title}><h4>{action.title}</h4><p>{action.reason}</p><a className="overview-text-link" href={action.href}>{action.label}<ArrowRight size={15} /></a></article>)}</div></section>}
+          <section><h3>More activity <span>· Last {report.days} days</span></h3><dl className="overview-secondary-metrics"><div><dt>Bookings</dt><dd><strong>{number(report.bookings)}</strong><p>Confirmed bookings created in this period.</p></dd></div><div><dt>Video plays</dt><dd><strong>{number(report.plays)}</strong><p>Plays of your landing page video.</p></dd></div><div><dt>Button clicks</dt><dd><strong>{number(report.clicks)}</strong><p>Clicks on your landing page’s main button.</p></dd></div></dl></section>
+          <div className="overview-detail-columns">
+            <section><h3>Daily activity</h3><div className="overview-table-wrap overview-daily-table"><table><caption>Last {report.days} days, most recent first. Dates use UTC.</caption><thead><tr><th scope="col">Date</th><th scope="col">Visits</th><th scope="col">Contacts</th><th scope="col">Sales</th></tr></thead><tbody>{[...report.trend].reverse().map(day => <tr key={day.day}><th scope="row">{date(day.day)}</th><td>{number(day.visits)}</td><td>{number(day.leads)}</td><td>{number(day.purchases)}</td></tr>)}</tbody></table></div></section>
+            <section><h3>Campaign traffic</h3><p className="overview-detail-intro">Share a campaign’s tracked link to see which messages bring visitors.</p>{report.sources.length ? <div className="overview-table-wrap"><table><caption>Last {report.days} days</caption><thead><tr><th scope="col">Campaign</th><th scope="col">Visits</th><th scope="col">Clicks</th></tr></thead><tbody>{report.sources.map(source => <tr key={source.campaign}><th scope="row">{source.campaign === 'direct' ? 'Direct / no campaign tag' : source.campaign}</th><td>{number(source.visits)}</td><td>{number(source.clicks)}</td></tr>)}</tbody></table></div> : <p className="overview-detail-empty">No recorded campaign visits in this period.</p>}</section>
+          </div>
+          <section className="overview-counting-notes"><h3>How these numbers work</h3><ul><li>All results use the selected period, including today, with days counted in UTC. Product publishing status shows its current state.</li><li>Visits are anonymous daily sessions, so they are not a count of individual people. Browsers with Do Not Track enabled are not recorded.</li><li>A contact is counted once per email address for each product. Contacts and sales are counted separately from visits; they do not form a conversion rate.</li><li>Product sales include orders that are currently paid. Refunded or revoked orders and purchases of FiveGen credits are excluded.</li><li>Revenue is the total on those paid product orders, before deducting fees or taxes. Different currencies are kept separate.</li><li>Bookings are counted by when they were created, rather than the appointment date.</li></ul></section>
+        </div>
+      </details>
+    </>}
   </section>;
 }

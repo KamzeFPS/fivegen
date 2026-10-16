@@ -1,14 +1,13 @@
 'use client';
 
-import {ArrowRight,ChevronDown,ChevronRight,Coins,CreditCard,FolderOpen,History,Link2,LogOut,Megaphone,MessageSquare,Plus,ShieldCheck,TrendingUp,Users} from 'lucide-react';
+import {ArrowRight,ChevronDown,ChevronRight,Coins,CreditCard,FolderOpen,History,Link2,LogOut,MessageSquare,Plus,ShieldCheck,TrendingUp,Users} from 'lucide-react';
 import {DropdownMenu,DropdownMenuContent,DropdownMenuItem,DropdownMenuLabel,DropdownMenuSeparator,DropdownMenuTrigger} from '@/components/ui/dropdown-menu';
 import {Brand} from './ui-brand';
 
-type NavigationView='overview'|'library'|'marketing'|'crm'|'credits'|'connections'|'admin';
+type NavigationView='overview'|'library'|'crm'|'credits'|'connections'|'admin';
 const navigation=[
   {id:'overview' as const,label:'Overview',icon:TrendingUp},
   {id:'library' as const,label:'Products',icon:FolderOpen},
-  {id:'marketing' as const,label:'Marketing',icon:Megaphone},
   {id:'crm' as const,label:'Customers',icon:Users},
 ];
 type Props={
