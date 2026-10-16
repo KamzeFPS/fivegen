@@ -66,7 +66,9 @@ export async function createWalletCheckout(owner:string,email:string,offerId:str
     metadata,client_reference_id:intent.id,
     ...(offer.interval?{subscription_data:{metadata}}:{payment_intent_data:{metadata},invoice_creation:{enabled:true}}),
     return_url:`${origin}/welcome?session_id={CHECKOUT_SESSION_ID}`,
-  },{idempotencyKey:`fivegen-wallet-checkout:${intent.id}`});
+  // v2 gives intents that previously cached a Stripe 400 a fresh idempotency
+  // key after the Managed Payments-compatible payload change.
+  },{idempotencyKey:`fivegen-wallet-checkout:v2:${intent.id}`});
   await db.prepare('UPDATE wallet_checkout_intents SET session_id=? WHERE id=?').bind(session.id,intent.id).run();
   return {clientSecret:session.client_secret!,sessionId:session.id};
 }
