@@ -103,10 +103,34 @@ try {
     'oai-authenticated-user-email': 'admin@example.test', cookie: '__sites_local_auth=1', 'x-forwarded-host': 'evil.example', 'x-forwarded-proto': 'https' } });
   assert.equal(spoof.status, 401);
   await json('/api/workspace','GET',undefined,true,428);
-  await json('/api/terms','POST',{accepted:false,version:termsVersion},true,400);
-  await json('/api/terms','POST',{accepted:true,version:'old'},true,400);
-  await json('/api/terms','POST',{accepted:true,version:termsVersion});
+  const welcomePath = '/welcome?return_to=' + encodeURIComponent('/?view=overview');
+  const welcome = await fetch(base + welcomePath, { headers: { cookie }, redirect: 'manual' });
+  assert.equal(welcome.status, 200, 'An unaccepted account can review onboarding');
+  const welcomeHtml = await welcome.text();
+  const consentForm = welcomeHtml.match(/<form\b[^>]*>([\s\S]*?)<\/form>/)?.[1];
+  assert.ok(consentForm, 'The rendered welcome page includes the consent form');
+  const checkbox = consentForm.match(/<input\b(?=[^>]*\btype="checkbox")[^>]*>/)?.[0];
+  assert.ok(checkbox, 'Consent requires an explicit checkbox');
+  assert.ok(!/\bchecked(?:=|\s|>)/.test(checkbox), 'Consent is never preselected');
+  assert.match(consentForm, /<button\b[^>]*\bdisabled(?:=|\s|>)/, 'Submission starts disabled until the user agrees');
+  // Read the value serialized into the actual rendered client component, not
+  // just the server constant. This catches a missing/stale server-to-client
+  // version contract that direct API tests would otherwise skip.
+  const serializedWelcome = welcomeHtml.replace(/&quot;/g, '"').replace(/\\"/g, '"');
+  const renderedVersions = [...new Set([...serializedWelcome.matchAll(/"termsVersion"\s*:\s*"([a-zA-Z0-9-]+)"/g)].map(match => match[1]))];
+  assert.deepEqual(renderedVersions, [termsVersion], 'The welcome component receives exactly the current Terms version');
+  const submittedVersion = renderedVersions[0];
+  assert.equal((await json('/api/terms')).accepted, false, 'Rendering welcome never records acceptance');
+  assert.equal(storage.sqlite.prepare('SELECT COUNT(*) AS count FROM terms_acceptances WHERE owner=?').get(owner).count, 0);
+  await json('/api/workspace','GET',undefined,true,428);
+  await json('/api/terms','POST',{accepted:false,version:submittedVersion},true,400);
+  await json('/api/terms','POST',{accepted:true,version:'2026-09-13-studio'},true,400);
+  assert.equal((await json('/api/terms')).accepted, false, 'Rejected checkbox or stale-version submissions do not grant access');
+  await json('/api/terms','POST',{accepted:true,version:submittedVersion});
   assert.equal((await json('/api/terms')).accepted,true);
+  const acceptedWelcome = await fetch(base + welcomePath, { headers: { cookie }, redirect: 'manual' });
+  assert.ok([303,307].includes(acceptedWelcome.status), 'Accepted users continue past onboarding');
+  assert.equal(new URL(acceptedWelcome.headers.get('location'), base).href, base + '/?view=overview');
   await json('/api/admin', 'GET', undefined, true, 403);
   assert.equal((await fetch(base+'/terms')).status,200);
   await json('/api/billing','POST',{action:'upgrade'},true,410);
