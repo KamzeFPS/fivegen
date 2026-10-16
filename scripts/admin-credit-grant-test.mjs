@@ -18,8 +18,15 @@ const email='s.boldoo10@gmail.com',owner='target-user',base='https://fivegen.tes
 sql.prepare('INSERT INTO terms_acceptances (id,owner,version,email,accepted_at) VALUES (?,?,?,?,?)').run('terms-target',owner,'current',email,Date.now());
 const requestId=randomUUID();
 function request(body,origin=base){return new Request(`${base}/api/admin/credits/grant`,{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify(body)});}
+function lookup(address,origin=base){return new Request(`${base}/api/admin/credits/grant?email=${encodeURIComponent(address)}`,{headers:{origin}});}
 try{
-  allowed=false;assert.equal((await route.POST(request({email,credits:50,requestId}))).status,403);allowed=true;
+  allowed=false;assert.equal((await route.POST(request({email,credits:50,requestId}))).status,403);assert.equal((await route.GET(lookup(email))).status,403);allowed=true;
+  assert.equal((await route.GET(lookup('invalid'))).status,400);
+  assert.equal((await route.GET(lookup('missing@example.test'))).status,404);
+  assert.equal((await route.GET(lookup(email,'https://attacker.test'))).status,403);
+  const emptyHistory=await route.GET(lookup(` ${email.toUpperCase()} `));assert.equal(emptyHistory.status,200);assert.equal(emptyHistory.headers.get('cache-control'),'no-store');assert.deepEqual(await emptyHistory.json(),{email,purchasedBalance:0,grants:[],hasMore:false});
+  assert.equal(sql.prepare('SELECT COUNT(*) n FROM wallets WHERE owner=?').get(owner).n,0,'Reading history does not create a wallet');
+  assert.equal(sql.prepare('SELECT COUNT(*) n FROM credit_admin_grants').get().n,0,'Reading history does not issue a grant');
   assert.equal((await route.POST(request({email:'missing@example.test',credits:50,requestId:randomUUID()}))).status,404);
   assert.equal((await route.POST(request({email,credits:1001,requestId:randomUUID()}))).status,400);
   const first=await route.POST(request({email,credits:50,requestId}));assert.equal(first.status,200);assert.deepEqual(await first.json(),{email,creditsGranted:50,purchasedBalance:50});
@@ -27,5 +34,13 @@ try{
   assert.equal((await route.POST(request({email,credits:51,requestId}))).status,409,'A request ID cannot be reused with a different grant');
   assert.equal((await route.POST(request({email,credits:50,requestId:randomUUID()},'https://attacker.test'))).status,403,'Cross-origin grants are rejected');
   assert.equal(sql.prepare('SELECT COUNT(*) n FROM credit_admin_grants WHERE owner=?').get(owner).n,1);
-  console.log('Passed: admin-only, existing-account-only, same-origin, bounded and idempotent AI-credit grants with a permanent audit record.');
+  sql.prepare('INSERT INTO terms_acceptances (id,owner,version,email,accepted_at) VALUES (?,?,?,?,?)').run('terms-other','other-owner','current','other@example.test',Date.now());
+  sql.prepare('INSERT INTO credit_admin_grants (id,owner,email,credits,admin,applied,created_at) VALUES (?,?,?,?,?,?,?)').run('other-grant','other-owner','other@example.test',999,admin.userId,1,Date.now());
+  const historyResponse=await route.GET(lookup(email)),history=await historyResponse.json();assert.equal(historyResponse.status,200);assert.equal(history.purchasedBalance,50);assert.equal(history.hasMore,false);assert.equal(history.grants.length,1);assert.deepEqual(Object.keys(history.grants[0]).sort(),['applied','created_at','credits','id']);assert.equal(history.grants[0].id,requestId);assert.equal(history.grants[0].credits,50);assert.equal(history.grants[0].applied,true);assert.ok(history.grants[0].created_at>0);
+  assert.equal(sql.prepare('SELECT purchased FROM wallets WHERE owner=?').get(owner).purchased,50,'History lookup cannot duplicate an existing grant');
+  sql.prepare('INSERT INTO credit_admin_grants (id,owner,email,credits,admin,applied,created_at) VALUES (?,?,?,?,?,?,?)').run('unapplied-grant',owner,email,12,admin.userId,0,Date.now()+1);
+  const pending=await (await route.GET(lookup(email))).json();assert.equal(pending.grants.find(grant=>grant.id==='unapplied-grant').applied,false,'An unapplied audit row is distinguishable without applying it');assert.equal(pending.purchasedBalance,50);
+  for(let i=0;i<101;i++)sql.prepare('INSERT INTO credit_admin_grants (id,owner,email,credits,admin,applied,created_at) VALUES (?,?,?,?,?,?,?)').run(`old-grant-${i}`,owner,email,1,admin.userId,1,i);
+  const bounded=await (await route.GET(lookup(email))).json();assert.equal(bounded.grants.length,100);assert.equal(bounded.hasMore,true);assert.equal(bounded.grants[0].id,'unapplied-grant');assert.equal(bounded.purchasedBalance,50);
+  console.log('Passed: admin-only read-only account history, normalized lookup, account isolation, bounded audit records, and existing idempotent credit grants.');
 }finally{storage.close();}

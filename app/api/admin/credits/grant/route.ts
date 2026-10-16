@@ -2,11 +2,27 @@ import {requireAdmin} from '@/lib/admin';
 import {ApiError,database,failure,sameOrigin} from '@/lib/server';
 import {z} from 'zod';
 
+const emailSchema=z.string().trim().email().max(320);
 const grantSchema=z.object({
-  email:z.string().trim().email().max(320),
+  email:emailSchema,
   credits:z.number().int().min(1).max(1000),
   requestId:z.string().uuid(),
 });
+
+export async function GET(req:Request){
+  try{
+    sameOrigin(req);
+    await requireAdmin();
+    const email=emailSchema.parse(new URL(req.url).searchParams.get('email')).toLowerCase(),db=database();
+    const target=await db.prepare('SELECT owner FROM terms_acceptances WHERE lower(trim(email))=? ORDER BY accepted_at DESC LIMIT 1').bind(email).first<{owner:string}>();
+    if(!target)throw new ApiError('No FiveGen account was found for that email.',404);
+    const [wallet,history]=await Promise.all([
+      db.prepare('SELECT purchased FROM wallets WHERE owner=?').bind(target.owner).first<{purchased:number}>(),
+      db.prepare('SELECT id,credits,applied,created_at FROM credit_admin_grants WHERE owner=? ORDER BY created_at DESC,id DESC LIMIT 101').bind(target.owner).all<{id:string;credits:number;applied:number;created_at:number}>(),
+    ]);
+    return Response.json({email,purchasedBalance:Number(wallet?.purchased||0),grants:history.results.slice(0,100).map(grant=>({...grant,applied:grant.applied===1})),hasMore:history.results.length>100},{headers:{'Cache-Control':'no-store'}});
+  }catch(error){return failure(error);}
+}
 
 export async function POST(req:Request){
   try{
