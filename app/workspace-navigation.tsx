@@ -1,6 +1,6 @@
 'use client';
 
-import {ArrowRight,ChevronDown,ChevronRight,Coins,CreditCard,FolderOpen,History,Link2,LogOut,MessageSquare,Plus,ShieldCheck,TrendingUp,Users} from 'lucide-react';
+import {ArrowRight,Banknote,ChevronDown,ChevronRight,Coins,CreditCard,FolderOpen,History,Link2,LogOut,MessageSquare,Plus,ShieldCheck,TrendingUp,Users} from 'lucide-react';
 import {DropdownMenu,DropdownMenuContent,DropdownMenuItem,DropdownMenuLabel,DropdownMenuSeparator,DropdownMenuTrigger} from '@/components/ui/dropdown-menu';
 import {Brand} from './ui-brand';
 
@@ -42,7 +42,8 @@ export function WorkspaceNavigation({user,view,label,admin,productCount,creditsL
           <DropdownMenuContent className="workspace-account-menu" align="end" sideOffset={12} collisionPadding={12}>
             <DropdownMenuLabel className="workspace-account-identity"><strong>{user.name}</strong><span>{user.email}</span></DropdownMenuLabel>
             <DropdownMenuSeparator/>
-            <DropdownMenuItem onSelect={()=>onVisit('/account/billing')}><CreditCard/>Account & billing</DropdownMenuItem>
+            <DropdownMenuItem onSelect={()=>onVisit('/account/payments')}><Banknote/>Seller payments</DropdownMenuItem>
+            <DropdownMenuItem onSelect={()=>onVisit('/account/billing')}><CreditCard/>Billing & receipts</DropdownMenuItem>
             <DropdownMenuItem onSelect={()=>onVisit('/pricing')}><Coins/>Plans & credits</DropdownMenuItem>
             <DropdownMenuItem onSelect={()=>onView('connections')}><Link2/>Connect assistant</DropdownMenuItem>
             {admin&&<DropdownMenuItem onSelect={()=>onView('admin')}><ShieldCheck/>Platform settings</DropdownMenuItem>}

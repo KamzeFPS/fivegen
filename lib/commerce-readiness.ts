@@ -24,7 +24,10 @@ export async function commerceReadiness(origin:string):Promise<CommerceReadiness
       stripe.v2.core.accounts.list({limit:1}),
       stripe.webhookEndpoints.list({limit:100}),
     ]);
-    if(eligibility.status==='fulfilled')checks.push({id:'connect-access',label:'Stripe Connect account access',status:'ready',detail:'Stripe accepted a read-only Accounts v2 request. Individual sellers must still complete their own onboarding.'});
+    if(eligibility.status==='fulfilled'){
+      checks.push({id:'connect-access',label:'Stripe Connect account read access',status:'ready',detail:'Stripe accepted a read-only Accounts v2 request. This does not verify permission to create accounts or onboarding links.'});
+      checks.push({id:'connect-write-access',label:'Seller onboarding write permissions',status:'warning',detail:'Write permissions can only be confirmed when a seller starts Stripe setup from account payment settings.',action:'If setup reports permission denied, inspect the rejected request in Stripe Workbench and grant the server key only the missing Connect permissions.',href:'https://dashboard.stripe.com/workbench/logs'});
+    }
     else{
       const error=eligibility.reason&&typeof eligibility.reason==='object'?eligibility.reason as {code?:string;raw?:{code?:string}}:{};
       const registrationRequired=['platform_registration_required','non_connect_platform_accounts_v2_access_blocked'].includes(error.code||error.raw?.code||'');

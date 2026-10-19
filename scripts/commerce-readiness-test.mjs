@@ -14,6 +14,7 @@ const check=(report,id)=>report.checks.find(row=>row.id===id);
 let report=await commerceReadiness('https://www.fivegen.ai');
 assert.equal(report.enabled,false);assert.equal(report.readyToEnable,true);assert.equal(check(report,'switch').status,'blocked');assert.equal(check(report,'connect-access').status,'ready');assert.equal(check(report,'webhook-scope').status,'ready');
 assert.equal(settings.STRIPE_COMMERCE_ENABLED,'false','Diagnostics never enable connections');
+assert.equal(check(report,'connect-write-access').status,'warning','Read access never implies permission to create seller accounts');
 for(const value of Object.values(settings).filter(value=>/^(sk_|whsec_)/.test(value)))assert.ok(!JSON.stringify(report).includes(value),'Readiness never exposes secrets');
 assert.equal(accountReads,1);assert.equal(webhookReads,1);
 settings.STRIPE_COMMERCE_ENABLED='true';report=await commerceReadiness('https://www.fivegen.ai');assert.equal(report.enabled,true);assert.equal(report.readyToEnable,true);

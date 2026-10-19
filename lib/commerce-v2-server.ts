@@ -24,13 +24,16 @@ function assertEnabled(){commerceStripe();if(binding('STRIPE_COMMERCE_ENABLED')!
 async function commerceProvider<T>(operation:string,work:()=>Promise<T>):Promise<T>{
   try{return await work();}catch(error){
     if(error instanceof ApiError)throw error;
-    const value=error&&typeof error==='object'?error as {code?:string;statusCode?:number;type?:string;raw?:{code?:string}}:{};
-    const code=value.code||value.raw?.code||'';
+    const value=error&&typeof error==='object'?error as {code?:string;statusCode?:number;type?:string;rawType?:string;requestId?:string;raw?:{code?:string;type?:string;requestId?:string}}:{};
+    const code=value.code||value.raw?.code||'',providerType=value.rawType||value.raw?.type||value.type||'';
+    const safe=(field:unknown)=>typeof field==='string'&&/^[a-zA-Z0-9_.-]{1,120}$/.test(field)?field:undefined;
+    console.warn('Stripe commerce request rejected',{operation,status:value.statusCode,code:safe(code),type:safe(providerType),requestId:safe(value.requestId||value.raw?.requestId)});
     if(code==='platform_registration_required'||code==='non_connect_platform_accounts_v2_access_blocked')throw new ApiError('Enable Stripe Connect for this platform in the Stripe Dashboard before connecting creators.',503);
     if(/country|capability_not_supported|configuration_not_supported/.test(code))throw new ApiError('Stripe cannot support this payment configuration in the selected business country. Check your legal business country and Stripe availability.',400);
     if(code==='email_invalid')throw new ApiError('Stripe could not accept the account email address. Check your profile email before connecting.',400);
     if(value.statusCode===429||value.type==='StripeRateLimitError')throw new ApiError('Stripe is busy. Wait a moment and try again.',429);
-    if(value.statusCode===401||value.statusCode===403)throw new ApiError('The administrator needs to check the Stripe credentials and Connect permissions.',503);
+    if(value.statusCode===401)throw new ApiError('Stripe rejected the platform server key. The administrator must correct its credentials before sellers can connect.',503);
+    if(value.statusCode===403)throw new ApiError(`Stripe denied permission to ${operation}. The platform administrator must enable the required Connect permissions on its server key. Your products are unchanged.`,503);
     if(code==='idempotency_error'||value.statusCode===409)throw new ApiError('A previous Stripe request used different settings. Restore your previous settings or contact the administrator before retrying.',409);
     throw new ApiError(`Stripe could not ${operation}. Check your Connect setup and try again.`,value.statusCode===400?400:502);
   }
@@ -49,11 +52,13 @@ export async function commerceAccount(owner:string,refresh=false) {
   const ready=row&&refresh?await refreshCommerceAccount(String(row.account_id),mode):row?.status==='ready';
   return {configured:true,enabled:binding('STRIPE_COMMERCE_ENABLED')==='true'&&binding('STRIPE_CONNECT_WEBHOOK_SECRET').startsWith('whsec_'),mode,connected:!!row,ready,accountId:row?String(row.account_id):null};
 }
-export async function connectCommerce(owner:string,email:string,origin:string,country='US',productId?:string) {
+export async function connectCommerce(owner:string,email:string,origin:string,country?:string,productId?:string) {
   assertEnabled();if(productId)await ownedProduct(productId,owner);const mode=commerceMode(),client=commerceStripe();let row=await database().prepare('SELECT * FROM commerce_accounts WHERE owner=? AND mode=?').bind(owner,mode).first();
   if(!row){
+    const selectedCountry=z.string().regex(/^[A-Z]{2}$/).safeParse(country);
+    if(!selectedCountry.success)throw new ApiError('Choose your registered business country in account payment settings before connecting Stripe.',400);
     const account=await commerceProvider('create the connected account',()=>client.v2.core.accounts.create({
-      contact_email:email,dashboard:'full',identity:{country:z.string().regex(/^[A-Z]{2}$/).parse(country)},
+      contact_email:email,dashboard:'full',identity:{country:selectedCountry.data},
       configuration:{merchant:{capabilities:{card_payments:{requested:true}}}},
       defaults:{responsibilities:{fees_collector:'stripe',losses_collector:'stripe'}},
       metadata:{fivegen_owner:owner,fivegen_mode:mode},include:['configuration.merchant'],
@@ -63,9 +68,9 @@ export async function connectCommerce(owner:string,email:string,origin:string,co
     row=await database().prepare('SELECT * FROM commerce_accounts WHERE owner=? AND mode=?').bind(owner,mode).first();
   }
   const builder=productId?await database().prepare('SELECT product_id FROM product_builder_workspaces WHERE product_id=? AND owner=?').bind(productId,owner).first():null;
-  const path=builder?`/build/${encodeURIComponent(productId!)}`:productId?`/?project=${encodeURIComponent(productId)}&area=commerce`:'/?view=library';
-  const separator=builder?'?':'&';
-  const link=await commerceProvider('start Stripe onboarding',()=>client.v2.core.accountLinks.create({account:String(row!.account_id),use_case:{type:'account_onboarding',account_onboarding:{configurations:['merchant'],refresh_url:origin+path+(builder?'?connect=refresh':''),return_url:origin+path+separator+'connect=returned'}}}));
+  const profile=!productId,path=builder?`/build/${encodeURIComponent(productId!)}`:productId?`/?project=${encodeURIComponent(productId)}&area=commerce`:'/account/payments';
+  const separator=builder||profile?'?':'&';
+  const link=await commerceProvider('start Stripe onboarding',()=>client.v2.core.accountLinks.create({account:String(row!.account_id),use_case:{type:'account_onboarding',account_onboarding:{configurations:['merchant'],refresh_url:origin+path+(builder||profile?'?connect=refresh':''),return_url:origin+path+separator+'connect=returned'}}}));
   if(link.livemode!==(mode==='live'))throw new ApiError('The Stripe onboarding link does not match this payment environment.',409);
   return {url:link.url};
 }
