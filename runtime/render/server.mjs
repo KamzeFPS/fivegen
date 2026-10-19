@@ -100,7 +100,7 @@ export async function start() {
       if (req.headers['oai-authenticated-user-id']) res.setHeader('Cache-Control', 'private, no-store');
       // Revoked landing pages and VSLs must disappear immediately, including for
       // anonymous visitors. Never cache a previously published snapshot.
-      if (/^\/(?:g|o|customer|unsubscribe)(?:\/|$)/.test(routePath) || /^\/api\/(?:growth|commerce|automations|offer-lab)(?:\/|$)/.test(routePath)) {
+      if (/^\/(?:b|g|o|customer|unsubscribe)(?:\/|$)/.test(routePath) || /^\/api\/(?:builder|builder-cover|growth|commerce|automations|offer-lab)(?:\/|$)/.test(routePath)) {
         res.setHeader('Cache-Control', 'private, no-store');
         res.setHeader('Referrer-Policy', 'no-referrer');
       }

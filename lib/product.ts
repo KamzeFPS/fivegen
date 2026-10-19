@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Commerce } from "./commerce";
 import type { Experience } from "./experience";
 export const formats = [
+  "Book",
   "Guide",
   "Mini course",
   "Video course",
@@ -14,6 +15,7 @@ export const formats = [
   "Community",
 ] as const;
 export const productTypes: {value: (typeof formats)[number]; description: string}[] = [
+  {value: "Book", description: "Write a book chapter by chapter or upload your manuscript."},
   {value: "Guide", description: "Share your expertise in a written guide or ebook."},
   {value: "Mini course", description: "Teach one focused outcome in a short series of lessons."},
   {value: "Video course", description: "Organize your own recorded lessons into modules."},

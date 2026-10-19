@@ -18,7 +18,7 @@ export async function GET(req: Request) {
       if (!row) throw new ApiError('This conversation was not found in your workspace.', 404);
       return Response.json({ conversation: { id: row.id, messages: JSON.parse(String(row.messages)), plan: row.plan ? JSON.parse(String(row.plan)) : null, productId: row.product_id, updatedAt: row.updated_at }, remaining });
     }
-    const rows = await db.prepare('SELECT id,title,product_id,updated_at FROM studio_conversations WHERE owner=? ORDER BY updated_at DESC LIMIT 50').bind(user.userId).all();
+    const rows = await db.prepare("SELECT id,title,product_id,updated_at FROM studio_conversations WHERE owner=? AND id NOT LIKE 'builder:%' ORDER BY updated_at DESC LIMIT 50").bind(user.userId).all();
     return Response.json({ conversations: rows.results, remaining });
   } catch (error) { return failure(error); }
 }

@@ -1,0 +1,27 @@
+# Shared product creation pipeline
+
+Implemented entry: `/build/new`. Product workspace: `/build/{id}`. Public page: `/b/{slug}`.
+
+All new UI creation entries use Choose your type → Build your product → Publish & sell. Book/eBook, Guide, Playbook, Mini course, Full/video course, Template kit, Challenge, Consulting/Mentorship, Coaching session, Community and Custom have relevant fields, section labels and readiness rules. Custom selects supported file, course, service or external-community delivery. AI, original uploads and manual authoring share the same persistent product identity.
+
+The contextual assistant appears on the right, minimizes without clearing history or unsent answers, and starts minimized on small screens. Suggestions require review and explicit application. The existing administrator-managed AI connection, shared planning allowance, full-product quota, credit reservations/refunds and verified owner exception are reused. Original files and private meeting/community URLs are excluded from AI context. No provider credential is requested from a customer.
+
+Full generation uses the existing staged generator. Generation results are captured independently before later manual saves; applying a result saves current metadata first and preserves original uploads. Version checks protect concurrent edits. Failed saves remain recoverable without endlessly retrying an unchanged invalid draft. A completed result is marked applied; another full generation requires a deliberate new run under current allowance/credit rules.
+
+## Publication and selling
+
+Publication checks product-specific content and deep asset integrity, but does not require a price or payment connection. A page without enabled sales shows that purchases are unavailable. Public metadata contains no manuscript/lesson bodies, original resource IDs, recordings, service meeting links or private community invitations. Optional covers use a published-image-only endpoint.
+
+Start selling is a separate server operation. It requires the latest published version, a valid price, explicit platform payment enablement, a correctly configured connected-account webhook, and a freshly verified eligible Stripe account. Services require session scope, preparation, a private meeting URL and upcoming availability. Community access uses an external HTTPS invitation and member resources; this release does not create an in-app discussion platform. Challenges are self-paced, not scheduled cohorts or email drip delivery. AI produces written material/scripts; creators upload their own recorded classes. Written content exports as printable HTML, not a claimed native PDF.
+
+Checkout freezes the reviewed delivery version before payment. Paid customers receive their purchased content through the authenticated/cookie-protected portal. Future published PDF updates are additive for customers already paid at publication; original PDFs remain available. Pending checkout A → publication B → payment A preserves A. New course content and unrelated resource types are not automatically granted. Refund/dispute revocation applies to original content and update grants.
+
+Legacy sold products and file-sale revisions retain their existing editors and entitlement behavior. Adoption refuses direct purchases, bundle/upsell inclusion and commerce purchases. Historical checkout/quote/free-download endpoints cannot expose new builder content. Existing marketing tools remain reachable from the builder without duplicating content or payment editing.
+
+## Data and verification
+
+Additive migrations `0017_product_builders.sql` and `0018_builder_pdf_updates.sql` create workspaces, publications, checkout snapshots and PDF update grants. A fresh 19-migration install and an upgrade from 0016 preserve historical products/orders byte for byte and pass foreign-key checks. Drizzle reports no schema drift. Migration evidence: `outputs/product-builder-migration-qa/d706173d-0135-4219-82ca-8af5cafe51cb/result.json`.
+
+Validated with TypeScript, full production builds, `npm run test:builders`, legacy file-sale suites, commerce-v2 tests, generation-credit tests, studio planning/subscription tests, wallets/admin credits, growth suites, and built HTTP creator/growth runtime checks. The all-type suite exercises actual services, SQLite migrations and private blobs. AI/payment transport is isolated synthetic data: no live AI generation, provider account change, actual charge or email was performed.
+
+Browser checks cover a manually authored mini course and an original PDF book: creation, type-specific builder, autosave, reload/resume, publication with payments skipped, protected public preview, minimization and separate Start selling gates. Fixtures are retained in `outputs/file-sales-preview-1792386528541`.

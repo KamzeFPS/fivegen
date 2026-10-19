@@ -13,6 +13,7 @@ export async function GET(
       .bind(slug)
       .first();
     if (!p) throw new ApiError("Product not found.", 404);
+    if(await database().prepare('SELECT product_id FROM product_builder_workspaces WHERE product_id=?').bind(p.id).first())throw new ApiError('Open your purchase in /customer to download this product’s private resources.',403);
     const token = new URL(req.url).searchParams.get("token");
     const sale=await resolveFileSaleAccess(p,token||undefined);
     if(sale)return Response.json({accessPath:`/access/${slug}`,message:'Open your purchase to download the original files or read your course.'},{headers:{'Cache-Control':'private, no-store'}});

@@ -27,6 +27,7 @@ export async function DELETE(req:Request,{params}:{params:Promise<{id:string}>})
  // File-sale assets are immutable retained objects. Detach from a draft rather
  // than race a publication or erase a historical paid version.
  if(await database().prepare('SELECT product_id FROM file_sale_drafts WHERE product_id=?').bind(p.id).first())throw new ApiError('Remove this file from the draft feature instead. Stored versions are retained to protect buyer access.',409);
+ if(await database().prepare('SELECT product_id FROM product_builder_workspaces WHERE product_id=?').bind(p.id).first())throw new ApiError('Remove this file from the builder instead. Stored versions are retained to protect published pages and purchased content.',409);
  if([p.content,p.commerce,p.experience].some(v=>String(v).includes(id)))throw new ApiError("Remove this file from your lessons or funnel and save before deleting it.",409);
  const published=await database().prepare("SELECT product_id FROM growth_funnels WHERE creator_vsl_upload_id=? AND owner=? AND published_at IS NOT NULL").bind(id,u.userId).first();
  if(published)throw new ApiError("Remove this recording from the published funnel and publish the update before deleting it.",409);

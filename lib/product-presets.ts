@@ -29,6 +29,7 @@ export function productPreset(id: string): ProductPreset | undefined {
 }
 
 export const legacyProductFamilies: Record<Brief['format'], ProductFamily | 'community'> = {
+  Book: 'downloads',
   Guide: 'downloads', 'Mini course': 'course', 'Template kit': 'downloads',
   Challenge: 'course', Playbook: 'downloads', 'Custom product': 'downloads',
   'Coaching session': 'service', Community: 'community',

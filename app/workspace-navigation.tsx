@@ -19,17 +19,18 @@ type Props={
   creditsLabel:string;
   history:{id:string;title:string}[];
   onCreate:()=>void;
+  onHome?:()=>void;
   onView:(view:NavigationView)=>void;
   onConversation:(id:string)=>void;
   onVisit:(path:string)=>void;
   onSignOut:()=>void;
 };
 
-export function WorkspaceNavigation({user,view,label,admin,productCount,creditsLabel,history,onCreate,onView,onConversation,onVisit,onSignOut}:Props){
+export function WorkspaceNavigation({user,view,label,admin,productCount,creditsLabel,history,onCreate,onHome,onView,onConversation,onVisit,onSignOut}:Props){
   return <>
     <a className="workspace-skip" href="#workspace-content">Skip to content</a>
     <header className="workspace-header">
-      <button type="button" className="workspace-brand" onClick={onCreate} aria-label="FiveGen home"><Brand/></button>
+      <button type="button" className="workspace-brand" onClick={onHome||onCreate} aria-label="FiveGen home"><Brand/></button>
       <nav className="workspace-primary-nav" aria-label="Main navigation">
         {navigation.map(({id,label:navLabel,icon:Icon})=><button type="button" key={id} aria-current={view===id?'page':undefined} onClick={()=>onView(id)}><Icon size={17}/><span>{navLabel}</span>{id==='library'&&productCount>0&&<small>{productCount}</small>}</button>)}
       </nav>

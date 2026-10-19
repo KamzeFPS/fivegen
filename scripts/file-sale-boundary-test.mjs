@@ -48,6 +48,8 @@ Object.assign(dependencies, await load('lib/server.ts', ['productFromRow']));
 const sales = await load('lib/file-sales.ts'); Object.assign(dependencies, sales);
 Object.assign(dependencies, await load('lib/payments.ts'));
 Object.assign(dependencies, await load('lib/access.ts'));
+Object.assign(dependencies, await load('lib/builder-publication-contract.ts'));
+Object.assign(dependencies, await load('lib/builder-delivery-server.ts'));
 const uploadRoute = await load('app/api/uploads/[id]/route.ts');
 const productUploadRoute = await load('app/api/products/[id]/uploads/route.ts');
 const commerceCustomer = await load('lib/commerce-v2-server.ts', ['commerceMode', 'commerceHash', 'cookieValue', 'cookieOwns', 'customerOrder', 'customerVideo']);

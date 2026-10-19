@@ -1,0 +1,51 @@
+import { z } from 'zod';
+
+export const builderAgentSectionSchema = z.object({
+  title: z.string().trim().min(1).max(160),
+  body: z.string().max(12000),
+});
+
+export const builderAgentContextSchema = z.object({
+  type: z.string().trim().min(1).max(80),
+  title: z.string().max(160).default(''),
+  description: z.string().max(3000).default(''),
+  audience: z.string().max(1000).default(''),
+  language: z.string().max(80).default('English'),
+  fields: z.record(z.string().max(3000)).refine(value => Object.keys(value).length <= 30, 'Too many context fields.').default({}),
+  sections: z.array(builderAgentSectionSchema).max(40).default([]),
+}).refine(value => JSON.stringify(value).length <= 24000, 'Share a shorter excerpt with the assistant.');
+
+export const builderAgentSuggestionSchema = z.object({
+  summary: z.string().trim().min(3).max(500),
+  title: z.string().trim().min(1).max(160).optional(),
+  description: z.string().trim().min(1).max(3000).optional(),
+  audience: z.string().trim().min(1).max(1000).optional(),
+  sections: z.array(builderAgentSectionSchema).min(1).max(24).optional(),
+}).refine(value => Boolean(value.title || value.description || value.audience || value.sections?.length), 'A suggestion must include an editable change.')
+  .refine(value => (value.sections || []).reduce((sum, section) => sum + section.body.length, 0) <= 1800, 'Use full product generation for complete chapters or lessons.');
+
+export const builderAgentResponseSchema = z.object({
+  answer: z.string().trim().min(3).max(2500),
+  questions: z.array(z.string().trim().min(3).max(300)).max(3).default([]),
+  suggestion: builderAgentSuggestionSchema.nullable().default(null),
+});
+
+export type BuilderAgentContext = z.infer<typeof builderAgentContextSchema>;
+export type BuilderAgentSuggestion = z.infer<typeof builderAgentSuggestionSchema>;
+export type BuilderAgentMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  questions?: string[];
+  suggestion?: BuilderAgentSuggestion | null;
+};
+export type BuilderAgentConversation = { id: string; messages: BuilderAgentMessage[]; updatedAt: number };
+export type BuilderAgentState = {
+  conversation: BuilderAgentConversation;
+  remaining: number;
+  cost: number;
+  credits: number;
+  unlimited: boolean;
+  aiReady: boolean;
+  spent?: number;
+};

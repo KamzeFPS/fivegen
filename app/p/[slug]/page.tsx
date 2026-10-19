@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound,redirect } from "next/navigation";
 import { database, productFromRow, binding, stripeConfigured } from "@/lib/server";
 import { Brand, Cover } from "@/app/ui-brand";
 import { Check, Layers3 } from "lucide-react";
@@ -18,6 +18,8 @@ export default async function ProductPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  const builder=await database().prepare('SELECT slug FROM product_builder_publications WHERE slug=?').bind(slug).first();
+  if(builder)redirect(`/b/${encodeURIComponent(String(builder.slug))}`);
   const sale=await getPublishedFileSale(slug);
   if(sale){
     const user=await getChatGPTUser();

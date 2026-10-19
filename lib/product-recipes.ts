@@ -12,6 +12,7 @@ export const productRecipes = {
 } as const;
 
 export function recipeFor(format: Brief["format"]) {
+  if (format === "Book") return productRecipes.Guide;
   if (format === "Video course") return productRecipes["Mini course"];
   if (format === "Consulting / Mentorship") return productRecipes["Coaching session"];
   return productRecipes[format] || productRecipes["Custom product"];
