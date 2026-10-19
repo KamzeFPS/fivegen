@@ -4,13 +4,16 @@ import {commissionAmount,commissionRate} from "./credit-policy";
 import {planFor} from "./billing";
 import {recordReferral} from "./referrals";
 import {captureLead} from "./customer-journey";
+import {fulfillFileSaleOrder} from './file-sales';
 export type PurchasedItem=OfferProduct & {amount:number};
 export function orderItems(order:Record<string,unknown>):PurchasedItem[]{try{return JSON.parse(String(order.items||"[]"));}catch{return [];}}
 async function insertOrder(id:string,intent:Record<string,unknown>,email:string,provider:string,subscriptionId:string|null=null,customerId:string|null=null){
   const token=crypto.randomUUID()+crypto.randomUUID();
-  await database().prepare("INSERT OR IGNORE INTO orders (id,product_id,owner,email,amount,platform_fee,provider,token,items,subscription_id,customer_id,stripe_account,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
-    .bind(id,intent.product_id,intent.owner,email,intent.amount,intent.platform_fee||0,provider,token,intent.items||"[]",subscriptionId,customerId,intent.account||null,Date.now()).run();
-  return (await database().prepare("SELECT * FROM orders WHERE id=?").bind(id).first())!;
+  await database().prepare("INSERT OR IGNORE INTO orders (id,product_id,owner,email,amount,platform_fee,provider,token,items,subscription_id,customer_id,stripe_account,created_at,sale_revision_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .bind(id,intent.product_id,intent.owner,email,intent.amount,intent.platform_fee||0,provider,token,intent.items||"[]",subscriptionId,customerId,intent.account||null,Date.now(),intent.sale_revision_id||null).run();
+  const order=(await database().prepare("SELECT * FROM orders WHERE id=?").bind(id).first())!;
+  if(order.sale_revision_id)await fulfillFileSaleOrder(order);
+  return order;
 }
 export async function recordFreeOrder(ref:string){
   const intent=await database().prepare("SELECT * FROM checkout_intents WHERE id=?").bind(ref).first();
@@ -24,6 +27,7 @@ export async function recordPayment(
   if(session.metadata?.order_ref){
     const intent=await database().prepare("SELECT * FROM checkout_intents WHERE id=?").bind(session.metadata.order_ref).first();
     if(!intent||intent.account!==account||intent.owner!==session.metadata.owner||intent.product_id!==session.metadata.product_id||(intent.session_id&&intent.session_id!==session.id))throw new ApiError("Payment could not be matched to this offer.",403);
+    if(intent.sale_revision_id&&(session.livemode!==false||session.metadata.sale_revision_id!==intent.sale_revision_id))throw new ApiError('The payment does not match the purchased test offer revision.',403);
     if(session.payment_status!=="paid"||session.currency!=="usd"||session.mode!==intent.mode||Number(session.amount_total)!==Number(intent.amount))throw new ApiError("Payment has not completed or its amount could not be verified.",409);
     const order=await insertOrder(session.id,intent,session.customer_details?.email||"customer","stripe",session.subscription?String(session.subscription):null,session.customer?String(session.customer):null);
     await recordReferral(order,intent,session);

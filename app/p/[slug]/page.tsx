@@ -7,6 +7,10 @@ import Purchase from "./purchase";
 import { quoteProduct } from "@/lib/offers-server";
 
 import { defaultCommerce } from "@/lib/commerce";
+import {getPublishedFileSale,fileSalesEnabled} from '@/lib/file-sales';
+import {FileSalePageView} from '@/app/file-sale-page-view';
+import FileSalePurchase from '@/app/file-sale-purchase';
+import {getChatGPTUser} from '@/app/chatgpt-auth';
 export const dynamic = "force-dynamic";
 export default async function ProductPage({
   params,
@@ -14,6 +18,13 @@ export default async function ProductPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  const sale=await getPublishedFileSale(slug);
+  if(sale){
+    const user=await getChatGPTUser();
+    return <FileSalePageView snapshot={sale.snapshot} coverUrl={sale.snapshot.coverUploadId?`/api/file-sales/cover/${encodeURIComponent(slug)}`:undefined}><FileSalePurchase slug={slug} revisionId={sale.revisionId} ready={sale.readiness.ready} message={sale.readiness.checks.find(c=>!c.ready)?.message||''} email={user?.email}/></FileSalePageView>;
+  }
+  // The narrow sandbox exception does not reactivate retired legacy stores.
+  if(fileSalesEnabled())notFound();
   const row = await database()
     .prepare(
       "SELECT p.*,s.stripe_account,s.name as seller_name FROM products p LEFT JOIN sellers s ON p.owner=s.owner WHERE p.slug=? AND p.status='published'",

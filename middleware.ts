@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import {retiredCommercePath,commerceGone} from './lib/retired-commerce';
 // PRODUCT_DOMAIN requires a real domain and wildcard DNS configured by its owner.
 export function middleware(request: NextRequest) {
-  if(retiredCommercePath(request.nextUrl.pathname))return commerceGone();
+  const fileSalePage=process.env.FIVEGEN_FILE_SALES_ENABLED==='true'&&process.env.STRIPE_MODE==='test'&&/^\/p\/[^/]+\/?$/.test(request.nextUrl.pathname);
+  if(retiredCommercePath(request.nextUrl.pathname)&&!fileSalePage)return commerceGone();
   const metadata:Record<string,string>={"/.well-known/oauth-protected-resource":"/oauth/metadata/resource","/.well-known/oauth-protected-resource/api/mcp":"/oauth/metadata/resource","/.well-known/oauth-authorization-server":"/oauth/metadata/server"};
   const target=metadata[request.nextUrl.pathname];
   if(target){const url=request.nextUrl.clone();url.pathname=target;return NextResponse.rewrite(url);}

@@ -66,7 +66,7 @@ export async function start() {
       req.headers['x-forwarded-proto'] = authority.protocol.slice(0, -1);
       req.rawHeaders.push('x-forwarded-proto', req.headers['x-forwarded-proto']);
       res.setHeader('X-Content-Type-Options', 'nosniff');
-      res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+      res.setHeader('Referrer-Policy', url.pathname.startsWith('/access/')?'no-referrer':'strict-origin-when-cross-origin');
       res.setHeader('X-Frame-Options', 'DENY');
       res.setHeader('Content-Security-Policy', "frame-ancestors 'none'; object-src 'none'; base-uri 'self'");
       res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
@@ -86,7 +86,8 @@ export async function start() {
       let routePath;
       try { routePath = decodeURIComponent(url.pathname).replace(/\/+$/, ''); }
       catch { res.writeHead(400); res.end(); return; }
-      if ((productHost && host !== authority.host && !['www','app'].includes(host.slice(0,-domain.length-1))) || /^\/(?:p|f|r|invite|partners)(?:\/|$)/.test(routePath) || /^\/api\/(?:checkout|quote|connect\/stripe|referrals|invite|leads|visits|crm)(?:\/|$)/.test(routePath) || /^\/api\/products\/[^/]+\/slots(?:\/|$)/.test(routePath)) { res.writeHead(410,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:'FiveGen is a private AI creation studio. Storefronts, seller payments, referrals and payouts are no longer available.'}));return; }
+      const fileSalePage=process.env.FIVEGEN_FILE_SALES_ENABLED==='true'&&process.env.STRIPE_MODE==='test'&&/^\/p\/[^/]+$/.test(routePath);
+      if ((productHost && host !== authority.host && !['www','app'].includes(host.slice(0,-domain.length-1))) || (!fileSalePage&&/^\/(?:p|f|r|invite|partners)(?:\/|$)/.test(routePath)) || /^\/api\/(?:checkout|quote|connect\/stripe|referrals|invite|leads|visits|crm)(?:\/|$)/.test(routePath) || /^\/api\/products\/[^/]+\/slots(?:\/|$)/.test(routePath)) { res.writeHead(410,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:'FiveGen is a private AI creation studio. Storefronts, seller payments, referrals and payouts are no longer available.'}));return; }
       if (routePath === '/api/webhooks/paddle' && process.env.PADDLE_ENVIRONMENT === 'production') {
         try { await allowPaddleWebhookSource(webhookSource, { mode: process.env.PADDLE_WEBHOOK_IP_MODE, render: process.env.RENDER === 'true' }); }
         catch (error) { res.writeHead(error.status === 403 ? 403 : 503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...(error.status === 403 ? {} : { 'Retry-After': '60' }) }); res.end(JSON.stringify({ error: error.status === 403 ? 'Webhook source IP is not allowed.' : 'Webhook IP verification is temporarily unavailable.' })); return; }
