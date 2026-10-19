@@ -20,7 +20,7 @@
     "test:referrals": "node scripts/referral-test.mjs",
     "test:credits": "node scripts/credits-test.mjs && node scripts/generation-credit-test.mjs && node scripts/commission-test.mjs",
     "test:paddle": "node scripts/paddle-test.mjs && node scripts/paddle-webhook-test.mjs",
-    "test:wallets": "node scripts/wallet-billing-test.mjs && node scripts/admin-credit-grant-test.mjs && node scripts/wallet-readiness-test.mjs",
+    "test:wallets": "node scripts/wallet-billing-test.mjs && node scripts/admin-credit-grant-test.mjs && node scripts/wallet-readiness-test.mjs && node scripts/commerce-readiness-test.mjs",
     "test:file-sales": "node scripts/file-upload-test.mjs && node scripts/file-sales-test.mjs && node scripts/file-sale-boundary-test.mjs",
     "preview:file-sales": "node scripts/file-sales-preview.mjs",
     "test:paddle:live": "node scripts/paddle-live-test.mjs",
@@ -35,7 +35,7 @@
     "test:marketing-plugins": "node scripts/marketing-plugins-test.mjs",
     "test:ai-format": "node scripts/ai-response-schema-test.mjs && node scripts/builder-assistant-test.mjs && node scripts/builder-assistant-apply-test.mjs",
     "test:ai-format:runtime": "node scripts/builder-assistant-runtime-test.mjs",
-    "test:creator-reliability": "node scripts/wallet-billing-test.mjs && node scripts/wallet-readiness-test.mjs && node scripts/product-builder-test.mjs && node scripts/builder-revision-test.mjs && node scripts/ai-response-schema-test.mjs && node scripts/builder-assistant-test.mjs && node scripts/builder-assistant-apply-test.mjs && node scripts/generation-credit-test.mjs && node scripts/product-quality-test.mjs"
+    "test:creator-reliability": "node scripts/wallet-billing-test.mjs && node scripts/wallet-readiness-test.mjs && node scripts/commerce-readiness-test.mjs && node scripts/product-builder-test.mjs && node scripts/builder-revision-test.mjs && node scripts/ai-response-schema-test.mjs && node scripts/builder-assistant-test.mjs && node scripts/builder-assistant-apply-test.mjs && node scripts/generation-credit-test.mjs && node scripts/product-quality-test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

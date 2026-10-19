@@ -17,7 +17,7 @@ For a new deployment:
 3. In Render, choose **New → Blueprint**, select the repository, and use the root `render.yaml`. Review the service and persistent-disk costs before creating resources. Render generates `CREDENTIAL_ENCRYPTION_KEY` for a new database; preserve it in secure disaster recovery.
 4. Deploy. Startup applies pending SQL migrations transactionally, checks existing migration checksums, and starts the server on `0.0.0.0:$PORT`. Migrations run at startup because service disks are unavailable during build and pre-deploy commands. `/healthz` checks database access and free disk space.
 
-Automatic deployment is off in the Blueprint. Commerce, wallet checkout, and the automation worker also default to disabled. Enable each only after its configuration and intended behavior have been verified.
+Automatic deployment is off in the Blueprint. Commerce and wallet checkout release switches are supplied explicitly when creating a service and managed in that service's Environment thereafter; Blueprint sync preserves existing values. Set them to `false` for new or staging services until verification is complete. The automation worker defaults to disabled.
 
 ## Custom domain and sign-in
 

@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {randomUUID} from 'node:crypto';
+import ts from 'typescript';
+
+const settings={STRIPE_MODE:'live',STRIPE_SECRET_KEY:'sk_live_private_fixture',STRIPE_CONNECT_WEBHOOK_SECRET:'whsec_private_fixture',STRIPE_COMMERCE_ENABLED:'false'};
+const events=['checkout.session.completed','checkout.session.async_payment_succeeded','charge.refunded','charge.dispute.created','charge.dispute.closed','account.updated'];
+let accountReads=0,webhookReads=0,sdkCalls=0,eligibilityError=null,webhookError=null,connectedScope=true,missingEvents=false,wrongUrl=false,includeDuplicate=false;
+const sdk={v2:{core:{accounts:{list:async params=>{accountReads++;assert.deepEqual(params,{limit:1});if(eligibilityError)throw eligibilityError;return {data:[]};}}}},webhookEndpoints:{list:async()=>{webhookReads++;if(webhookError)throw webhookError;const row={url:wrongUrl?'https://other.example/api/commerce/webhook':'https://www.fivegen.ai/api/commerce/webhook',status:'enabled',application:connectedScope?'ca_fixture':null,enabled_events:missingEvents?events.slice(0,-1):events};return {data:includeDuplicate?[{...row,application:null},row]:[row],has_more:false};}}};
+const deps={binding:key=>settings[key]||'',commerceStripe:()=>{sdkCalls++;return sdk;}};
+async function load(path){const key='commerceReadinessQa'+randomUUID().replaceAll('-','');globalThis[key]=deps;const source=fs.readFileSync(path,'utf8').replace(/^import[\s\S]*?;\r?\n/gm,'');const code=`const {${Object.keys(deps).join(',')}}=globalThis.${key};\n`+ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;try{return await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));}finally{delete globalThis[key];}}
+const {commerceReadiness}=await load('lib/commerce-readiness.ts');
+const check=(report,id)=>report.checks.find(row=>row.id===id);
+let report=await commerceReadiness('https://www.fivegen.ai');
+assert.equal(report.enabled,false);assert.equal(report.readyToEnable,true);assert.equal(check(report,'switch').status,'blocked');assert.equal(check(report,'connect-access').status,'ready');assert.equal(check(report,'webhook-scope').status,'ready');
+assert.equal(settings.STRIPE_COMMERCE_ENABLED,'false','Diagnostics never enable connections');
+for(const value of Object.values(settings).filter(value=>/^(sk_|whsec_)/.test(value)))assert.ok(!JSON.stringify(report).includes(value),'Readiness never exposes secrets');
+assert.equal(accountReads,1);assert.equal(webhookReads,1);
+settings.STRIPE_COMMERCE_ENABLED='true';report=await commerceReadiness('https://www.fivegen.ai');assert.equal(report.enabled,true);assert.equal(report.readyToEnable,true);
+connectedScope=false;report=await commerceReadiness('https://www.fivegen.ai');assert.equal(check(report,'webhook').status,'ready');assert.equal(check(report,'webhook-scope').status,'blocked');assert.equal(report.readyToEnable,false,'An account-scope destination cannot fulfill seller purchases');connectedScope=true;
+includeDuplicate=true;report=await commerceReadiness('https://www.fivegen.ai');assert.equal(check(report,'webhook-scope').status,'ready','A valid Connect destination is preferred over a duplicate account-scope URL');includeDuplicate=false;
+missingEvents=true;report=await commerceReadiness('https://www.fivegen.ai');assert.equal(check(report,'webhook').status,'blocked');assert.equal(report.readyToEnable,false);missingEvents=false;
+wrongUrl=true;report=await commerceReadiness('https://www.fivegen.ai');assert.equal(check(report,'webhook').status,'blocked');wrongUrl=false;
+eligibilityError={code:'platform_registration_required',message:'unsafe provider error with sk_live_private_fixture'};report=await commerceReadiness('https://www.fivegen.ai');assert.equal(check(report,'connect-access').status,'blocked');assert.match(check(report,'connect-access').action,/complete the platform setup/);assert.ok(!JSON.stringify(report).includes('unsafe provider error'));eligibilityError=null;
+webhookError=new Error('unsafe webhook provider payload');report=await commerceReadiness('https://www.fivegen.ai');assert.equal(report.readyToEnable,false);assert.ok(!JSON.stringify(report).includes('unsafe webhook provider payload'));webhookError=null;
+settings.STRIPE_CONNECT_WEBHOOK_SECRET='';report=await commerceReadiness('https://www.fivegen.ai');assert.equal(report.enabled,false);assert.equal(check(report,'signing-secret').status,'blocked');settings.STRIPE_CONNECT_WEBHOOK_SECRET='whsec_private_fixture';
+let before=sdkCalls;settings.STRIPE_MODE='';report=await commerceReadiness('https://www.fivegen.ai');assert.equal(report.mode,null);assert.equal(report.readyToEnable,false);assert.equal(sdkCalls,before,'Unset mode never queries a Stripe account');
+settings.STRIPE_MODE='test';report=await commerceReadiness('https://www.fivegen.ai');assert.equal(sdkCalls,before,'Mismatched server key never queries Stripe');assert.equal(report.enabled,false);
+settings.STRIPE_SECRET_KEY='rk_test_private_fixture';report=await commerceReadiness('https://www.fivegen.ai');assert.equal(report.mode,'test');assert.equal(check(report,'keys').status,'ready');assert.equal(sdkCalls,before+1);
+console.log('Passed: read-only Connect eligibility, independent seller release switch, explicit mode and matching keys, connected-account webhook scope and events, duplicate destination selection, sanitized provider failures and secret-free diagnostics.');

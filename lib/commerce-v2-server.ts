@@ -62,8 +62,10 @@ export async function connectCommerce(owner:string,email:string,origin:string,co
     await database().prepare('INSERT OR IGNORE INTO commerce_accounts (key,owner,mode,account_id,status,updated_at) VALUES (?,?,?,?,?,?)').bind(`${mode}:${owner}`,owner,mode,account.id,'pending',Date.now()).run();
     row=await database().prepare('SELECT * FROM commerce_accounts WHERE owner=? AND mode=?').bind(owner,mode).first();
   }
-  const path=productId?`/?project=${encodeURIComponent(productId)}&area=commerce`:'/?view=library';
-  const link=await commerceProvider('start Stripe onboarding',()=>client.v2.core.accountLinks.create({account:String(row!.account_id),use_case:{type:'account_onboarding',account_onboarding:{configurations:['merchant'],refresh_url:origin+path,return_url:origin+path+'&connect=returned'}}}));
+  const builder=productId?await database().prepare('SELECT product_id FROM product_builder_workspaces WHERE product_id=? AND owner=?').bind(productId,owner).first():null;
+  const path=builder?`/build/${encodeURIComponent(productId!)}`:productId?`/?project=${encodeURIComponent(productId)}&area=commerce`:'/?view=library';
+  const separator=builder?'?':'&';
+  const link=await commerceProvider('start Stripe onboarding',()=>client.v2.core.accountLinks.create({account:String(row!.account_id),use_case:{type:'account_onboarding',account_onboarding:{configurations:['merchant'],refresh_url:origin+path+(builder?'?connect=refresh':''),return_url:origin+path+separator+'connect=returned'}}}));
   if(link.livemode!==(mode==='live'))throw new ApiError('The Stripe onboarding link does not match this payment environment.',409);
   return {url:link.url};
 }
