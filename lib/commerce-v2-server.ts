@@ -8,7 +8,9 @@ import { contentSchema, publishContentError } from './product';
 import { enrollAutomationPurchase } from './automation-server';
 import {builderPublishedDelivery,builderOrderDelivery,verifyBuilderDelivery,builderDownloadMetadata,builderPrivateDownload} from './builder-delivery-server';
 import {builderDeliverySnapshotSchema} from './builder-publication-contract';
-import {COMMERCE_COMMISSION_BPS,commerceCommission,commerceFeeSnapshot} from './commerce-fees';
+import {commerceCommission,commerceFeeSnapshot} from './commerce-fees';
+import { creatorPlan } from './creator-plan-server';
+import { freeCreatorPlan } from './creator-plans';
 
 export function commerceMode(): 'live'|'test' {
   const mode=binding('STRIPE_MODE');
@@ -55,10 +57,11 @@ async function refreshCommerceAccount(accountId:string,mode:'test'|'live'){
   return ready;
 }
 export async function commerceAccount(owner:string,refresh=false) {
-  let mode:'live'|'test'|null=null;try{mode=commerceMode();commerceStripe();}catch{return {configured:false,enabled:false,mode,connected:false,ready:false,accountId:null};}
+  let mode:'live'|'test'|null=null;try{mode=commerceMode();commerceStripe();}catch{return {configured:false,enabled:false,mode,connected:false,ready:false,accountId:null,creatorPlan:freeCreatorPlan()};}
+  const plan=await creatorPlan(owner,mode);
   const row=await database().prepare('SELECT * FROM commerce_accounts WHERE owner=? AND mode=?').bind(owner,mode).first();
   const ready=row&&refresh?await refreshCommerceAccount(String(row.account_id),mode):row?.status==='ready';
-  return {configured:true,enabled:binding('STRIPE_COMMERCE_ENABLED')==='true'&&binding('STRIPE_CONNECT_WEBHOOK_SECRET').startsWith('whsec_'),mode,connected:!!row,ready,accountId:row?String(row.account_id):null};
+  return {configured:true,enabled:binding('STRIPE_COMMERCE_ENABLED')==='true'&&binding('STRIPE_CONNECT_WEBHOOK_SECRET').startsWith('whsec_'),mode,connected:!!row,ready,accountId:row?String(row.account_id):null,creatorPlan:plan};
 }
 export async function connectCommerce(owner:string,email:string,origin:string,country?:string,productId?:string) {
   assertEnabled();if(productId)await ownedProduct(productId,owner);const mode=commerceMode(),client=commerceStripe();let row=await database().prepare('SELECT * FROM commerce_accounts WHERE owner=? AND mode=?').bind(owner,mode).first();
@@ -142,14 +145,14 @@ export async function createCommerceCheckout(req:Request,input:unknown) {
   const account=await commerceAccount(String(row.owner),true);if(!account.ready)throw new ApiError('This creator cannot accept payments yet.',409);
   const existing=await db.prepare('SELECT * FROM commerce_orders WHERE id=?').bind(value.requestId).first();let token='';
   if(existing){if(existing.email!==email||existing.product_id!==row.product_id||existing.account_id!==row.account_id||existing.mode!==mode||!await cookieOwns(req,existing))throw new ApiError('Start a new checkout attempt.',409);if(existing.status!=='pending')throw new ApiError('This checkout is already complete. Open your customer portal.',409);}
-  else {const recent=await db.prepare('SELECT COUNT(*) AS count FROM commerce_orders WHERE product_id=? AND created_at>?').bind(row.product_id,Date.now()-3600000).first();if(Number(recent?.count)>300)throw new ApiError('Too many checkout attempts. Try again later.',429);token=crypto.randomUUID()+crypto.randomUUID();const now=Date.now(),hash=await commerceHash(token);
+  else {const recent=await db.prepare('SELECT COUNT(*) AS count FROM commerce_orders WHERE product_id=? AND created_at>?').bind(row.product_id,Date.now()-3600000).first();if(Number(recent?.count)>300)throw new ApiError('Too many checkout attempts. Try again later.',429);token=crypto.randomUUID()+crypto.randomUUID();const now=Date.now(),hash=await commerceHash(token),plan=await creatorPlan(String(row.owner),mode,now);
    if(row.publication_version){
     const snapshot=builderDeliverySnapshotSchema.parse(JSON.parse(String(row.content_snapshot)));
     const results=await db.batch([
-     db.prepare(`INSERT INTO commerce_orders (id,owner,product_id,account_id,mode,email,amount,currency,title,status,access_hash,created_at,campaign,expected_fee_bps,expected_fee_amount) SELECT ?,?,?,?,?,?,?,?,?,'pending',?,?,?,?,? WHERE EXISTS(SELECT 1 FROM product_builder_publications b JOIN commerce_offers o ON o.product_id=b.product_id WHERE b.product_id=? AND b.version=? AND o.enabled=1 AND o.enabled_mode=? AND o.updated_at=?)`).bind(value.requestId,row.owner,row.product_id,row.account_id,mode,email,row.amount,row.currency,row.title,hash,now,value.campaign,COMMERCE_COMMISSION_BPS,commerceCommission(Number(row.amount)),row.product_id,row.publication_version,mode,row.updated_at),
+     db.prepare(`INSERT INTO commerce_orders (id,owner,product_id,account_id,mode,email,amount,currency,title,status,access_hash,created_at,campaign,expected_fee_bps,expected_fee_amount,fee_plan_id) SELECT ?,?,?,?,?,?,?,?,?,'pending',?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM product_builder_publications b JOIN commerce_offers o ON o.product_id=b.product_id WHERE b.product_id=? AND b.version=? AND o.enabled=1 AND o.enabled_mode=? AND o.updated_at=?)`).bind(value.requestId,row.owner,row.product_id,row.account_id,mode,email,row.amount,row.currency,row.title,hash,now,value.campaign,plan.commissionBps,commerceCommission(Number(row.amount),plan.commissionBps),plan.id,row.product_id,row.publication_version,mode,row.updated_at),
      db.prepare('INSERT INTO product_builder_order_snapshots (order_id,product_id,publication_version,snapshot,created_at) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM commerce_orders WHERE id=? AND access_hash=?)').bind(value.requestId,row.product_id,row.publication_version,JSON.stringify(snapshot),now,value.requestId,hash),
     ]);if(!results[0].meta.changes)throw new ApiError('This product changed. Reload the page before paying.',409);
-   }else await db.prepare('INSERT INTO commerce_orders (id,owner,product_id,account_id,mode,email,amount,currency,title,status,access_hash,created_at,campaign,expected_fee_bps,expected_fee_amount) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(value.requestId,row.owner,row.product_id,row.account_id,mode,email,row.amount,row.currency,row.title,'pending',hash,now,value.campaign,COMMERCE_COMMISSION_BPS,commerceCommission(Number(row.amount))).run();
+   }else await db.prepare('INSERT INTO commerce_orders (id,owner,product_id,account_id,mode,email,amount,currency,title,status,access_hash,created_at,campaign,expected_fee_bps,expected_fee_amount,fee_plan_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(value.requestId,row.owner,row.product_id,row.account_id,mode,email,row.amount,row.currency,row.title,'pending',hash,now,value.campaign,plan.commissionBps,commerceCommission(Number(row.amount),plan.commissionBps),plan.id).run();
   }
   if(row.publication_version){const frozen=await db.prepare('SELECT publication_version FROM product_builder_order_snapshots WHERE order_id=?').bind(value.requestId).first();if(Number(frozen?.publication_version)!==Number(row.publication_version))throw new ApiError('This checkout belongs to an earlier offer. Start a new checkout from the product page.',409);}
   const order=existing||await db.prepare('SELECT * FROM commerce_orders WHERE id=?').bind(value.requestId).first();const origin=new URL(req.url).origin;

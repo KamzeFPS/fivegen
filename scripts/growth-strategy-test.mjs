@@ -23,6 +23,8 @@ Object.assign(deps,await load('lib/growth-funnel.ts'));
 Object.assign(deps,await load('lib/offer-lab.ts'));
 Object.assign(deps,await load('lib/offer-lab-server.ts'));
 Object.assign(deps,await load('lib/marketing-plugins.ts'));
+Object.assign(deps,await load('lib/creator-plans.ts'));
+Object.assign(deps,await load('lib/creator-plan-server.ts'));
 Object.assign(deps,await load('lib/commerce-earnings-server.ts'));
 Object.assign(deps,await load('lib/growth-analytics.ts'));
 const labRoute=await load('app/api/products/[id]/offer-lab/route.ts'),publicRoute=await load('app/api/offer-lab/respond/route.ts'),eventRoute=await load('app/api/growth/events/route.ts'),dashboardRoute=await load('app/api/growth/dashboard/route.ts');

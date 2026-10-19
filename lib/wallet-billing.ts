@@ -1,10 +1,11 @@
 import type Stripe from 'stripe';
 import {ApiError, binding, database} from './server';
-import {walletCatalog} from './wallet-catalog';
+import {historicalWalletCatalog,walletCatalog} from './wallet-catalog';
 import {assertWalletCheckout, walletEnvironment, walletObjectId, walletStripe} from './wallet-stripe';
 import {refreshSubscriptionCredits, subscriptionCreditBalance} from './subscription-credits';
+import {creatorPlan} from './creator-plan-server';
 
-type Intent={id:string;owner:string;environment:string;offer_id:string;email:string;amount:number;credits:number;billing_interval:'month'|'year'|null;session_id:string|null;status:string;created_at:number};
+type Intent={id:string;owner:string;environment:string;offer_id:string;email:string;amount:number;credits:number;billing_interval:'month'|'year'|null;checkout_name:string|null;session_id:string|null;status:string;created_at:number};
 const purpose='fivegen_wallet';
 const paidStatuses="'active','trialing','past_due','paused','unpaid','incomplete'";
 function supportsExpressCurrency(session:Stripe.Checkout.Session) {
@@ -14,6 +15,16 @@ async function intentById(id:string) {
   return database().prepare('SELECT * FROM wallet_checkout_intents WHERE id=? AND environment=?').bind(id,walletEnvironment()).first<Intent>();
 }
 function assertMode(live:boolean) {if(live!==(walletEnvironment()==='production'))throw new ApiError('Payment environment mismatch.',400);}
+function checkoutName(intent:Intent){
+  if(intent.checkout_name)return intent.checkout_name;
+  // Pre-migration requests may have reached Stripe before session_id was saved.
+  // Reuse their exact old label with the same v4 idempotency key; changing even
+  // the display name would make Stripe reject recovery as different parameters.
+  const legacyNames:Record<string,string>={'pack:starter':'FiveGen Starter credits','pack:studio':'FiveGen Pro credits','pack:scale':'FiveGen Advanced credits','subscription:pro:month':'FiveGen Pro','subscription:pro:year':'FiveGen Pro','subscription:studio:month':'FiveGen Studio','subscription:studio:year':'FiveGen Studio'};
+  const name=legacyNames[intent.offer_id];
+  if(!name)throw new ApiError('The original checkout description is not available. Contact support before retrying this purchase.',409);
+  return name;
+}
 async function ownedCustomer(owner:string,email:string) {
   const db=database(),environment=walletEnvironment(),key=`${environment}:${owner}`;
   const row=await db.prepare('SELECT customer_id FROM wallet_customers WHERE key=?').bind(key).first<{customer_id:string}>();
@@ -27,10 +38,18 @@ async function ownedCustomer(owner:string,email:string) {
 
 export async function createWalletCheckout(owner:string,email:string,offerId:string,origin:string) {
   const config=assertWalletCheckout(),sdk=walletStripe(),db=database();
-  const offer=walletCatalog().find(o=>o.id===offerId);
+  const existing=await db.prepare("SELECT * FROM wallet_checkout_intents WHERE owner=? AND environment=? AND status='open'").bind(owner,config.environment).first<Intent>();
+  const currentOffer=walletCatalog().find(o=>o.id===offerId);
+  const offer=currentOffer??(existing?.offer_id===offerId?historicalWalletCatalog().find(o=>o.id===offerId):undefined);
   if(!offer)throw new ApiError('Choose an available credit pack or subscription.');
   if(config.environment==='production'&&!(await sdk.accounts.retrieve(null)).charges_enabled)throw new ApiError('Card payments are not available yet. Your account has not been charged.',503);
-  const existing=await db.prepare("SELECT * FROM wallet_checkout_intents WHERE owner=? AND environment=? AND status='open'").bind(owner,config.environment).first<Intent>();
+  if(offer.interval){
+    const [current,previous]=await Promise.all([
+      db.prepare(`SELECT subscription_id FROM wallet_subscriptions WHERE owner=? AND environment=? AND status IN (${paidStatuses}) LIMIT 1`).bind(owner,config.environment).first(),
+      db.prepare(`SELECT s.subscription_id FROM paddle_subscriptions s JOIN paddle_customers c ON c.customer_id=s.customer_id AND c.environment=s.environment WHERE c.owner=? AND s.environment=? AND s.status IN (${paidStatuses}) LIMIT 1`).bind(owner,config.environment).first(),
+    ]);
+    if(current||previous)throw new ApiError('You already have a subscription. Manage it in Billing & receipts, or choose a one-time top-up.',409);
+  }
   if(existing){
     if(existing.session_id){
       const session=await sdk.checkout.sessions.retrieve(existing.session_id);
@@ -41,17 +60,11 @@ export async function createWalletCheckout(owner:string,email:string,offerId:str
       if(session.status==='expired')await db.prepare("UPDATE wallet_checkout_intents SET status='expired' WHERE id=?").bind(existing.id).run();
       else if(existing.offer_id===offerId&&supportsExpressCurrency(session))return {clientSecret:session.client_secret!,sessionId:session.id};
       else if((await closeWalletCheckout(owner,session.id)).completed)throw new ApiError('Your previous purchase is complete. View Billing & receipts.',409);
+      if(!currentOffer)throw new ApiError('This older offer is no longer available for a new checkout. Choose a current plan or manage your existing subscription in Billing & receipts.',409);
     } else if(existing.offer_id!==offerId)throw new ApiError('Another checkout is being prepared. Try again in a moment.',409);
   }
-  if(offer.interval){
-    const [current,previous]=await Promise.all([
-      db.prepare(`SELECT subscription_id FROM wallet_subscriptions WHERE owner=? AND environment=? AND status IN (${paidStatuses}) LIMIT 1`).bind(owner,config.environment).first(),
-      db.prepare(`SELECT s.subscription_id FROM paddle_subscriptions s JOIN paddle_customers c ON c.customer_id=s.customer_id AND c.environment=s.environment WHERE c.owner=? AND s.environment=? AND s.status IN (${paidStatuses}) LIMIT 1`).bind(owner,config.environment).first(),
-    ]);
-    if(current||previous)throw new ApiError('You already have a subscription. Manage it in Billing & receipts, or choose a one-time top-up.',409);
-  }
   const id=crypto.randomUUID();
-  await db.prepare("INSERT OR IGNORE INTO wallet_checkout_intents (id,owner,environment,offer_id,email,amount,credits,billing_interval,created_at) VALUES (?,?,?,?,?,?,?,?,?)").bind(id,owner,config.environment,offer.id,email,offer.cents,offer.credits,offer.interval??null,Date.now()).run();
+  await db.prepare("INSERT OR IGNORE INTO wallet_checkout_intents (id,owner,environment,offer_id,email,amount,credits,billing_interval,checkout_name,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(id,owner,config.environment,offer.id,email,offer.cents,offer.credits,offer.interval??null,`FiveGen ${offer.name}`,Date.now()).run();
   const intent=(await db.prepare("SELECT * FROM wallet_checkout_intents WHERE owner=? AND environment=? AND status='open'").bind(owner,config.environment).first<Intent>())!;
   if(intent.offer_id!==offerId)throw new ApiError('Another checkout is open. Close it before switching your selection.',409);
   const customer=await ownedCustomer(owner,email);
@@ -59,17 +72,17 @@ export async function createWalletCheckout(owner:string,email:string,offerId:str
   // Prices stay server-owned in USD. Stripe handles local presentment and
   // reports integration amounts in the API, with FX under presentment_details.
   const session=await sdk.checkout.sessions.create({
-    ui_mode:'elements',mode:offer.interval?'subscription':'payment',customer,
+    ui_mode:'elements',mode:intent.billing_interval?'subscription':'payment',customer,
     // Keep direct merchant settlement and our own invoices regardless of the
     // account default. Card also enables eligible Apple Pay / Google Pay tokens.
     managed_payments:{enabled:false},payment_method_types:['card','link'],
     allow_promotion_codes:false,
     adaptive_pricing:{enabled:true},
     line_items:[{quantity:1,price_data:{currency:'usd',unit_amount:intent.amount,
-      product_data:{name:`FiveGen ${offer.name}${offer.interval?'':' credits'}`,metadata:{fivegen_offer:offer.id}},
-      ...(offer.interval?{recurring:{interval:offer.interval}}:{})}}],
+      product_data:{name:checkoutName(intent),metadata:{fivegen_offer:intent.offer_id}},
+      ...(intent.billing_interval?{recurring:{interval:intent.billing_interval}}:{})}}],
     metadata,client_reference_id:intent.id,
-    ...(offer.interval?{subscription_data:{metadata}}:{payment_intent_data:{metadata},invoice_creation:{enabled:true}}),
+    ...(intent.billing_interval?{subscription_data:{metadata}}:{payment_intent_data:{metadata},invoice_creation:{enabled:true}}),
     return_url:`${origin}/welcome?session_id={CHECKOUT_SESSION_ID}`,
   },{idempotencyKey:`fivegen-wallet-checkout:v4-adaptive:${intent.id}`});
   await db.prepare('UPDATE wallet_checkout_intents SET session_id=? WHERE id=?').bind(session.id,intent.id).run();
@@ -215,14 +228,15 @@ export async function reconcileWalletReversals(owner:string,environment:string) 
 
 export async function walletAccount(owner:string) {
   const db=database(),environment=walletEnvironment();
-  const [customer,subscriptions,payments,balance,credits]=await Promise.all([
+  const [customer,subscriptions,payments,balance,credits,plan]=await Promise.all([
     db.prepare('SELECT customer_id FROM wallet_customers WHERE owner=? AND environment=?').bind(owner,environment).first<{customer_id:string}>(),
     db.prepare('SELECT subscription_id,status,cancel_at,period_end FROM wallet_subscriptions WHERE owner=? AND environment=? ORDER BY updated_at DESC').bind(owner,environment).all<{subscription_id:string;status:string;cancel_at:number|null;period_end:number|null}>(),
     db.prepare('SELECT p.id,p.amount,p.credits,p.credited,p.reversed,p.subscription_id,p.created_at,i.offer_id FROM wallet_payments p JOIN wallet_checkout_intents i ON i.id=p.intent_id WHERE p.owner=? AND p.environment=? ORDER BY p.created_at DESC LIMIT 30').bind(owner,environment).all<{id:string;amount:number;credits:number;credited:number;reversed:number;subscription_id:string|null;created_at:number;offer_id:string}>(),
     db.prepare('SELECT credits FROM wallet_test_balances WHERE owner=?').bind(owner).first<{credits:number}>(),
     subscriptionCreditBalance(owner,environment),
+    creatorPlan(owner,environment==='production'?'live':'test'),
   ]);
-  return {environment,hasCustomer:!!customer,subscriptions:subscriptions.results.map(r=>({...r})),payments:payments.results.map(r=>({...r,name:walletCatalog().find(offer=>offer.id===r.offer_id)?.name??'AI credits'})),subscriptionCredits:credits.included,creditsResetAt:credits.renewsAt,testCredits:environment==='sandbox'?(balance?.credits??0)+credits.included:null};
+  return {environment,hasCustomer:!!customer,creatorPlan:plan,subscriptions:subscriptions.results.map(r=>({...r})),payments:payments.results.map(r=>({...r,name:historicalWalletCatalog().find(offer=>offer.id===r.offer_id)?.name??'AI credits'})),subscriptionCredits:credits.included,creditsResetAt:credits.renewsAt,testCredits:environment==='sandbox'?(balance?.credits??0)+credits.included:null};
 }
 
 // A delayed webhook should never require a customer to purchase twice. This

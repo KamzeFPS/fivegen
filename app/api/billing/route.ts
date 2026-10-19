@@ -4,7 +4,7 @@ import {planFor,syncMembership} from '@/lib/billing';
 export async function GET(){try{const u=await identity();return Response.json(await planFor(u.userId));}catch(e){return failure(e);}}
 export async function POST(req:Request){try{
  sameOrigin(req);const u=await identity();const {action}=z.object({action:z.string()}).parse(await req.json());
- if(action!=='cancel')throw new ApiError('FiveGen no longer sells plans. All tools are included; buy AI credits in AI & credits.',410);
+ if(action!=='cancel')throw new ApiError('This legacy billing route does not create or switch subscriptions. Choose a current creator plan at /pricing and manage current billing at /account/billing.',410);
  const row=await database().prepare('SELECT subscription_id FROM memberships WHERE owner=?').bind(u.userId).first();
  if(!row?.subscription_id)return Response.json({cancelled:true});
  const sub=await stripe('subscriptions/'+row.subscription_id);

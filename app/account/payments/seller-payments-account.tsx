@@ -4,6 +4,7 @@ import {useCallback,useEffect,useState} from 'react';
 import {ArrowLeft,ArrowRight,Check,CheckCircle2,ChevronRight,ExternalLink,Loader2,RefreshCw,ShieldCheck,Wallet} from 'lucide-react';
 import {Brand} from '@/app/ui-brand';
 import {CreatorSaleFees} from '@/app/creator-sale-fees';
+import type {CreatorPlanState} from '@/lib/creator-plans';
 
 export interface SellerPaymentStatus {
   configured:boolean;
@@ -12,6 +13,7 @@ export interface SellerPaymentStatus {
   connected:boolean;
   ready:boolean;
   accountId:string|null;
+  creatorPlan?:CreatorPlanState;
 }
 
 // Choosing a legal country is a deliberate seller action. This ISO list does
@@ -94,7 +96,7 @@ export function SellerPaymentsAccount({email,initialAccount}:{email:string;initi
           <div className="seller-payment-actions">{ready&&<a href={returnTo||'/?view=library'} className="seller-payment-products">{returnTo?'Return to my product':'My products'}<ArrowRight size={16}/></a>}<button type="button" className="seller-payment-refresh" onClick={()=>void refresh()} disabled={!!busy}>{busy==='refresh'?<Loader2 size={15} className="animate-spin"/>:<RefreshCw size={15}/>}Refresh connection</button></div>
           <small className="seller-payment-secure"><ShieldCheck size={14}/>Business and bank details are handled securely by Stripe.</small>
         </section>
-        <aside className="seller-payments-aside"><section aria-labelledby="seller-how-it-works"><span className="paddle-eyebrow">HOW IT WORKS</span><h2 id="seller-how-it-works">Set up once.<br/>Launch on your terms.</h2><ol><li><span>01</span><div><strong>Connect your profile</strong><p>Complete your business and payout details on Stripe.</p></div></li><li><span>02</span><div><strong>Publish any product</strong><p>Your page can be published before payment setup is complete.</p></div></li><li><span>03</span><div><strong>Start selling when ready</strong><p>Turn on sales for a finished product. It uses this shared connection.</p></div></li></ol><div className="seller-payments-fees"><CreatorSaleFees compact/></div></section><a href="/account/billing" className="seller-billing-link"><span><strong>FiveGen plans & credits</strong><small>Manage your own purchases and receipts.</small></span><ChevronRight size={17}/></a></aside>
+        <aside className="seller-payments-aside"><section aria-labelledby="seller-how-it-works"><span className="paddle-eyebrow">HOW IT WORKS</span><h2 id="seller-how-it-works">Set up once.<br/>Launch on your terms.</h2><ol><li><span>01</span><div><strong>Connect your profile</strong><p>Complete your business and payout details on Stripe.</p></div></li><li><span>02</span><div><strong>Publish any product</strong><p>Your page can be published before payment setup is complete.</p></div></li><li><span>03</span><div><strong>Start selling when ready</strong><p>Turn on sales for a finished product. It uses this shared connection.</p></div></li></ol><div className="seller-payments-fees"><CreatorSaleFees compact plan={account.creatorPlan}/></div></section><a href="/account/billing" className="seller-billing-link"><span><strong>FiveGen plans & credits</strong><small>Manage your own purchases and receipts.</small></span><ChevronRight size={17}/></a></aside>
       </div>
       <footer className="seller-payment-footer"><Check size={14}/>Payment setup is optional until you want to accept orders. <a href="/terms">Terms</a><a href="/privacy">Privacy</a></footer>
     </div>

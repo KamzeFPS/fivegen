@@ -34,7 +34,7 @@ async function load(path,selectedExports){
  const code=`const {${Object.keys(deps).join(',')}}=globalThis.${key};\n`+ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;
  const result=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));delete globalThis[key];return result;
 }
-for(const path of ['lib/commerce.ts','lib/experience.ts','lib/product.ts','lib/commerce-v2.ts','lib/builder-contract.ts','lib/builder-assistant-contract.ts','lib/builder-revision-contract.ts','lib/product-readiness.ts','lib/builder-publication-contract.ts','lib/upload-validation.ts','lib/builder-delivery-server.ts','lib/commerce-v2-server.ts'])Object.assign(deps,await load(path));
+for(const path of ['lib/commerce.ts','lib/experience.ts','lib/product.ts','lib/commerce-v2.ts','lib/creator-plans.ts','lib/creator-plan-server.ts','lib/builder-contract.ts','lib/builder-assistant-contract.ts','lib/builder-revision-contract.ts','lib/product-readiness.ts','lib/builder-publication-contract.ts','lib/upload-validation.ts','lib/builder-delivery-server.ts','lib/commerce-v2-server.ts'])Object.assign(deps,await load(path));
 Object.assign(deps,await load('lib/server.ts',['productFromRow']));
 const builder=await load('lib/product-builder-server.ts');Object.assign(deps,builder);
 const publication=await load('lib/product-builder-publication.ts');Object.assign(deps,publication);

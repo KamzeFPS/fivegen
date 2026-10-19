@@ -4,9 +4,11 @@ import ts from 'typescript';
 import Stripe from 'stripe';
 import {randomUUID} from 'node:crypto';
 import {resolve} from 'node:path';
+import {createServer} from 'node:http';
 import {createStorage} from '../runtime/render/storage.mjs';
 import {monthlyWindow,creditPacks} from '../lib/credit-policy.ts';
-import {subscriptionPlans} from '../lib/subscriptions.ts';
+import {creatorSubscriptionPlans,subscriptionPlans} from '../lib/subscriptions.ts';
+import {creatorPlans,freeCreatorPlan} from '../lib/creator-plans.ts';
 
 const root=resolve('outputs/wallet-billing-qa',randomUUID()),storage=createStorage(root),db=storage.DB,sql=storage.sqlite;
 let environment='production',enabled=true,chargesEnabled=true;
@@ -28,16 +30,17 @@ const sdk={
   disputes:{list:async({charge})=>({data:charges.get(charge).disputed?[{status:charges.get(charge).disputeStatus||'lost'}]:[]})},
   billingPortal:{sessions:{create:async options=>({url:'https://billing.stripe.com/test',...options})}},
 };
-const deps={ApiError,database:()=>db,binding:k=>k==='STRIPE_WALLET_PORTAL_CONFIGURATION'?'bpc_fixture':'',monthlyWindow,creditPacks,subscriptionPlans,walletEnvironment:()=>environment,walletStripe:()=>sdk,walletObjectId:o=>typeof o==='string'?o:o?.id??null,assertWalletCheckout:()=>{if(!enabled)throw new ApiError('disabled',503);return {environment,enabled:true};}};
+const deps={ApiError,database:()=>db,binding:k=>k==='STRIPE_WALLET_PORTAL_CONFIGURATION'?'bpc_fixture':'',monthlyWindow,creditPacks,creatorSubscriptionPlans,subscriptionPlans,creatorPlans,freeCreatorPlan,walletEnvironment:()=>environment,walletStripe:()=>sdk,walletObjectId:o=>typeof o==='string'?o:o?.id??null,assertWalletCheckout:()=>{if(!enabled)throw new ApiError('disabled',503);return {environment,enabled:true};}};
 async function load(path){const key='qa'+randomUUID().replaceAll('-','');globalThis[key]={...deps};const source=fs.readFileSync(path,'utf8').replace(/^import[\s\S]*?;\r?\n/gm,'');const code=`const {${Object.keys(deps).join(',')}}=globalThis.${key};\n`+ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;const result=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));delete globalThis[key];return result;}
 Object.assign(deps,await load('lib/wallet-catalog.ts'),await load('lib/subscription-credits.ts'));
+Object.assign(deps,await load('lib/creator-plan-server.ts'));
 const billing=await load('lib/wallet-billing.ts');
 const now=Date.now(),owner='wallet-fixture';
-function fixture(id,{mode=environment,interval=null,credits=1000,amount=1500,wallet=null,status='active',link=null,presentment=null}={}){
+function fixture(id,{mode=environment,interval=null,credits=1000,amount=1500,wallet=null,status='active',link=null,presentment=null,offerId=null}={}){
   const customer='cus_'+id,session='cs_'+(mode==='production'?'live':'test')+'_'+id,pi='pi_'+id,charge='ch_'+id,sub=interval?'sub_'+id:null,invoice=interval?'in_'+id:null;
   const start=now-10000,endDate=new Date(start);endDate.setUTCMonth(endDate.getUTCMonth()+(interval==='year'?12:1));const end=endDate.getTime();
   sql.prepare('INSERT INTO wallet_customers VALUES (?,?,?,?)').run(mode+':'+id,owner,mode,customer);
-  sql.prepare('INSERT INTO wallet_checkout_intents (id,owner,environment,offer_id,email,amount,credits,billing_interval,session_id,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(id,owner,mode,interval?'subscription:pro:'+interval:'pack:starter','qa@example.test',amount,credits,interval,session,'fixture',now);
+  sql.prepare('INSERT INTO wallet_checkout_intents (id,owner,environment,offer_id,email,amount,credits,billing_interval,session_id,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(id,owner,mode,offerId??(interval?'subscription:pro:'+interval:'pack:starter'),'qa@example.test',amount,credits,interval,session,'fixture',now);
   const metadata={purpose:'fivegen_wallet',fivegen_intent:id};
   sessions.set(session,{id:session,metadata,client_reference_id:id,customer,mode:interval?'subscription':'payment',status:'complete',payment_status:'paid',currency:'usd',amount_subtotal:amount,amount_total:amount,...(presentment?{presentment_details:presentment}:{}),total_details:{amount_discount:0},payment_intent:pi,subscription:sub,invoice,livemode:mode==='production'});
   lineItems.set(session,[{quantity:1,price:{unit_amount:amount,currency:'usd',recurring:interval?{interval}:null}}]);
@@ -125,10 +128,26 @@ try {
   subscriptions.get(localSub.sub).presentment_details={presentment_currency:'mnt'};
   await Promise.all([billing.fulfillWalletInvoice(localSub.invoice),billing.fulfillWalletSession(localSub.session)]);
   assert.equal((await deps.subscriptionCreditBalance(localSub.id)).included,2500,'A localized monthly subscription still verifies the exact USD invoice and allowance');
+  assert.equal((await billing.walletAccount(localSub.id)).creatorPlan.commissionPercent,3,'Only the verified paid Pro period grants the 3% selling rate');
   assert.equal(sql.prepare('SELECT COUNT(*) n FROM wallet_payments WHERE intent_id=?').get(localSub.id).n,1,'Invoice and checkout events cannot duplicate a localized subscription grant');
   invoices.get(localSub.invoice).currency='mnt';
   await assert.rejects(()=>billing.fulfillWalletInvoice(localSub.invoice),/allowance/,'Local presentment does not authorize an unverified MNT invoice');
   invoices.get(localSub.invoice).currency='usd';
+
+  const scale=fixture('scale-monthly',{interval:'month',credits:6000,amount:9900,offerId:'subscription:scale:month'});selectOwner(scale);
+  await Promise.all([billing.fulfillWalletInvoice(scale.invoice),billing.fulfillWalletSession(scale.session)]);
+  assert.equal((await deps.subscriptionCreditBalance(scale.id)).included,6000,'Scale grants its verified 6,000-credit monthly allowance exactly once');
+  assert.equal((await billing.walletAccount(scale.id)).payments[0].name,'Scale');
+  assert.equal((await billing.walletAccount(scale.id)).creatorPlan.commissionPercent,0,'A paid Scale invoice activates the 0% selling rate');
+  charges.get(scale.charge).amount_refunded=9900;await billing.recordWalletCharge(scale.charge);
+  assert.equal((await deps.subscriptionCreditBalance(scale.id)).included,0,'A full Scale refund reverses its full included allowance');
+  assert.equal((await billing.walletAccount(scale.id)).creatorPlan.id,'free','Reversing the full subscription payment revokes its paid commission benefit');
+
+  const legacyStudio=fixture('legacy-studio-year',{interval:'year',credits:6000,amount:69000,offerId:'subscription:studio:year'});selectOwner(legacyStudio);
+  await billing.fulfillWalletSession(legacyStudio.session);
+  assert.equal((await deps.subscriptionCreditBalance(legacyStudio.id)).included,6000,'An existing Studio annual invoice keeps its frozen allowance and price');
+  assert.equal((await billing.walletAccount(legacyStudio.id)).payments[0].name,'Studio','Legacy billing history remains recognizable');
+  assert.equal((await billing.walletAccount(legacyStudio.id)).creatorPlan.id,'legacy-studio','Existing paid Studio invoices retain their known legacy tier');
 
   const annual=fixture('annual',{interval:'year',credits:2500,amount:29000,wallet:'google_pay'});selectOwner(annual);
   delete charges.get(annual.charge).payment_method_details.card.wallet;
@@ -151,6 +170,9 @@ try {
   environment='production';await assert.rejects(()=>billing.fulfillWalletSession(test.session));
   enabled=false;await assert.rejects(()=>billing.createWalletCheckout('new','new@example.test','pack:starter','https://example.test'),e=>e.status===503);enabled=true;
   await assert.rejects(()=>billing.createWalletCheckout('new','new@example.test','pack:free-forged','https://example.test'),e=>e.status===400);
+  for(const retired of ['subscription:pro:year','subscription:studio:month','subscription:studio:year','subscription:scale:year']){
+    await assert.rejects(()=>billing.createWalletCheckout('retired-new-'+retired,'qa@example.test',retired,'https://example.test'),e=>e.status===400,'Retired and unapproved annual offers cannot start a new purchase');
+  }
   const concurrent=await Promise.all(Array.from({length:6},()=>billing.createWalletCheckout('new','new@example.test','pack:starter','https://example.test')));
   assert.equal(new Set(concurrent.map(s=>s.sessionId)).size,1,'Concurrent tabs reuse one pending checkout');
   assert.deepEqual(lastCheckoutParams.managed_payments,{enabled:false},'Direct wallet checkout overrides the account Managed Payments default');
@@ -219,7 +241,58 @@ try {
     assert.equal(lastCheckoutParams.line_items[0].price_data.unit_amount,offer.cents,'Every offer checkout uses the server catalog amount');
     assert.equal(lastCheckoutParams.line_items[0].price_data.recurring?.interval??null,offer.interval??null);
     assert.equal(sql.prepare('SELECT credits FROM wallet_checkout_intents WHERE owner=?').get(catalogOwner).credits,offer.credits);
+    assert.equal(sql.prepare('SELECT checkout_name FROM wallet_checkout_intents WHERE owner=?').get(catalogOwner).checkout_name,`FiveGen ${offer.name}`,'New purchase records freeze their exact provider description');
+    assert.equal(lastCheckoutParams.line_items[0].price_data.product_data.name,`FiveGen ${offer.name}`,'Pack names are not duplicated as credits credits');
   }
+
+  // Use Stripe's actual request serializer and a local idempotency endpoint:
+  // emulate the provider accepting a request before our session_id DB write.
+  // Its retry must be byte-for-byte identical, including historical labels.
+  const providerRequests=new Map(),providerCalls=new Map();
+  const provider=createServer(async(request,response)=>{
+    const parts=[];for await(const part of request)parts.push(part);
+    const body=Buffer.concat(parts).toString(),key=String(request.headers['idempotency-key']),saved=providerRequests.get(key);
+    providerCalls.set(key,(providerCalls.get(key)??0)+1);
+    response.setHeader('Content-Type','application/json');
+    if(saved&&saved!==body){response.statusCode=400;response.end(JSON.stringify({error:{type:'idempotency_error',message:'Parameters differ from the original accepted request'}}));return;}
+    providerRequests.set(key,body);
+    const params=new URLSearchParams(body),id='cs_live_'+params.get('client_reference_id').replaceAll('-','');
+    response.end(JSON.stringify({id,object:'checkout.session',client_secret:'local_fixture',status:'open',livemode:true}));
+  });
+  await new Promise(resolve=>provider.listen(0,'127.0.0.1',resolve));
+  const serializedSdk=new Stripe('sk_test_local_fixture',{host:'127.0.0.1',port:provider.address().port,protocol:'http',maxNetworkRetries:0}),mockCreate=sdk.checkout.sessions.create;
+  try{
+    sdk.checkout.sessions.create=(params,options)=>serializedSdk.checkout.sessions.create(params,options);
+    const recoveryCases=[
+      ['pack:starter',1500,1000,null,'FiveGen Starter credits',null],
+      ['pack:studio',3500,2500,null,'FiveGen Pro credits',null],
+      ['pack:scale',7500,6000,null,'FiveGen Advanced credits',null],
+      ['subscription:pro:month',2900,2500,'month','FiveGen Pro',null],
+      ['subscription:pro:year',29000,2500,'year','FiveGen Pro',null],
+      ['subscription:studio:month',6900,6000,'month','FiveGen Studio',null],
+      ['subscription:studio:year',69000,6000,'year','FiveGen Studio',null],
+      ['subscription:scale:month',9900,6000,'month','FiveGen Scale','FiveGen Scale'],
+      ['pack:starter',1500,1000,null,'FiveGen 1,000 credits','FiveGen 1,000 credits'],
+    ];
+    for(const [index,[offerId,amount,credits,interval,name,frozenName]] of recoveryCases.entries()){
+      const recoveryOwner='orphaned-provider-'+index,email=recoveryOwner+'@example.test',intentId=randomUUID(),customer='cus_orphan_'+index,origin='https://example.test';
+      sql.prepare('INSERT INTO wallet_customers VALUES(?,?,?,?)').run('production:'+recoveryOwner,recoveryOwner,'production',customer);
+      sql.prepare('INSERT INTO wallet_checkout_intents(id,owner,environment,offer_id,email,amount,credits,billing_interval,checkout_name,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)').run(intentId,recoveryOwner,'production',offerId,email,amount,credits,interval,frozenName,now);
+      const metadata={purpose:'fivegen_wallet',fivegen_intent:intentId},key='fivegen-wallet-checkout:v4-adaptive:'+intentId;
+      const original={ui_mode:'elements',mode:interval?'subscription':'payment',customer,managed_payments:{enabled:false},payment_method_types:['card','link'],allow_promotion_codes:false,adaptive_pricing:{enabled:true},line_items:[{quantity:1,price_data:{currency:'usd',unit_amount:amount,product_data:{name,metadata:{fivegen_offer:offerId}},...(interval?{recurring:{interval}}:{})}}],metadata,client_reference_id:intentId,...(interval?{subscription_data:{metadata}}:{payment_intent_data:{metadata},invoice_creation:{enabled:true}}),return_url:`${origin}/welcome?session_id={CHECKOUT_SESSION_ID}`};
+      const accepted=await serializedSdk.checkout.sessions.create(original,{idempotencyKey:key});
+      const recovered=await billing.createWalletCheckout(recoveryOwner,email,offerId,origin);
+      assert.equal(recovered.sessionId,accepted.id,`${offerId} recovers the original accepted provider request after a missing session DB write`);
+      assert.equal(providerCalls.get(key),2,'Recovery reused the existing provider idempotency key');
+      assert.equal(sql.prepare('SELECT COUNT(*) n FROM wallet_checkout_intents WHERE owner=?').get(recoveryOwner).n,1,'The retry never creates a duplicate purchase record');
+    }
+  }finally{sdk.checkout.sessions.create=mockCreate;await new Promise((resolve,reject)=>provider.close(error=>error?reject(error):resolve()));}
+
+  const expiredLegacy=fixture('expired-legacy',{interval:'year',credits:6000,amount:69000,offerId:'subscription:studio:year'});selectOwner(expiredLegacy);
+  sql.prepare("UPDATE wallet_checkout_intents SET status='open' WHERE id=?").run(expiredLegacy.id);
+  sessions.get(expiredLegacy.session).status='expired';
+  await assert.rejects(()=>billing.createWalletCheckout(expiredLegacy.id,'qa@example.test','subscription:studio:year','https://example.test'),e=>e.status===409,'An expired legacy session cannot be converted into a new retired sale');
+  assert.equal(sql.prepare('SELECT COUNT(*) n FROM wallet_checkout_intents WHERE owner=?').get(expiredLegacy.id).n,1);
   const delayed=fixture('delayed-delivery');selectOwner(delayed);
   sql.prepare("UPDATE wallet_checkout_intents SET status='open' WHERE id=?").run(delayed.id);
   const unrelated=fixture('other-owner-unprocessed');selectOwner(unrelated);
@@ -230,7 +303,7 @@ try {
   assert.equal(balance(unrelated.id),0,'Reconciliation never fulfills another account purchase');
   await billing.reconcileWalletAccount(delayed.id);assert.equal(balance(delayed.id),1000,'A refresh cannot duplicate delivery');
   const listed=(await billing.walletAccount(delayed.id)).payments;
-  assert.equal(listed.length,1);assert.equal(listed[0].amount,1500);assert.equal(listed[0].name,'Starter');
+  assert.equal(listed.length,1);assert.equal(listed[0].amount,1500);assert.equal(listed[0].name,'1,000 credits');
   assert.equal((await billing.walletAccount('attacker')).payments.length,0,'Billing history is isolated by signed-in owner');
   assert.equal((await billing.walletReceipt(delayed.id,delayed.session)).url,'https://pay.stripe.com/receipts/payment/'+delayed.id);
   await assert.rejects(()=>billing.walletReceipt('attacker',delayed.session),e=>e.status===404);
@@ -265,6 +338,6 @@ try {
   assert.equal(expressCheckoutOptions.paymentMethods.applePay,'always');assert.equal(expressCheckoutOptions.paymentMethods.googlePay,'auto');assert.equal(expressCheckoutOptions.paymentMethods.link,'auto');
   assert.equal(expressCheckoutOptions.paymentMethods.amazonPay,'never');assert.equal(expressCheckoutOptions.paymentMethods.paypal,'never');assert.equal(expressCheckoutOptions.paymentMethods.klarna,'never');
   assert.match(fs.readFileSync('app/api/paddle/checkout/route.ts','utf8'),/status:410/);
-  console.log('Passed: Stripe express and card checkout, Adaptive Pricing with exact USD verification, MNT presentment/refunds/subscriptions, settled Link funding groups, unsafe settlement rejection, account-default override, failed-intent recovery, incompatible-session upgrades/completion races, monthly/annual checkout creation, exact-once credit delivery, refund ordering, disputes/debt, monthly annual grants, cancellation/status, test isolation, portal ownership, SDK webhook signatures and Paddle retirement.');
+  console.log('Passed: current monthly Creator Pro/Scale checkout, retired-offer rejection, legacy annual/Studio preservation and recovery, real SDK byte-identical orphaned-checkout idempotency recovery with frozen new and legacy names, Stripe express and card checkout, Adaptive Pricing with exact USD verification, MNT presentment/refunds/subscriptions, settled Link funding groups, unsafe settlement rejection, account-default override, failed-intent recovery, incompatible-session upgrades/completion races, exact-once credit delivery, refund ordering, disputes/debt, monthly annual grants, cancellation/status, test isolation, portal ownership, SDK webhook signatures and Paddle retirement.');
   console.log('Permanent QA records retained: '+root);
 }finally{storage.close();}

@@ -15,6 +15,7 @@ export const commerceOrders = sqliteTable('commerce_orders', {
   email: text('email').notNull(), amount: integer('amount').notNull(), currency: text('currency').notNull(), title: text('title').notNull(), campaign: text('campaign').notNull().default(''),
   status: text('status').notNull().default('pending'), sessionId: text('session_id').unique(), paymentIntent: text('payment_intent'),
   expectedFeeBps: integer('expected_fee_bps').notNull().default(0), expectedFeeAmount: integer('expected_fee_amount').notNull().default(0),
+  feePlanId: text('fee_plan_id').notNull().default('historical'),
   earningsCheckedAt: integer('earnings_checked_at').notNull().default(0),
   accessHash: text('access_hash').notNull(), createdAt: integer('created_at').notNull(), paidAt: integer('paid_at'),
 }, t => [index('commerce_order_email').on(t.email,t.mode), index('commerce_order_owner').on(t.owner,t.mode,t.paidAt), uniqueIndex('commerce_payment').on(t.accountId,t.mode,t.paymentIntent)]);

@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { ApiError, database, ownedProduct } from './server';
 import { commerceMode, refreshCommerceOrderEarnings } from './commerce-v2-server';
 import type { CommerceEarningsOrder, CommerceEarningsRefresh, CommerceEarningsReport } from './commerce-earnings';
+import { creatorPlan } from './creator-plan-server';
+import type { CommerceFeePlanId } from './creator-plans';
 
 const orderLimit = 100;
 const refreshLimit = 10;
@@ -28,11 +30,12 @@ async function earningsScope(owner: string, days: number, productId?: string) {
 const nullableAmount = (value: unknown) => value == null ? null : Number(value);
 function earningsOrder(row: Record<string, unknown>): CommerceEarningsOrder {
   const complete = !!row.confirmed, excluded = row.status !== 'paid';
-  const legacy = Number(row.expected_fee_bps) === 0 && row.charge_application_fee_amount != null && Number(row.charge_application_fee_amount) === 0;
+  const legacy = row.fee_plan_id === 'historical' && Number(row.expected_fee_bps) === 0 && row.charge_application_fee_amount != null && Number(row.charge_application_fee_amount) === 0;
   return {
     id: String(row.id), productId: String(row.product_id), title: String(row.title), amount: Number(row.amount), currency: String(row.currency), status: String(row.status),
     feeStatus: excluded ? 'refunded' : legacy ? 'legacy' : complete ? 'confirmed' : 'pending',
     expectedFeeBps: Number(row.expected_fee_bps), expectedFeeAmount: Number(row.expected_fee_amount),
+    feePlanId: String(row.fee_plan_id) as CommerceFeePlanId,
     actualChargePlatformFeeAmount: nullableAmount(row.charge_application_fee_amount),
     settlementAmount: complete ? nullableAmount(row.settlement_amount) : null,
     settlementCurrency: complete ? String(row.settlement_currency) : null,
@@ -49,7 +52,7 @@ export async function commerceEarnings(owner: string, days: number, productId?: 
   const filters = ` FROM commerce_orders o LEFT JOIN commerce_earnings e ON e.order_id=o.id
     WHERE o.owner=? AND o.mode=? AND o.status IN ('paid','revoked') AND o.paid_at>=?${scope}`;
   const values = [owner, mode, from, selected, selected];
-  const [sales, totals, coverage, orders] = await Promise.all([
+  const [sales, totals, coverage, orders, plan] = await Promise.all([
     db.prepare(`SELECT o.currency,COUNT(*) orders,SUM(o.amount) gross${filters} AND o.status='paid' GROUP BY o.currency ORDER BY o.currency`).bind(...values).all(),
     db.prepare(`SELECT e.settlement_currency currency,COUNT(*) orders,SUM(e.settlement_amount) gross,
       SUM(e.stripe_fee_amount) stripe_fee,SUM(e.platform_fee_amount) platform_fee,SUM(e.creator_net_amount) creator_net
@@ -57,15 +60,17 @@ export async function commerceEarnings(owner: string, days: number, productId?: 
     db.prepare(`SELECT COUNT(*) total,
       SUM(CASE WHEN o.status='paid' AND ${confirmed} THEN 1 ELSE 0 END) confirmed,
       SUM(CASE WHEN o.status='paid' AND NOT (${confirmed}) THEN 1 ELSE 0 END) pending,
-      SUM(CASE WHEN o.status='paid' AND o.expected_fee_bps=0 AND e.charge_application_fee_amount=0 THEN 1 ELSE 0 END) legacy,
+      SUM(CASE WHEN o.status='paid' AND o.fee_plan_id='historical' AND o.expected_fee_bps=0 AND e.charge_application_fee_amount=0 THEN 1 ELSE 0 END) legacy,
       SUM(CASE WHEN o.status!='paid' THEN 1 ELSE 0 END) excluded${filters}`).bind(...values).first(),
-    db.prepare(`SELECT o.id,o.product_id,o.title,o.amount,o.currency,o.status,o.expected_fee_bps,o.expected_fee_amount,o.paid_at,o.created_at,
+    db.prepare(`SELECT o.id,o.product_id,o.title,o.amount,o.currency,o.status,o.expected_fee_bps,o.expected_fee_amount,o.fee_plan_id,o.paid_at,o.created_at,
       e.charge_application_fee_amount,e.balance_transaction_id,e.settlement_amount,e.settlement_currency,e.stripe_fee_amount,
       e.platform_fee_amount,e.creator_net_amount,e.availability,e.available_at,CASE WHEN ${confirmed} THEN 1 ELSE 0 END confirmed
       ${filters} ORDER BY o.paid_at DESC,o.id DESC LIMIT ${orderLimit}`).bind(...values).all(),
+    creatorPlan(owner, mode),
   ]);
   return {
-    commissionPercent: 5,
+    commissionPercent: plan.commissionPercent,
+    creatorPlan: plan,
     sales: sales.results.map(row => ({ currency: String(row.currency), grossAmount: Number(row.gross), orders: Number(row.orders) })),
     totals: totals.results.map(row => ({ currency: String(row.currency), grossAmount: Number(row.gross), stripeFeeAmount: Number(row.stripe_fee), platformFeeAmount: Number(row.platform_fee), creatorNetAmount: Number(row.creator_net), confirmedOrders: Number(row.orders) })),
     coverage: { totalOrders: Number(coverage?.total || 0), confirmedOrders: Number(coverage?.confirmed || 0), pendingOrders: Number(coverage?.pending || 0), legacyOrders: Number(coverage?.legacy || 0), excludedOrders: Number(coverage?.excluded || 0) },

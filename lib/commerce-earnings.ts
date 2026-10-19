@@ -1,3 +1,5 @@
+import type { CommerceFeePlanId, CreatorPlanState } from './creator-plans';
+
 /** Amounts are Stripe minor units, never frontend estimates. Sale and settlement
  * currencies are separate because Stripe can convert a buyer's payment. */
 export type CommerceEarningsOrder = {
@@ -10,6 +12,7 @@ export type CommerceEarningsOrder = {
   feeStatus: 'confirmed' | 'pending' | 'legacy' | 'refunded';
   expectedFeeBps: number;
   expectedFeeAmount: number;
+  feePlanId: CommerceFeePlanId;
   actualChargePlatformFeeAmount: number | null;
   settlementAmount: number | null;
   settlementCurrency: string | null;
@@ -23,7 +26,8 @@ export type CommerceEarningsOrder = {
 };
 
 export type CommerceEarningsReport = {
-  commissionPercent: 5;
+  commissionPercent: number;
+  creatorPlan: CreatorPlanState;
   /** All paid sales in the buyer's payment currency. */
   sales: { currency: string; grossAmount: number; orders: number }[];
   /** Only verified paid settlements, in the Stripe balance currency. These

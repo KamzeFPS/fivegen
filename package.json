@@ -37,7 +37,8 @@
     "test:ai-format": "node scripts/ai-response-schema-test.mjs && node scripts/builder-assistant-test.mjs && node scripts/builder-assistant-apply-test.mjs",
     "test:ai-format:runtime": "node scripts/builder-assistant-runtime-test.mjs",
     "test:creator-reliability": "node scripts/wallet-billing-test.mjs && node scripts/wallet-readiness-test.mjs && node scripts/commerce-readiness-test.mjs && node scripts/product-builder-test.mjs && node scripts/builder-revision-test.mjs && node scripts/ai-response-schema-test.mjs && node scripts/builder-assistant-test.mjs && node scripts/builder-assistant-apply-test.mjs && node scripts/generation-credit-test.mjs && node scripts/product-quality-test.mjs",
-    "test:commerce-earnings": "node scripts/commerce-fees-test.mjs && node scripts/commerce-v2-test.mjs && node scripts/commerce-earnings-test.mjs && node scripts/creator-earnings-ui-test.mjs && node scripts/account-payments-test.mjs"
+    "test:commerce-earnings": "node scripts/commerce-fees-test.mjs && node scripts/commerce-v2-test.mjs && node scripts/commerce-earnings-test.mjs && node scripts/creator-earnings-ui-test.mjs && node scripts/account-payments-test.mjs",
+    "test:creator-plans": "node scripts/creator-plan-test.mjs && node scripts/wallet-catalog-test.mjs && node scripts/wallet-billing-test.mjs && node scripts/creator-pricing-ui-test.mjs && npm run test:commerce-earnings"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

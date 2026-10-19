@@ -33,6 +33,8 @@ async function load(path) {
   const code = `const {${Object.keys(deps).join(',')}}=globalThis.${key};\n` + ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 } }).outputText;
   const module = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64')); delete globalThis[key]; return module;
 }
+Object.assign(deps, await load('lib/creator-plans.ts'));
+Object.assign(deps, await load('lib/creator-plan-server.ts'));
 Object.assign(deps, await load('lib/commerce-earnings-server.ts'));
 const route = await load('app/api/commerce/earnings/refresh/route.ts');
 const product = randomUUID(), anotherProduct = randomUUID(), foreignProduct = randomUUID(), now = Date.now();
@@ -63,6 +65,7 @@ const base = 'https://fivegen.test/api/commerce/earnings/refresh';
 const post = (body, origin = 'https://fivegen.test') => route.POST(new Request(base, { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify(body) }));
 try {
   const report = await deps.commerceEarnings('creator-a', 30, product);
+  assert.equal(report.creatorPlan.id,'free');assert.equal(report.commissionPercent,5);
   assert.deepEqual(report.sales, [{ currency: 'usd', grossAmount: 2000, orders: 6 }]);
   assert.deepEqual(report.coverage, { totalOrders: 7, confirmedOrders: 4, pendingOrders: 2, legacyOrders: 1, excludedOrders: 1 });
   assert.deepEqual(report.totals.find(row => row.currency === 'usd'), { currency: 'usd', grossAmount: 200, stripeFeeAmount: 68, platformFeeAmount: 5, creatorNetAmount: 127, confirmedOrders: 2 });
@@ -108,6 +111,8 @@ try {
   assert.deepEqual(await recoveredRefresh.json(), { refreshed: 2, pending: 0, failed: 8, limit: 10 });
   assert.ok(readableOrders.every(id => calls.slice(callsBeforeRetry).some(call => call.id === id)), 'The next refresh reaches later readable sales after a full failed batch');
   const unverified = await deps.commerceEarnings(recoveryOwner, 30, recoveryProduct); assert.equal(unverified.coverage.confirmedOrders, 0); assert.equal(unverified.coverage.pendingOrders, 12); assert.equal(unverified.totals.length, 0, 'Attempt markers are never proof of actual fees or earnings');
+  const scaleOrder=order({owner:'creator-expired-scale',bps:0,expected:0});db.prepare("UPDATE commerce_orders SET fee_plan_id='scale' WHERE id=?").run(scaleOrder);settlement(scaleOrder,{platform:0});
+  const scaleReport=await deps.commerceEarnings('creator-expired-scale',30);assert.equal(scaleReport.creatorPlan.id,'free','Current rates do not rewrite the plan used for earlier orders');assert.equal(scaleReport.orders[0].feePlanId,'scale');assert.equal(scaleReport.orders[0].feeStatus,'confirmed','Scale’s zero commission is never labeled a historical policy');assert.equal(scaleReport.coverage.legacyOrders,0);assert.equal(scaleReport.orders[0].creatorNetAmount,66);
   console.log('Passed: actual Stripe-fee/net reporting, no guessed fees, historical zero commission, excluded refunds, FX/zero-decimal settlements, exact aggregates beyond the 100-row ledger, owner/product/mode/date isolation, auth/CSRF/strict refresh payload, owner-wide cooldown and ten-payment read cap.');
   console.log('QA records retained: ' + root);
 } finally { storage.close(); }

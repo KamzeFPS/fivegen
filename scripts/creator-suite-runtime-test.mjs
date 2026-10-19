@@ -43,6 +43,14 @@ async function json(path, method = 'GET', body, auth = headers, expected = 200, 
   assert.equal(response.status, expected, `${message ? message + ": " : ""}${method} ${path}: ${JSON.stringify(value)}`); return value;
 }
 try {
+  // A signed-in customer must review current terms before checkout, rather
+  // than reaching a payment form whose POST fails without an actionable path.
+  const consentToken=randomBytes(32).toString('base64url');
+  app.storage.sqlite.prepare('INSERT INTO render_sessions VALUES (?,?,?,?,?)').run(digest(consentToken),'creator-unaccepted','unaccepted@example.test','Consent QA',Date.now()+3600000);
+  const consentCheckout=await fetch(base+'/checkout?offer=subscription%3Apro%3Amonth',{headers:{cookie:`fivegen-local-session=${consentToken}`},redirect:'manual'});
+  assert.equal(consentCheckout.status,307);
+  assert.equal(new URL(consentCheckout.headers.get('location'),base).pathname,'/welcome');
+  assert.equal(new URL(consentCheckout.headers.get('location'),base).searchParams.get('return_to'),'/checkout?offer=subscription%3Apro%3Amonth');
   const home = await fetch(base + '/', {headers}); assert.equal(home.status, 200); assert.match(await home.text(), /Create your product/);
   await json('/api/voice', 'GET', undefined, anonymous, 401);
   await json('/api/growth/dashboard', 'GET', undefined, anonymous, 401);

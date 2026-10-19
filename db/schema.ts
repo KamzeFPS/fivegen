@@ -35,7 +35,7 @@ export const walletCustomers = sqliteTable('wallet_customers', {
   key:text('key').primaryKey(),owner:text('owner').notNull(),environment:text('environment').notNull(),customerId:text('customer_id').notNull().unique(),
 });
 export const walletCheckoutIntents = sqliteTable('wallet_checkout_intents', {
-  id:text('id').primaryKey(),owner:text('owner').notNull(),environment:text('environment').notNull(),offerId:text('offer_id').notNull(),email:text('email').notNull(),amount:integer('amount').notNull(),credits:integer('credits').notNull(),billingInterval:text('billing_interval'),sessionId:text('session_id').unique(),status:text('status').notNull().default('open'),createdAt:integer('created_at').notNull(),
+  id:text('id').primaryKey(),owner:text('owner').notNull(),environment:text('environment').notNull(),offerId:text('offer_id').notNull(),email:text('email').notNull(),amount:integer('amount').notNull(),credits:integer('credits').notNull(),billingInterval:text('billing_interval'),checkoutName:text('checkout_name'),sessionId:text('session_id').unique(),status:text('status').notNull().default('open'),createdAt:integer('created_at').notNull(),
 },t=>[uniqueIndex('idx_wallet_open_checkout').on(t.owner,t.environment).where(sql`${t.status} = 'open'`)]);
 export const walletSubscriptions = sqliteTable('wallet_subscriptions', {
   subscriptionId:text('subscription_id').primaryKey(),owner:text('owner').notNull(),environment:text('environment').notNull(),customerId:text('customer_id').notNull(),intentId:text('intent_id').notNull(),status:text('status').notNull(),cancelAt:integer('cancel_at'),periodEnd:integer('period_end'),updatedAt:integer('updated_at').notNull(),
@@ -45,7 +45,7 @@ export const walletPayments = sqliteTable('wallet_payments', {
 },t=>[index('idx_wallet_payments_owner').on(t.owner,t.environment)]);
 export const walletChargeState = sqliteTable('wallet_charge_state', {
   chargeId:text('charge_id').primaryKey(),environment:text('environment').notNull(),paymentIntent:text('payment_intent').notNull(),amount:integer('amount').notNull(),reversedAmount:integer('reversed_amount').notNull(),eventTime:integer('event_time').notNull(),
-});
+},t=>[index('idx_wallet_charge_payment').on(t.environment,t.paymentIntent)]);
 export const walletTestBalances = sqliteTable('wallet_test_balances', {
   owner:text('owner').primaryKey(),credits:integer('credits').notNull().default(0),
 });

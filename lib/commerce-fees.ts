@@ -1,7 +1,7 @@
 import type Stripe from 'stripe';
 
-// Freeze the policy on each checkout intent. Existing intents retain the policy
-// they were created with, including the historical zero-commission policy.
+// Free's default rate. Checkout passes the server-resolved creator plan rate and
+// freezes it on the order; existing intents never change when a plan changes.
 export const COMMERCE_COMMISSION_BPS = 500;
 export function commerceCommission(amount:number,basisPoints=COMMERCE_COMMISSION_BPS){
  if(!Number.isSafeInteger(amount)||amount<0||!Number.isSafeInteger(basisPoints)||basisPoints<0||basisPoints>10000)throw new Error('Invalid commission amount.');

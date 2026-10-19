@@ -7,6 +7,8 @@ const {COMMERCE_COMMISSION_BPS,commerceCommission,commerceFeeSnapshot}=await imp
 assert.equal(COMMERCE_COMMISSION_BPS,500);
 for(const [gross,fee] of [[50,3],[100,5],[1000,50],[1999,100],[4900,245],[999900,49995]])assert.equal(commerceCommission(gross),fee);
 assert.equal(commerceCommission(Number.MAX_SAFE_INTEGER),450359962737050,'Rounding stays exact at safe integer limits');
+for(const [gross,fee] of [[50,2],[100,3],[1999,60],[4900,147]])assert.equal(commerceCommission(gross,300),fee,'Creator Pro uses exact 3% rounding');
+for(const gross of [50,100,4900,Number.MAX_SAFE_INTEGER])assert.equal(commerceCommission(gross,0),0,'Scale never charges an application fee');
 for(const invalid of [-1,1.5,NaN,Infinity])assert.throws(()=>commerceCommission(invalid));
 for(const rate of [-1,10001,1.5])assert.throws(()=>commerceCommission(100,rate));
 const charge={id:'ch_fixture',currency:'usd',amount:100,amount_refunded:0,disputed:false,application_fee_amount:5,balance_transaction:{id:'txn_fixture',source:'ch_fixture',currency:'usd',amount:100,fee:39,net:61,status:'pending',available_on:1792972800,fee_details:[{amount:34,currency:'usd',type:'stripe_fee'},{amount:5,currency:'usd',type:'application_fee'}]}};
