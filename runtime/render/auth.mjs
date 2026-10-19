@@ -116,7 +116,11 @@ export function createAuth(config, storage, { exchange = exchangeCode, verify = 
     try {
       if (url.pathname === '/signout-with-chatgpt') {
         const current = cookie(req, sessionName);
+        const pending = cookie(req, flowName);
         if (current) db.prepare('DELETE FROM render_sessions WHERE hash=?').run(digest(current));
+        // Cancel a sign-in that is still open in another tab, including one
+        // already waiting for Google's token exchange to finish.
+        if (pending) db.prepare('DELETE FROM render_auth_flows WHERE browser_hash=?').run(digest(pending));
         res.setHeader('Set-Cookie', [makeCookie(sessionName, '', 0), makeCookie(flowName, '', 0)]);
         res.writeHead(303, { Location: safeReturn(url.searchParams.get('return_to')) }); res.end();
       } else if (url.pathname === '/signin-with-chatgpt') {
@@ -134,10 +138,21 @@ export function createAuth(config, storage, { exchange = exchangeCode, verify = 
       } else {
         const state = url.searchParams.get('state'), browser = cookie(req, flowName), code = url.searchParams.get('code');
         if (!state || state.length > 100 || !browser || !code || code.length > 4096) throw new Error('Missing authorization');
-        const flow = db.prepare('DELETE FROM render_auth_flows WHERE hash=? AND browser_hash=? AND expires>? RETURNING *')
+        const flow = db.prepare('SELECT * FROM render_auth_flows WHERE hash=? AND browser_hash=? AND expires>?')
           .get(digest(state), digest(browser), Date.now());
         if (!flow) throw new Error('Invalid or expired authorization');
-        const user = await verify(await exchange(code, flow.verifier, config), config, flow.nonce);
+        let user;
+        try {
+          user = await verify(await exchange(code, flow.verifier, config), config, flow.nonce);
+        } catch (error) {
+          db.prepare('DELETE FROM render_auth_flows WHERE hash=? AND browser_hash=?').run(digest(state), digest(browser));
+          throw error;
+        }
+        // Only the first successful callback can create a session. Sign-out
+        // can delete this flow while provider verification is in progress.
+        const consumed = db.prepare('DELETE FROM render_auth_flows WHERE hash=? AND browser_hash=? AND expires>? RETURNING hash')
+          .get(digest(state), digest(browser), Date.now());
+        if (!consumed) throw new Error('Invalid or expired authorization');
         const current = cookie(req, sessionName), session = token();
         if (current) db.prepare('DELETE FROM render_sessions WHERE hash=?').run(digest(current));
         db.prepare('INSERT INTO render_sessions VALUES (?,?,?,?,?)')

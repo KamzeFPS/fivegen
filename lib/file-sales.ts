@@ -66,7 +66,7 @@ export async function fileSalePaymentReadiness(owner:string):Promise<SaleReadine
 }
 
 async function validAsset(product:Row,id:string,kind:'download'|'video'|'cover',verifyIntegrity=false){
-  const row=await database().prepare("SELECT * FROM uploads WHERE id=? AND owner=? AND product_id=? AND status='completed'").bind(id,product.owner,product.id).first();
+  const row=await database().prepare("SELECT * FROM uploads WHERE id=? AND owner=? AND product_id=? AND status='completed' AND object_key NOT LIKE 'voice/%' AND NOT EXISTS (SELECT 1 FROM creator_voice_sources WHERE upload_id=uploads.id)").bind(id,product.owner,product.id).first();
   if(!row||!row.sha256||!/^[a-f0-9]{64}$/.test(String(row.sha256)))return false;
   const mime=String(row.mime);
   if(kind==='download'&&!['application/pdf','image/png','image/jpeg','image/webp','text/plain','text/csv'].includes(mime))return false;
@@ -102,7 +102,7 @@ async function readinessFor(product:Row,draft:SaleDraft,verifyIntegrity=false):P
 export async function getFileSale(productId:string,owner:string):Promise<FileSaleWorkspace>{
   const {product,row,draft}=await saleRow(productId,owner);
   const [readiness,uploads,published]=await Promise.all([
-    readinessFor(product,draft),database().prepare('SELECT id,name,mime,size,status,sha256,validation_error FROM uploads WHERE product_id=? AND owner=? ORDER BY created_at').bind(productId,owner).all(),
+    readinessFor(product,draft),database().prepare("SELECT id,name,mime,size,status,sha256,validation_error FROM uploads WHERE product_id=? AND owner=? AND object_key NOT LIKE 'voice/%' AND NOT EXISTS (SELECT 1 FROM creator_voice_sources WHERE upload_id=uploads.id) ORDER BY created_at").bind(productId,owner).all(),
     row.published_revision_id?database().prepare('SELECT snapshot FROM file_sale_revisions WHERE id=? AND product_id=?').bind(row.published_revision_id,productId).first():Promise.resolve(null),
   ]);
   await fileSaleEvent(productId,owner,'payment_readiness_changed',{state:readiness.payments.state});
@@ -127,7 +127,7 @@ export async function saveFileSale(productId:string,owner:string,input:unknown){
   const encoded=JSON.stringify(data.draft);
   if(Number(row.version)!==data.expectedVersion){if(encoded===String(row.data))return getFileSale(productId,owner);throw new ApiError('This draft changed in another tab. Reload before saving.',409);}
   const ids=[...saleUploadIds(data.draft),...(data.draft.coverUploadId?[data.draft.coverUploadId]:[])];
-  for(const id of ids)if(!await database().prepare('SELECT id FROM uploads WHERE id=? AND product_id=? AND owner=?').bind(id,productId,owner).first())throw new ApiError('A file does not belong to this product.',403);
+  for(const id of ids)if(!await database().prepare("SELECT id FROM uploads WHERE id=? AND product_id=? AND owner=? AND object_key NOT LIKE 'voice/%' AND NOT EXISTS (SELECT 1 FROM creator_voice_sources WHERE upload_id=uploads.id)").bind(id,productId,owner).first())throw new ApiError('Choose a product upload. Creator voice sources stay private and cannot be included in a sale.',403);
   if(encoded!==String(row.data)){
     const saved=await database().prepare('UPDATE file_sale_drafts SET data=?,version=version+1 WHERE product_id=? AND version=?').bind(encoded,productId,data.expectedVersion).run();
     if(!saved.meta.changes)throw new ApiError('This draft changed in another tab. Reload before saving.',409);
@@ -254,7 +254,14 @@ export async function resolveFileSaleAccess(product:Row,token?:string,providedUs
   }
   const ids=[...new Set([...saleUploadIds({title,description,priceCents:0,currency:'usd',modules}),...entitledUploadIds])];
   const uploads=[];
-  for(const id of ids){const upload=await database().prepare("SELECT id,name,mime,size,status,sha256 FROM uploads WHERE id=? AND product_id=? AND owner=? AND status='completed'").bind(id,product.id,product.owner).first();if(upload)uploads.push(upload);}
+  for(const id of ids){const upload=await database().prepare("SELECT id,name,mime,size,status,sha256 FROM uploads WHERE id=? AND product_id=? AND owner=? AND status='completed' AND object_key NOT LIKE 'voice/%' AND NOT EXISTS (SELECT 1 FROM creator_voice_sources WHERE upload_id=uploads.id)").bind(id,product.id,product.owner).first();if(upload)uploads.push(upload);}
+  if(user?.userId!==product.owner){
+    // Recheck source privacy at delivery too: a recording may have become a
+    // creator source after publication. Never expose it through module metadata
+    // or alternate classroom routes, even if an old snapshot references it.
+    const available=new Set(uploads.map(upload=>String(upload.id)));
+    modules=modules.map(module=>({...module,uploadIds:module.uploadIds.filter(id=>available.has(id)),sections:module.sections.map(section=>section.videoId&&!available.has(section.videoId)?{...section,videoId:undefined}:section)}));
+  }
   return {owner:user?.userId===product.owner,user,productId:String(product.id),slug:String(product.slug),title,description,modules,uploads,purchasedRevisionIds:[...new Set(purchasedRevisionIds)]};
 }
 export async function fileSaleUploadAllowed(product:Row,uploadId:string,token?:string,providedUser?:Buyer|null){

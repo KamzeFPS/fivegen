@@ -1,0 +1,356 @@
+/* Readable workspace content within the full-width navigation shell. */
+.growth-app {
+  --workspace-copy: #aaa3a0;
+  --workspace-subtle: #928a85;
+}
+
+.growth-app .gen-create {
+  max-width: 1160px;
+  padding: 44px 40px 40px;
+}
+
+.growth-app .gen-create.has-conversation {
+  max-width: 1400px;
+  padding-top: 32px;
+}
+
+.growth-app .gen-hero {
+  padding: 20px 0 32px;
+}
+
+.growth-app .gen-hero h1 {
+  font-size: clamp(44px, 4.7vw, 64px);
+  letter-spacing: -.045em;
+  line-height: 1.08;
+}
+
+.growth-app .gen-status {
+  font-size: 10px;
+  color: #bd987c;
+  letter-spacing: .15em;
+  margin-bottom: 20px;
+}
+
+.growth-app .gen-hero p {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--workspace-copy);
+  margin-top: 20px;
+}
+
+.growth-app .gen-composer {
+  padding: 20px;
+  border-color: #ffffff29;
+}
+
+.growth-app .gen-composer-top {
+  font-size: 12px;
+  color: #c5b7ad;
+}
+
+.growth-app .gen-composer-mode {
+  font-size: 9px;
+  color: var(--workspace-subtle);
+}
+
+.growth-app .gen-composer textarea {
+  font-size: 15px;
+  line-height: 1.8;
+  min-height: 112px;
+}
+
+.growth-app .gen-composer textarea::placeholder {
+  color: #95908f;
+}
+
+.growth-app .gen-composer-bottom > span {
+  font-size: 11px;
+  line-height: 1.6;
+  color: #c1a792;
+}
+
+.growth-app .gen-composer-bottom small {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--workspace-subtle);
+  margin-top: 3px;
+}
+
+.growth-app .gen-send,
+.growth-app .gen-starting-points button {
+  min-height: 44px;
+  font-size: 12px;
+}
+
+.growth-app .gen-starting-points button {
+  padding: 13px 15px;
+  color: #c3bab4;
+}
+
+.growth-app .gen-start-manual {
+  font-size: 12px;
+  color: var(--workspace-subtle);
+  margin: 17px 0;
+}
+
+.growth-app .gen-start-manual button {
+  min-height: 44px;
+  font-size: 12px;
+  color: #dbb898;
+}
+
+.growth-app .gen-workflow {
+  max-width: 900px;
+  margin-top: 30px;
+  padding-top: 24px;
+}
+
+.growth-app .gen-workflow strong {
+  font-size: 13px;
+  color: #c7bcb3;
+}
+
+.growth-app .gen-workflow p {
+  font-size: 12px;
+  line-height: 1.75;
+  color: var(--workspace-subtle);
+  max-width: 230px;
+}
+
+.growth-app :is(.gen-library, .gen-editor, .gen-settings) {
+  max-width: 1440px;
+  padding-left: clamp(24px, 4vw, 56px);
+  padding-right: clamp(24px, 4vw, 56px);
+}
+
+.growth-app :is(.gen-page-heading p, .gen-editor-title p, .gen-conversation-header p) {
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--workspace-copy);
+}
+
+.growth-app .gen-tag {
+  font-size: 10px;
+  color: #c19d81;
+}
+
+.growth-app .gen-library-tools label {
+  min-width: 300px;
+  border-color: #ffffff20;
+  color: var(--workspace-subtle);
+}
+
+.growth-app .gen-library-tools input {
+  min-height: 44px;
+  font-size: 13px;
+}
+
+.growth-app .gen-library-tools input::placeholder {
+  color: var(--workspace-subtle);
+}
+
+.growth-app .gen-product-grid {
+  align-items: stretch;
+}
+
+.growth-app .gen-product-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.growth-app .gen-product-card > .product-cover {
+  width: 100%;
+  aspect-ratio: 1.65;
+  min-height: 215px;
+  max-height: 260px;
+  padding: 22px;
+}
+
+.growth-app .gen-product-card .cover-top {
+  font-size: 10px;
+  letter-spacing: .13em;
+  color: #c2bab4;
+  opacity: 1;
+}
+
+.growth-app .gen-product-card .cover-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+  margin: 18px 0;
+  font-size: clamp(23px, 2.1vw, 29px);
+  line-height: 1.12;
+  letter-spacing: -.035em;
+}
+
+.growth-app .gen-product-card :is(.cover-bottom, .cover-edition) {
+  font-size: 10px;
+  line-height: 1.5;
+  letter-spacing: .07em;
+}
+
+.growth-app .gen-product-card > div:last-child {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding: 22px;
+}
+
+.growth-app .gen-product-type {
+  font-size: 11px;
+  line-height: 1.5;
+  color: #bfa28a;
+}
+
+.growth-app .gen-product-type > span {
+  color: var(--workspace-subtle);
+}
+
+.growth-app .gen-product-card h2 {
+  font-size: 18px;
+  line-height: 1.5;
+  letter-spacing: -.025em;
+  margin-top: 12px;
+  overflow-wrap: anywhere;
+}
+
+.growth-app .gen-product-card p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--workspace-subtle);
+  margin: 10px 0 22px;
+}
+
+.growth-app .gen-product-open {
+  margin-top: auto;
+  padding-top: 17px;
+  font-size: 12px;
+  color: #dfbfa3;
+}
+
+.growth-app :is(.gen-library, .gen-editor, .gen-settings) .button {
+  min-height: 44px;
+  font-size: 12px;
+}
+
+.growth-app :is(.growth-panel, .growth-card, .growth-form, .growth-product-details, .growth-lesson-editor, .growth-crm, .growth-vsl, .growth-funnel) label {
+  font-size: 13px;
+}
+
+.growth-app :is(.growth-panel, .growth-card, .growth-form, .growth-product-details, .growth-lesson-editor, .growth-crm, .growth-vsl, .growth-funnel) :is(input:not([type=checkbox]):not([type=radio]), select) {
+  min-height: 44px;
+}
+
+.growth-app .gen-editor-tabs button {
+  min-height: 48px;
+  font-size: 12px;
+  color: #a79a94;
+}
+
+.growth-app .gen-editor-tabs button[aria-selected=true] {
+  color: #f2c6a1;
+}
+
+@media (min-width: 1100px) {
+  .growth-app .gen-product-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .growth-app .gen-create,
+  .growth-app .gen-create.has-conversation {
+    padding: 28px 20px;
+  }
+
+  .growth-app .gen-hero {
+    padding-top: 12px;
+  }
+
+  .growth-app .gen-hero h1 {
+    font-size: clamp(36px, 7vw, 48px);
+  }
+
+  .growth-app .gen-status {
+    font-size: 8px;
+    letter-spacing: .1em;
+  }
+
+  .growth-app .gen-hero p {
+    font-size: 13px;
+  }
+
+  .growth-app .gen-composer {
+    padding: 17px;
+  }
+
+  .growth-app .gen-composer textarea {
+    font-size: 16px;
+    min-height: 135px;
+  }
+
+  .growth-app .gen-composer-bottom {
+    align-items: flex-end;
+  }
+
+  .growth-app .gen-composer-bottom > span {
+    max-width: 145px;
+    font-size: 10px;
+  }
+
+  .growth-app .gen-starting-points button {
+    padding: 12px;
+  }
+
+  .growth-app .gen-workflow p {
+    max-width: none;
+  }
+
+  .growth-app :is(.gen-library, .gen-editor, .gen-settings) {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .growth-app .gen-library-tools label {
+    min-width: 0;
+    flex-basis: 100%;
+  }
+
+  .growth-app .gen-library-tools input {
+    font-size: 16px;
+    width: 100%;
+    max-width: none;
+  }
+
+  .growth-app .gen-product-card > .product-cover {
+    aspect-ratio: 1.7;
+    min-height: 215px;
+  }
+
+  .growth-app .gen-product-card .cover-title {
+    font-size: 27px;
+  }
+}
+
+@media (max-width: 420px) {
+  .growth-app .gen-composer-bottom {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .growth-app .gen-composer-bottom > span {
+    max-width: none;
+  }
+
+  .growth-app .gen-send {
+    width: 100%;
+  }
+
+  .growth-app .growth-starting-points {
+    grid-template-columns: 1fr;
+  }
+}

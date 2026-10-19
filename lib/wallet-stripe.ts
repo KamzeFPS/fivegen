@@ -3,12 +3,12 @@ import { ApiError, binding } from './server';
 
 export function walletEnvironment(): 'production'|'sandbox' {
   const mode=binding('STRIPE_MODE');
-  if(mode!=='live'&&mode!=='test')throw new ApiError('Wallet checkout requires an explicit Stripe mode.',503);
+  if(mode!=='live'&&mode!=='test')throw new ApiError('Stripe checkout requires an explicit payment mode.',503);
   return mode==='live'?'production':'sandbox';
 }
 export function walletStripe() {
   const environment=walletEnvironment(),key=binding('STRIPE_SECRET_KEY');
-  if(!new RegExp(`^(sk|rk)_${environment==='production'?'live':'test'}_`).test(key))throw new ApiError('Wallet checkout keys do not match the selected environment.',503);
+  if(!new RegExp(`^(sk|rk)_${environment==='production'?'live':'test'}_`).test(key))throw new ApiError('Stripe checkout keys do not match the selected environment.',503);
   return new Stripe(key,{maxNetworkRetries:2,timeout:20000});
 }
 export function walletPublicConfig() {
@@ -22,7 +22,7 @@ export function walletPublicConfig() {
 }
 export function assertWalletCheckout() {
   const config=walletPublicConfig();
-  if(!config?.enabled)throw new ApiError('Apple Pay and Google Pay checkout is being set up. Please try again later.',503);
+  if(!config?.enabled)throw new ApiError('Stripe card checkout is being set up. Please try again later.',503);
   return config;
 }
 export function walletObjectId(object:string|{id:string}|null|undefined) { return typeof object==='string'?object:object?.id??null; }

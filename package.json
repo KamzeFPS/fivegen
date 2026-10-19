@@ -20,12 +20,17 @@
     "test:referrals": "node scripts/referral-test.mjs",
     "test:credits": "node scripts/credits-test.mjs && node scripts/generation-credit-test.mjs && node scripts/commission-test.mjs",
     "test:paddle": "node scripts/paddle-test.mjs && node scripts/paddle-webhook-test.mjs",
-    "test:wallets": "node scripts/wallet-billing-test.mjs",
+    "test:wallets": "node scripts/wallet-billing-test.mjs && node scripts/admin-credit-grant-test.mjs",
     "test:file-sales": "node scripts/file-upload-test.mjs && node scripts/file-sales-test.mjs && node scripts/file-sale-boundary-test.mjs",
     "preview:file-sales": "node scripts/file-sales-preview.mjs",
     "test:paddle:live": "node scripts/paddle-live-test.mjs",
     "start:paddle:staging": "node --env-file=.env.render.local --env-file=.env.paddle-live.local scripts/paddle-staging.mjs",
-    "test:studio": "node scripts/studio-planning-test.mjs && node scripts/studio-subscription-test.mjs"
+    "test:studio": "node scripts/studio-planning-test.mjs && node scripts/studio-subscription-test.mjs",
+    "test:growth": "node scripts/growth-ai-test.mjs && node scripts/growth-funnel-test.mjs && node scripts/creator-content-test.mjs",
+    "test:growth:runtime": "node scripts/growth-runtime-test.mjs",
+    "test:growth:suite": "node scripts/commerce-v2-test.mjs && node scripts/automation-test.mjs && node scripts/voice-campaign-test.mjs && node scripts/growth-strategy-test.mjs",
+    "test:growth:suite:runtime": "node scripts/creator-suite-runtime-test.mjs",
+    "preview:connect": "node --env-file-if-exists=.env.render.local scripts/stripe-connect-preview.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

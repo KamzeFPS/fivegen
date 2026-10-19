@@ -1,6 +1,7 @@
 import { z } from 'zod';
+import { growthBriefSchema } from './growth';
 
-export const studioFormats = ['Guide', 'Mini course', 'Template kit', 'Challenge', 'Playbook', 'Custom product'] as const;
+export const studioFormats = ['Video course', 'Consulting / Mentorship', 'Guide', 'Mini course', 'Template kit', 'Challenge', 'Playbook', 'Custom product'] as const;
 export const studioPlanSchema = z.object({
   title: z.string().min(3).max(100),
   description: z.string().min(12).max(2000),
@@ -11,11 +12,12 @@ export const studioPlanSchema = z.object({
   deliverables: z.array(z.object({ name: z.string().min(3).max(100), detail: z.string().min(10).max(500) })).min(3).max(8),
   direction: z.string().min(20).max(2000),
   assumptions: z.array(z.string().max(300)).max(4),
+  growthBrief: growthBriefSchema.optional(),
 });
 export const planningResponseSchema = z.object({
   answer: z.string().min(20).max(2500),
   questions: z.array(z.string().min(5).max(250)).max(3),
-  plan: studioPlanSchema,
+  plan: studioPlanSchema.extend({ growthBrief: growthBriefSchema }),
 });
 export type StudioPlan = z.infer<typeof studioPlanSchema>;
 export type StudioMessage = { id: string; role: 'user' | 'assistant'; content: string; questions?: string[] };

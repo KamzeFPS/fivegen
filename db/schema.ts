@@ -1,5 +1,17 @@
 import { sqliteTable, text, integer, index, uniqueIndex, primaryKey, unique, check } from "drizzle-orm/sqlite-core";
 import { sql } from 'drizzle-orm';
+export * from './growth-schema';
+export * from './growth-funnel-schema';
+export * from './growth-strategy-schema';
+export * from './commerce-v2-schema';
+export * from './automation-schema';
+export * from './creator-voice-schema';
+
+// Existing production migration 0015 is mirrored here so future generation
+// retains administrator grants rather than attempting to remove their table.
+export const creditAdminGrants=sqliteTable('credit_admin_grants',{
+ id:text('id').primaryKey(),owner:text('owner').notNull(),email:text('email').notNull(),credits:integer('credits').notNull(),admin:text('admin').notNull(),applied:integer('applied').notNull().default(0),createdAt:integer('created_at').notNull(),
+},t=>[index('idx_credit_admin_grants_owner').on(t.owner,t.createdAt)]);
 
 // Opt-in revisions leave legacy product/order behavior untouched. Published
 // snapshots and grants must be retained even when creation is disabled.

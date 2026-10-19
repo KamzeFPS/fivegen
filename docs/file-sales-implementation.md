@@ -12,7 +12,7 @@ Reuse: Product IDs/slugs, existing uploads/bucket, section/video models, Stripe 
 
 Smallest dependency graph: PDF validation → draft module references → immutable published revision → pinned checkout intent → verified payment/order → revision-aware private access. Capability checks gate publish and each new checkout. Draft changes never change the live pointer. Publication and grant updates are atomic. Entry/UI depend on this complete boundary.
 
-Additive migration 0011 creates draft/revision/grant/event tables, nullable intent/order revision references and upload validation metadata. No existing row is backfilled. Estimated changes cover one new editor, shared public/member views, new narrow sale APIs, existing upload/read boundary adapters, and isolated regression tests. Existing billing prices/credits and generation behavior stay unchanged.
+Additive migration 0016 creates draft/revision/grant/event tables, nullable intent/order revision references and upload validation metadata. No existing row is backfilled. Estimated changes cover one new editor, shared public/member views, new narrow sale APIs, existing upload/read boundary adapters, and isolated regression tests. Existing billing prices/credits and generation behavior stay unchanged.
 
 ## Requirement map
 
@@ -64,7 +64,7 @@ These are local review groups, not external PRs. All share the additive feature 
 
 | Group | Requirements | Main files / impact | Validation and rollback |
 |---|---|---|---|
-| Contracts and compatibility | FG-002/017/018 | `lib/product-presets.ts`, `lib/file-sale-contract.ts`, `db/schema.ts`, `drizzle/0011_file_sale_revisions.sql`, journal/snapshot | Eight persisted formats explicitly mapped; opt-in tables and nullable columns. Disable entry flag, retain schema and records. |
+| Contracts and compatibility | FG-002/017/018 | `lib/product-presets.ts`, `lib/file-sale-contract.ts`, `db/schema.ts`, `drizzle/0016_file_sale_revisions.sql`, journal/snapshot | Eight persisted formats explicitly mapped; opt-in tables and nullable columns. Disable entry flag, retain schema and records. |
 | Native assets | FG-003/009 | `lib/upload-validation.ts`, existing upload POST and upload GET/DELETE | Stream size/PDF structure/hash, private storage, ownership, protected deletion. No malware-scanning claim. Retain uploads on rollback. |
 | Seller workspace | FG-001/004/005/010/018 | `app/file-sale-studio.tsx/.css`, `app/sell/[id]/page.tsx`, generator entry, workspace summary | Product → Sell → Review, actual file picker, explicit inclusion, lesson editing, keyboard reorder, save/resume. Disable entry without touching generation. |
 | Checkout, revisions and access | FG-006/009/011/012/019/020 | `lib/file-sales.ts`, sale APIs, narrow `lib/payments.ts`/`lib/access.ts` adapters, private readers | Existing account capability checks, immutable checkout revision, verified payment, replay safety, additive PDF/module grants. Disable new purchases; preserve authorized historical reads. |
@@ -127,3 +127,17 @@ This is an implemented and locally verified Downloads + Course slice, **not a de
 4. Keep Consulting/Community/cohort/archive capabilities unavailable until their existing routes, customer fulfillment and policies have been verified. The type table above is the separate all-type handoff, not a promise that PDF verification covers these modes.
 5. Decide and implement verified transactional-email sending/retry if required for release. No receipt/notification is promised now; paid access is independent of email. Setup and notification-failure event names are reserved but not emitted for actions that do not run.
 6. Inventory live legacy relationships/URLs and approve any rollout or backfill separately. No live database was inspected, and no production migration or backfill has run.
+
+## Integration for the subsequently authorized deployment
+
+The user subsequently requested deployment to FiveGen. Fetching GitHub found newer production work at `a3e3698` that was not in the initial local implementation baseline. The release merges that work rather than replacing it: top workspace navigation, unified Products, growth tools, Accounts v2 commerce, card/express checkout, local-currency pricing and administrator credit history remain intact.
+
+The production branch already contains migrations 0011–0015. The never-deployed local file-sale migration was therefore renamed **0016**, with its SQL bytes unchanged. Existing remote SQL/checksums and snapshots were preserved. Missing metadata for the already-existing administrator-credit table was reconciled without changing that table. Fresh installation and upgrade from remote 0015 both apply 17 migrations, preserve a synthetic credit-history row and pass foreign-key checks; the next Drizzle diff is empty. Evidence: `outputs/migration-merge-qa/9f345f19-9c93-4512-8a43-c2c7ad52f529`.
+
+The updated format schema includes separate `Video course` and `Consulting / Mentorship` values in addition to historical aliases. New presets use the new names; old stored formats and IDs are unchanged. Creator Voice audio uploads and private-source exclusions are preserved across the shared upload endpoints. Voice material cannot become a file-sale deliverable merely by attaching its upload ID.
+
+This deployment installs the additive schema and guarded implementation. The new file-sale flow requires both `FIVEGEN_FILE_SALES_ENABLED=true` and `STRIPE_MODE=test`; it remains unavailable on the existing live configuration. Existing payment settings, connected accounts, billing data and automation configuration must not be changed for this release. In particular, the current Accounts v2 commerce path and its policy are not replaced by the isolated file-sale test path. Enabling real file sales needs the release gates above and reconciliation with current seller-payment policy.
+
+The deployment target was verified in the signed-in Render Dashboard: `srv-daho9hrm8hqs73cmgt7g`, repository `KamzeFPS/fivegen`, branch `main`, manual deployments, canonical site `https://www.fivegen.ai`. The connected Render MCP account listed a different workspace; the authenticated browser is the authorized deployment path. No duplicate service, new provider account or credential configuration is needed.
+
+Merged-release validation passed: TypeScript, full production build, all three file-sale suites, wallet billing plus administrator-credit tests, Accounts v2 commerce tests, creator-content tests, and built-HTTP creator-suite/growth integration tests. The latter run actual authentication, SQLite, blob and bundled route boundaries while blocking provider calls. Audio/voice privacy, published VSL protection, customer video access, refund/dispute revocation and flag-off behavior are included. Test fixtures remain retained; no production records were inspected or modified by tests.

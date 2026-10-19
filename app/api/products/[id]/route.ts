@@ -12,7 +12,7 @@ export async function PATCH(req:Request,{params}:{params:Promise<{id:string}>}) 
     const job=await database().prepare('SELECT status FROM generation WHERE product_id=?').bind(id).first();
     if(job&&job.status!=='completed')throw new ApiError('Finish or stop AI generation before saving edits.',409);
     for(const section of data.content.sections) if(section.videoId) {
-      const upload=await database().prepare("SELECT id FROM uploads WHERE id=? AND product_id=? AND owner=? AND status='completed' AND mime LIKE 'video/%'").bind(section.videoId,id,user.userId).first();
+      const upload=await database().prepare("SELECT id FROM uploads WHERE id=? AND product_id=? AND owner=? AND status='completed' AND mime LIKE 'video/%' AND object_key NOT LIKE 'voice/%' AND NOT EXISTS(SELECT 1 FROM creator_voice_sources WHERE upload_id=uploads.id)").bind(section.videoId,id,user.userId).first();
       if(!upload)throw new ApiError('This recording does not belong to this product.',409);
     }
     // Historical commerce and payment records remain intact and inaccessible here.

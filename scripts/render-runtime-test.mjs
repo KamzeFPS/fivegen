@@ -123,3 +123,77 @@ test('Google OAuth validates signatures, browser state, nonce, PKCE, verified em
     storage.close(); rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('Sign-out clears secure cookies and cancels an in-flight sign-in without affecting another browser', { timeout: 10000 }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'fivegen-signout-'));
+  const storage = createStorage(root);
+  const config = { origin: 'https://www.fivegen.example', googleClientId: 'test-client', googleClientSecret: 'unused-test-secret' };
+  let releaseExchange, enteredExchange;
+  const exchangeGate = new Promise(resolve => { releaseExchange = resolve; });
+  const exchangeStarted = new Promise(resolve => { enteredExchange = resolve; });
+  const auth = createAuth(config, storage, {
+    exchange: async code => {
+      if (code === 'interrupted') { enteredExchange(); await exchangeGate; }
+      return code;
+    },
+    verify: async code => ({ userId: 'google:' + code, email: code + '@example.test', name: 'Test creator' }),
+  });
+  const session = randomBytes(32).toString('base64url');
+  storage.sqlite.prepare('INSERT INTO render_sessions VALUES (?,?,?,?,?)')
+    .run(digest(session), 'google:existing', 'existing@example.test', 'Existing creator', Date.now() + 60000);
+  const server = createServer(async (req, res) => {
+    if (await auth.handle(req, res, new URL(req.url, config.origin))) return;
+    res.end(JSON.stringify({ id: req.headers['oai-authenticated-user-id'] || null }));
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const base = 'http://127.0.0.1:' + server.address().port;
+  const cookieFrom = response => response.headers.getSetCookie().map(c => c.split(';')[0]).join('; ');
+  let interrupted;
+  try {
+    const begin = await fetch(base + '/signin-with-chatgpt', { redirect: 'manual' });
+    const otherBegin = await fetch(base + '/signin-with-chatgpt', { redirect: 'manual' });
+    const flowCookie = cookieFrom(begin), otherCookie = cookieFrom(otherBegin);
+    const browserCookie = auth.sessionName + '=' + session + '; ' + flowCookie;
+    const pendingCount = () => storage.sqlite.prepare('SELECT COUNT(*) n FROM render_auth_flows').get().n;
+    assert.equal(pendingCount(), 2);
+    const prefetch = await fetch(base + '/signout-with-chatgpt', { redirect: 'manual', headers: { cookie: browserCookie, 'next-router-prefetch': '1' } });
+    assert.equal(prefetch.status, 204);
+    assert.equal(prefetch.headers.getSetCookie().length, 0);
+    const forbidden = await fetch(base + '/signout-with-chatgpt', { method: 'POST', redirect: 'manual', headers: { cookie: browserCookie, origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' } });
+    assert.equal(forbidden.status, 403);
+    assert.equal(pendingCount(), 2, 'Prefetch and cross-origin logout cannot revoke a session or sign-in');
+    assert.equal(storage.sqlite.prepare('SELECT COUNT(*) n FROM render_sessions').get().n, 1);
+    const state = new URL(begin.headers.get('location')).searchParams.get('state');
+    interrupted = fetch(base + '/callback?state=' + state + '&code=interrupted', { redirect: 'manual', headers: { cookie: browserCookie } });
+    await exchangeStarted;
+    const out = await fetch(base + '/signout-with-chatgpt?return_to=%2F%2Fevil.example', { method: 'POST', redirect: 'manual', headers: { cookie: browserCookie, origin: config.origin, 'sec-fetch-site': 'same-origin' } });
+    assert.equal(out.status, 303);
+    assert.equal(out.headers.get('location'), '/');
+    assert.equal(out.headers.get('cache-control'), 'private, no-store');
+    assert.deepEqual(out.headers.getSetCookie().map(value => value.split('=')[0]), [auth.sessionName, auth.flowName]);
+    for (const value of out.headers.getSetCookie()) {
+      assert.match(value, /^__Host-fivegen-(?:session|flow)=;/);
+      assert.match(value, /Path=\/; HttpOnly; SameSite=Lax; Max-Age=0; Secure$/);
+    }
+    assert.equal(pendingCount(), 1, 'Only the signing-out browser’s pending flow is cancelled');
+    assert.equal(storage.sqlite.prepare('SELECT COUNT(*) n FROM render_sessions').get().n, 0);
+    releaseExchange();
+    const cancelled = await interrupted;
+    assert.equal(cancelled.status, 400);
+    assert.equal(cancelled.headers.getSetCookie().length, 0, 'An interrupted callback cannot restore a cleared session');
+    assert.equal(storage.sqlite.prepare('SELECT COUNT(*) n FROM render_sessions').get().n, 0);
+    const otherState = new URL(otherBegin.headers.get('location')).searchParams.get('state');
+    const otherComplete = await fetch(base + '/callback?state=' + otherState + '&code=other-browser', { redirect: 'manual', headers: { cookie: otherCookie } });
+    assert.equal(otherComplete.status, 303);
+    assert.equal(storage.sqlite.prepare('SELECT user_id FROM render_sessions').get().user_id, 'google:other-browser');
+    const repeated = await fetch(base + '/signout-with-chatgpt', { redirect: 'manual', headers: { cookie: browserCookie, origin: config.origin } });
+    assert.equal(repeated.status, 303, 'Signing out again is safe');
+    assert.equal(storage.sqlite.prepare('SELECT COUNT(*) n FROM render_sessions').get().n, 1, 'Repeated sign-out cannot revoke another browser’s session');
+  } finally {
+    releaseExchange();
+    await interrupted?.catch(() => {});
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+    storage.close(); rmSync(root, { recursive: true, force: true });
+  }
+});

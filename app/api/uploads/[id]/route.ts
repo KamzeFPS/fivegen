@@ -8,10 +8,16 @@ export async function GET(req:Request,{params}:{params:Promise<{id:string}>}){tr
  const p=await database().prepare("SELECT * FROM products WHERE id=?").bind(a.product_id).first();if(!p)throw new ApiError("Product not found.",404);
  const q=new URL(req.url).searchParams;
  const funnel=JSON.parse(String(p.commerce||"{}")).funnel;
- const publicVideo=p.status==="published"&&funnel?.enabled&&String(a.mime).startsWith('video/')&&funnel.blocks?.some((b:any)=>b.visible&&b.kind==="video"&&b.image===`/api/uploads/${id}`);
- const saleAccess=await fileSaleUploadAllowed(p,id,q.get('token')||undefined);
- if(saleAccess===false)throw new ApiError('This file is not included in your purchased access.',403);
- if(saleAccess===null&&!publicVideo)await productAccess(p,q.get("token")||undefined);
+ const publicVideo=p.status==="published"&&funnel?.enabled&&String(a.mime).startsWith('video/')&&funnel.blocks?.some((b:{visible?:boolean;kind?:string;image?:string})=>b.visible&&b.kind==="video"&&b.image===`/api/uploads/${id}`);
+ const voiceOnly=String(a.object_key).startsWith("voice/")||await database().prepare("SELECT id FROM creator_voice_sources WHERE upload_id=? LIMIT 1").bind(id).first();
+ // Creator source recordings stay owner-only even if referenced accidentally
+ // by a public funnel, course or historical paid snapshot.
+ if(voiceOnly){const user=await identity();if(user.userId!==a.owner)throw new ApiError("File not found.",404);}
+ else {
+   const saleAccess=await fileSaleUploadAllowed(p,id,q.get('token')||undefined);
+   if(saleAccess===false)throw new ApiError('This file is not included in your purchased access.',403);
+   if(saleAccess===null&&!publicVideo)await productAccess(p,q.get("token")||undefined);
+ }
  const bucket=(env as unknown as {BUCKET:R2Bucket}).BUCKET,size=Number(a.size);let range:{offset:number;length:number}|undefined;
  if(req.headers.has("range")){const m=/^bytes=(\d*)-(\d*)$/.exec(req.headers.get("range")!);if(!m||(!m[1]&&!m[2]))return new Response(null,{status:416,headers:{"Content-Range":`bytes */${size}`}});const start=m[1]?Number(m[1]):Math.max(0,size-Number(m[2])),end=m[1]?(m[2]?Number(m[2]):size-1):size-1;if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start>=size||end<start)return new Response(null,{status:416,headers:{"Content-Range":`bytes */${size}`}});range={offset:start,length:Math.min(end,size-1)-start+1};}
  const obj=await bucket?.get(String(a.object_key),range?{range}:undefined);if(!obj)throw new ApiError("File is unavailable.",404);
@@ -21,4 +27,7 @@ export async function DELETE(req:Request,{params}:{params:Promise<{id:string}>})
  // File-sale assets are immutable retained objects. Detach from a draft rather
  // than race a publication or erase a historical paid version.
  if(await database().prepare('SELECT product_id FROM file_sale_drafts WHERE product_id=?').bind(p.id).first())throw new ApiError('Remove this file from the draft feature instead. Stored versions are retained to protect buyer access.',409);
- if([p.content,p.commerce,p.experience].some(v=>String(v).includes(id)))throw new ApiError("Remove this file from your lessons or funnel and save before deleting it.",409);await (env as unknown as {BUCKET:R2Bucket}).BUCKET.delete(String(a.object_key));await database().prepare("DELETE FROM uploads WHERE id=? AND owner=?").bind(id,u.userId).run();return Response.json({deleted:true});}catch(e){return failure(e);}}
+ if([p.content,p.commerce,p.experience].some(v=>String(v).includes(id)))throw new ApiError("Remove this file from your lessons or funnel and save before deleting it.",409);
+ const published=await database().prepare("SELECT product_id FROM growth_funnels WHERE creator_vsl_upload_id=? AND owner=? AND published_at IS NOT NULL").bind(id,u.userId).first();
+ if(published)throw new ApiError("Remove this recording from the published funnel and publish the update before deleting it.",409);
+ await (env as unknown as {BUCKET:R2Bucket}).BUCKET.delete(String(a.object_key));await database().prepare("DELETE FROM uploads WHERE id=? AND owner=?").bind(id,u.userId).run();return Response.json({deleted:true});}catch(e){return failure(e);}}

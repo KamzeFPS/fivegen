@@ -15,7 +15,7 @@ export function walletCatalog():WalletOffer[] {
   return [
     ...packs.map(pack=>{
       const price=creditPacks.find(p=>p.id===pack.id)!;
-      return {id:`pack:${pack.id}`,name:pack.name,description:pack.description,featured:pack.featured,credits:price.credits,cents:price.cents,price:`$${(price.cents/100).toFixed(2)}`,features:[`${price.credits.toLocaleString('en-US')} AI credits`,'AI products, images, and videos','Purchased credits never expire']};
+      return {id:`pack:${pack.id}`,name:pack.name,description:pack.description,featured:pack.featured,credits:price.credits,cents:price.cents,price:`$${(price.cents/100).toFixed(2)}`,features:[`${price.credits.toLocaleString('en-US')} AI credits`,'AI growth copy, images, and videos','Purchased credits never expire']};
     }),
     ...subscriptionPlans.flatMap(plan=>(['month','year'] as const).map(interval=>{
       const cents=interval==='month'?plan.monthlyCents:plan.annualCents;

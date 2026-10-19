@@ -24,7 +24,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const user = await identity(), { id } = await params;
     await ownedProduct(id, user.userId);
     await expireInterruptedAttempts(id, user.userId);
-    const rows = await database().prepare('SELECT id,name,mime,size,status,sha256,validation_error,created_at,updated_at FROM uploads WHERE product_id=? AND owner=? ORDER BY created_at DESC').bind(id, user.userId).all();
+    // Existing lesson/funnel pickers expect completed recordings. File-sale
+    // workspaces additionally need lifecycle records to recover failed uploads.
+    const rows = await database().prepare("SELECT id,name,mime,size,status,sha256,validation_error,created_at,updated_at,CASE WHEN object_key LIKE 'voice/%' OR EXISTS (SELECT 1 FROM creator_voice_sources WHERE upload_id=uploads.id) THEN 'voice' ELSE 'product' END AS purpose FROM uploads WHERE product_id=? AND owner=? AND (status='completed' OR EXISTS (SELECT 1 FROM file_sale_drafts WHERE product_id=uploads.product_id)) ORDER BY created_at DESC").bind(id, user.userId).all();
     return Response.json({ uploads: rows.results }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) { return failure(error); }
 }
@@ -47,7 +49,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!bucket) throw new ApiError('File storage is unavailable. Please try again later.', 503);
     await expireInterruptedAttempts(id, user.userId);
 
-    uploadId = crypto.randomUUID(); key = `classes/${user.userId}/${id}/${uploadId}`;
+    const purpose = new URL(req.url).searchParams.get('purpose') === 'voice' ? 'voice' : 'product';
+    uploadId = crypto.randomUUID(); key = `${purpose === 'voice' ? 'voice' : 'classes'}/${user.userId}/${id}/${uploadId}`;
     const now = Date.now();
     const reserve = await database().prepare("INSERT INTO uploads (id,owner,product_id,name,mime,size,object_key,status,created_at,updated_at) SELECT ?,?,?,?,?,?,?,?,?,? WHERE (SELECT COALESCE(SUM(size),0) FROM uploads WHERE owner=? AND status!='failed') + ? <= ?")
       .bind(uploadId, user.userId, id, name, mime, size, key, 'uploading', now, now, user.userId, size, storageLimit).run();
@@ -72,7 +75,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const completed = await database().prepare("UPDATE uploads SET status='completed',sha256=?,validation_error=NULL,updated_at=? WHERE id=? AND status='processing'").bind(checksum, Date.now(), uploadId).run();
     if (!completed.meta.changes) throw new UploadValidationError('This upload expired or was stopped. Select the original file and retry.', 409);
     await recordUploadEvent(id, user.userId, uploadId, 'upload_completed');
-    return Response.json({ upload: { id: uploadId, name, mime, size, status: 'completed', sha256: checksum } }, { status: 201 });
+    return Response.json({ upload: { id: uploadId, name, mime, size, purpose, status: 'completed', sha256: checksum } }, { status: 201 });
   } catch (error) {
     const known = error instanceof ApiError || error instanceof UploadValidationError;
     const safe = new ApiError(known ? error.message : 'The upload could not be stored. Your other files are safe. Select the original file and retry.', known ? error.status : 503);

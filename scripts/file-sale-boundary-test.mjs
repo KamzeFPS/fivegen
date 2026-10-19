@@ -49,6 +49,8 @@ const sales = await load('lib/file-sales.ts'); Object.assign(dependencies, sales
 Object.assign(dependencies, await load('lib/payments.ts'));
 Object.assign(dependencies, await load('lib/access.ts'));
 const uploadRoute = await load('app/api/uploads/[id]/route.ts');
+const productUploadRoute = await load('app/api/products/[id]/uploads/route.ts');
+const commerceCustomer = await load('lib/commerce-v2-server.ts', ['commerceMode', 'commerceHash', 'cookieValue', 'cookieOwns', 'customerOrder', 'customerVideo']);
 const learnRoute = await load('app/api/learn/[slug]/route.ts');
 const downloadRoute = await load('app/api/download/[slug]/route.ts');
 const memberRoute = await load('app/api/member-download/[slug]/route.ts');
@@ -167,6 +169,82 @@ try {
   sql.prepare('UPDATE products SET content=? WHERE id=?').run(JSON.stringify({ ...legacyContent, sections: [{ ...legacyContent.sections[0], videoId: legacyFile }] }), foreignId);
   await status(await uploadRoute.DELETE(request('/api/uploads/' + legacyFile, 'DELETE'), idParams(legacyFile)), 409);
   assert.ok(await storage.BUCKET.get(sql.prepare('SELECT object_key FROM uploads WHERE id=?').get(legacyFile).object_key));
-  console.log('Passed: actual upload/download/member/learn route boundaries, unauthenticated and cross-tenant denial, byte-identical private PDF and range delivery, draft isolation, future PDF plus retained originals, explicit Course grants/progress, flag-off access, protected deletion, and unchanged legacy ZIP/member semantics.');
+
+  // Merge compatibility: creator voice uploads retain audio support and privacy.
+  // They are source material, never a deliverable, even if a snapshot/funnel has
+  // an old reference. All retained source rows and bytes use synthetic fixtures.
+  currentUser = creator;
+  async function voiceUpload(mime, name) {
+    const bytes = Buffer.from('Synthetic creator source: ' + mime);
+    const response = await status(await productUploadRoute.POST(new Request(`http://localhost/api/products/${w.product.id}/uploads?purpose=voice&name=${name}`, {
+      method: 'POST', headers: { origin: 'http://localhost', 'Content-Type': mime, 'X-File-Size': String(bytes.length) }, body: bytes, duplex: 'half',
+    }), idParams(w.product.id)), 201);
+    const upload = (await response.json()).upload;
+    assert.equal(upload.purpose, 'voice'); assert.equal(upload.sha256, createHash('sha256').update(bytes).digest('hex'));
+    assert.match(sql.prepare('SELECT object_key FROM uploads WHERE id=?').get(upload.id).object_key, /^voice\//);
+    return upload.id;
+  }
+  for (const [mime, name] of [['audio/mpeg', 'source.mp3'], ['audio/mp4', 'source.m4a'], ['audio/wav', 'source.wav'], ['audio/x-wav', 'source.wav'], ['audio/webm', 'source.webm'], ['audio/ogg', 'source.ogg'], ['audio/flac', 'source.flac']]) {
+    const voiceId = await voiceUpload(mime, name);
+    await status(await file(voiceId), 200);
+    currentUser = buyer; await status(await file(voiceId, order.token), 404);
+    currentUser = null; await status(await file(voiceId, order.token), 401);
+    currentUser = creator;
+  }
+  const voiceVideo = await voiceUpload('video/mp4', 'private-source.mp4');
+  const source = (uploadId, productId, owner) => sql.prepare('INSERT INTO creator_voice_sources (id,owner,product_id,title,kind,upload_id,updated_at) VALUES (?,?,?,?,?,?,?)').run(randomUUID(), owner, productId, 'Synthetic private source', 'video', uploadId, Date.now());
+  source(video, w.product.id, creator.userId); // An existing classes/ recording becomes private source material.
+  const voiceList = (await (await status(await productUploadRoute.GET(request(`/api/products/${w.product.id}/uploads`), idParams(w.product.id)), 200)).json()).uploads;
+  assert.equal(voiceList.find(upload => upload.id === voiceVideo).purpose, 'voice');
+  assert.equal(voiceList.find(upload => upload.id === video).purpose, 'voice', 'Registered source privacy does not depend on storage-key prefix');
+  assert.equal(voiceList.find(upload => upload.id === first).purpose, 'product');
+  for (const sourceVideo of [voiceVideo, video]) {
+    await assert.rejects(() => save(w, { ...w.draft, modules: [{ ...w.draft.modules[1], sections: [{ id: randomUUID(), title: 'Source is not a lesson', body: '', videoId: sourceVideo }] }] }), error => error.status === 403);
+  }
+  const refreshed = await sales.getFileSale(w.product.id, creator.userId);
+  assert.ok(!refreshed.uploads.some(upload => [voiceVideo, video].includes(upload.id)), 'Sale editor excludes creator sources');
+  assert.equal(refreshed.readiness.checks.find(check => check.key === 'course').ready, false, 'Previously attached source cannot remain sale-ready');
+  currentUser = buyer;
+  await status(await file(video, order.token), 404);
+  const privateRoom = await sales.resolveFileSaleAccess(sql.prepare('SELECT * FROM products WHERE id=?').get(w.product.id));
+  assert.ok(!privateRoom.uploads.some(upload => [voiceVideo, video].includes(upload.id)));
+  assert.ok(!privateRoom.modules.some(module => module.sections.some(section => section.videoId === video)), 'Buyer classroom metadata omits private source recording');
+  assert.ok(!JSON.stringify(await (await learn(slug)).json()).includes(video));
+  await status(await file(first, order.token), 200, 'Source privacy does not revoke unrelated paid PDF files');
+
+  currentUser = { userId: 'legacy-owner', email: 'legacy-owner@example.test', displayName: 'Legacy owner' };
+  const publishedVsl = await fixtureUpload(foreignId, Buffer.from('Synthetic published VSL'), 'video/mp4', 'legacy-owner');
+  sql.prepare('INSERT INTO growth_funnels (product_id,owner,slug,title,landing,creator_vsl_upload_id,published_at,updated_at) VALUES (?,?,?,?,?,?,?,?)')
+    .run(foreignId, 'legacy-owner', 'legacy-funnel-boundary', 'Retained VSL', '{}', publishedVsl, Date.now(), Date.now());
+  await status(await uploadRoute.DELETE(request('/api/uploads/' + publishedVsl, 'DELETE'), idParams(publishedVsl)), 409, 'Published growth funnel preserves VSL absent from current product content');
+  assert.ok(sql.prepare('SELECT id FROM uploads WHERE id=?').get(publishedVsl));
+  const privateLegacyVideo = await fixtureUpload(foreignId, Buffer.from('Synthetic creator-private video'), 'video/mp4', 'legacy-owner');
+  source(privateLegacyVideo, foreignId, 'legacy-owner');
+  sql.prepare('UPDATE products SET content=?,commerce=? WHERE id=?').run(JSON.stringify({ ...legacyContent, sections: [{ ...legacyContent.sections[0], videoId: publishedVsl }, { id: randomUUID(), title: 'Accidental private reference', body: '', videoId: privateLegacyVideo }] }), JSON.stringify({ funnel: { enabled: true, blocks: [{ visible: true, kind: 'video', image: '/api/uploads/' + privateLegacyVideo }] } }), foreignId);
+  currentUser = null; await status(await file(privateLegacyVideo, foreignToken), 401, 'Accidental public funnel reference cannot expose a creator source');
+  currentUser = buyer; await status(await file(privateLegacyVideo, foreignToken), 404);
+
+  // Existing commerce-v2 orders and their dedicated customer route remain
+  // independent from both file-sale flags and legacy orders/access tokens.
+  const commerceId = randomUUID(), commerceToken = randomUUID() + randomUUID();
+  sql.prepare('INSERT INTO commerce_orders (id,owner,product_id,account_id,mode,email,amount,currency,title,status,access_hash,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(commerceId, 'legacy-owner', foreignId, 'acct_synthetic_v2', 'test', buyer.email, 1900, 'usd', 'Existing commerce fixture', 'paid', await commerceCustomer.commerceHash(commerceToken), Date.now());
+  enabled = false;
+  const v2File = headers => commerceCustomer.customerVideo(request(`/api/commerce/customer/${commerceId}/video/${publishedVsl}`, 'GET', undefined, headers), commerceId, publishedVsl);
+  assert.equal((await v2File()).status, 200, 'Signed-in commerce-v2 buyer keeps video access with file-sale flag off');
+  currentUser = outsider; await assert.rejects(v2File, error => error.status === 403);
+  currentUser = null; await assert.rejects(v2File, error => error.status === 403);
+  const cookie = `fivegen_purchase_${commerceId.replaceAll('-', '')}=${commerceToken}`;
+  const v2Range = await v2File({ cookie, range: 'bytes=0-8' }); assert.equal(v2Range.status, 206); assert.equal((await v2Range.arrayBuffer()).byteLength, 9);
+  await assert.rejects(() => commerceCustomer.customerVideo(request(`/api/commerce/customer/${commerceId}/video/${privateLegacyVideo}`, 'GET', undefined, { cookie }), commerceId, privateLegacyVideo), error => error.status === 404);
+  sql.prepare("UPDATE commerce_orders SET status='revoked' WHERE id=?").run(commerceId);
+  await assert.rejects(() => v2File({ cookie }), error => error.status === 403, 'Existing commerce-v2 refund/dispute revocation remains enforced');
+  currentUser = { userId: 'legacy-owner', email: 'legacy-owner@example.test', displayName: 'Legacy owner' };
+  const failedLegacyId = randomUUID();
+  sql.prepare("INSERT INTO uploads (id,owner,product_id,name,mime,size,object_key,status,created_at) VALUES (?,?,?,?,?,?,?,'failed',?)").run(failedLegacyId, 'legacy-owner', foreignId, 'failed.mp4', 'video/mp4', 4, 'boundary-failed-no-object', Date.now());
+  const legacyList = (await (await productUploadRoute.GET(request(`/api/products/${foreignId}/uploads`), idParams(foreignId))).json()).uploads;
+  assert.ok(!legacyList.some(upload => upload.id === failedLegacyId), 'Existing lesson and funnel pickers still list only completed uploads');
+  assert.equal(legacyList.find(upload => upload.id === privateLegacyVideo).purpose, 'voice');
+  console.log('Passed: actual private file/member/classroom routes, immutable PDF and module access, upload integrity and creator audio support, creator-source exclusion at save/readiness/delivery, retained VSL guard, existing commerce-v2 cookie/email access and revoked-order denial, flag-off buyer access, and legacy ZIP/member semantics.');
   console.log('Synthetic identities/provider only; no external requests or deletion. Retained fixtures: ' + root);
 } finally { storage.close(); }

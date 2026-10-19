@@ -17,7 +17,7 @@ const marker=resolve(root,'fixture-only.txt');
 if(fixture)assert.equal(readFileSync(marker,'utf8'),'FiveGen synthetic file sales fixture v1\n','Refusing to open a nonfixture database');
 mkdirSync(root,{recursive:true});
 if(!fixture)writeFileSync(marker,'FiveGen synthetic file sales fixture v1\n');
-Object.assign(process.env,{FIVEGEN_RUNTIME:'render',NODE_ENV:'production',FIVEGEN_DATA_DIR:root,APP_ORIGIN:'http://localhost:5187',PORT:'5187',FIVEGEN_FILE_SALES_ENABLED:'true',STRIPE_MODE:'test',PADDLE_ENVIRONMENT:'sandbox',RENDER_EXTERNAL_URL:'',PRODUCT_DOMAIN:'',GOOGLE_CLIENT_ID:'synthetic-local-preview',GOOGLE_CLIENT_SECRET:'synthetic-local-preview',CREDENTIAL_ENCRYPTION_KEY:randomBytes(32).toString('base64url')});
+Object.assign(process.env,{FIVEGEN_RUNTIME:'render',NODE_ENV:'production',FIVEGEN_DATA_DIR:root,APP_ORIGIN:'http://localhost:5187',PORT:'5187',FIVEGEN_FILE_SALES_ENABLED:'true',STRIPE_COMMERCE_ENABLED:'false',AUTOMATIONS_WORKER_ENABLED:'false',STRIPE_MODE:'test',PADDLE_ENVIRONMENT:'sandbox',RENDER_EXTERNAL_URL:'',PRODUCT_DOMAIN:'',GOOGLE_CLIENT_ID:'synthetic-local-preview',GOOGLE_CLIENT_SECRET:'synthetic-local-preview',CREDENTIAL_ENCRYPTION_KEY:randomBytes(32).toString('base64url')});
 if(!process.argv.includes('--skip-build')){
  const {createBuilder}=await import('vite');
  // Bypass the Vinext CLI's dotenv loader. The same app plugin builds all RSC,

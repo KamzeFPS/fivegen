@@ -1,6 +1,6 @@
 import {redirect} from 'next/navigation';
 import {getChatGPTUser,safeRelativeReturnPath,chatGPTSignInPath} from '../chatgpt-auth';
-import {acceptedTerms} from '@/lib/terms';
+import {acceptedTerms,TERMS_VERSION} from '@/lib/terms';
 import {TermsConsent} from './terms-consent';
 import {CheckoutWelcome} from './checkout-welcome';
 import '../pricing/pricing.css';
@@ -14,5 +14,5 @@ export default async function Welcome({searchParams}:{searchParams:Promise<{retu
  if(!q.return_to)return <CheckoutWelcome signedIn={Boolean(user)} continueTo={user?'/':chatGPTSignInPath('/welcome?return_to=%2F')}/>;
  if(!user)redirect(chatGPTSignInPath(`/welcome?return_to=${encodeURIComponent(returnTo)}`));
  if(await acceptedTerms(user.userId))redirect(returnTo);
- return <TermsConsent email={user.email} returnTo={returnTo}/>;
+ return <TermsConsent email={user.email} returnTo={returnTo} termsVersion={TERMS_VERSION}/>;
 }

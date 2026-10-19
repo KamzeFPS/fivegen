@@ -8,11 +8,18 @@ import "./connections-design.css";
 import "./journey-design.css";
 import "./generator-design.css";
 import "./studio-chat.css";
+import "./growth-design.css";
+import "./growth-strategy.css";
+import "./commerce-design.css";
+import "./automation-design.css";
+import "./workspace-navigation.css";
+import "./workspace-content.css";
+import "./overview-design.css";
 
 export const metadata: Metadata = {
-  title: "FiveGen — Your next idea, made real",
+  title: "FiveGen — Your AI growth operator",
   description:
-    "Turn an idea into a complete digital product with AI. Plan, write, create images and videos, and download your finished work in one private studio.",
+    "Build your launch around your expertise. Create a VSL script, publish your landing page, and manage leads while keeping your course in your own voice.",
   icons: {
     icon: "/brand/fivegen-transparent.webp",
     shortcut: "/brand/fivegen-transparent.webp",

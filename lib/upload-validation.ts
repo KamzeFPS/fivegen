@@ -6,13 +6,14 @@ export class UploadValidationError extends Error {
 }
 
 const supportedMime = new Set([
-  'video/mp4', 'video/webm', 'application/pdf', 'image/jpeg',
+  'video/mp4', 'video/webm', 'audio/mpeg', 'audio/mp4', 'audio/wav',
+  'audio/x-wav', 'audio/webm', 'audio/ogg', 'audio/flac', 'application/pdf', 'image/jpeg',
   'image/png', 'image/webp', 'text/plain', 'text/csv',
 ]);
 
 export function validateUploadMetadata(input: { name: string; mime: string; size: number; hasBody: boolean }, limit: number) {
   if (!supportedMime.has(input.mime))
-    throw new UploadValidationError('Upload an MP4, WebM, PDF, image, text or CSV file.');
+    throw new UploadValidationError('Upload an MP4, WebM, audio recording, PDF, image, text or CSV file.');
   if (!Number.isSafeInteger(input.size) || input.size < 1 || input.size > limit || !input.hasBody)
     throw new UploadValidationError('Files must be between 1 byte and 100 MB.', 413);
   const pdfName = /\.pdf$/i.test(input.name);
