@@ -36,7 +36,7 @@ for (const [index, id] of [owner, other].entries()) {
 seed.close();
 
 const originalFetch = globalThis.fetch, unexpectedOutbound = [];
-let providerCalls = 0, providerMode = 'nullable';
+let providerCalls = 0, providerMode = 'nullable', providerResponse = null, providerRequest = null;
 globalThis.fetch = async (input, options) => {
   const target = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
   if (['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname)) return originalFetch(input, options);
@@ -48,6 +48,7 @@ globalThis.fetch = async (input, options) => {
   assert.equal(options?.method, 'POST');
   assert.equal(new Headers(options?.headers).get('authorization'), `Bearer ${fixtureKey}`);
   const body = JSON.parse(options.body);
+  providerRequest = JSON.parse(body.input.split('\n\nRequest:\n').at(-1));
   assert.equal(body.text?.format?.type, 'json_object');
   assert.equal(body.store, false);
   assert.equal(body.max_output_tokens, 3000);
@@ -57,9 +58,9 @@ globalThis.fetch = async (input, options) => {
   }
   assert.ok(body.input.includes('illustrator') && body.input.includes('Reader handoff'), 'The actual draft and request reach the provider');
   if (providerMode === 'unavailable') return Response.json({error: {code: 'fixture_unavailable', message: 'Synthetic failure.'}}, {status: 503});
-  const response = providerMode === 'malformed'
+  const response = providerResponse || (providerMode === 'malformed'
     ? {answer: 'This malformed proposed title must be rejected without changing the product.', questions: [], suggestion: {summary: 'Synthetic invalid edit.', title: 123}}
-    : {answer: 'This introduction can make the reader outcome clearer. Review the proposed description before applying it.', questions: null, suggestion: {summary: 'Clarify the practical reader outcome.', title: null, description: 'A practical, original client handoff guide for independent illustrators.', audience: null, sections: null}};
+    : {answer: 'This introduction can make the reader outcome clearer. Review the proposed description before applying it.', questions: null, suggestion: {summary: 'Clarify the practical reader outcome.', title: null, description: 'A practical, original client handoff guide for independent illustrators.', audience: null, sections: null}});
   return Response.json({id: `resp_fixture_${providerCalls}`, status: 'completed', output: [{type: 'message', role: 'assistant', content: [{type: 'output_text', text: JSON.stringify(response)}]}]});
 };
 const {start} = await import('../runtime/render/server.mjs');
@@ -131,8 +132,52 @@ try {
   assert.equal(JSON.stringify(sql.prepare('SELECT * FROM products WHERE id=?').get(productId)), unchangedProduct, 'Suggestions and errors never mutate the original product');
   assert.equal(JSON.stringify(sql.prepare('SELECT * FROM product_builder_workspaces WHERE product_id=?').get(productId)), unchangedBuilder, 'Edits still require a separate explicit Apply action');
   assert.equal(sql.prepare('SELECT COUNT(*) n FROM ai_product_runs WHERE owner=?').get(owner).n, 0, 'Planning never creates a full-product generation run');
+  const legacyOutline = {id: 'historical-outline-fixture', role: 'assistant', content: 'HISTORICAL_OUTLINE_RESPONSE: Here are manuscript chapters.', questions: ['HISTORICAL_OUTLINE_QUESTION: What daily time commitment?'], suggestion: {summary: 'HISTORICAL_OUTLINE_SUMMARY', sections: [{title: 'HISTORICAL_OUTLINE_CHAPTER', body: 'Original old outline proposal.'}]}};
+  const legacyMessages = [...state.conversation.messages, legacyOutline];
+  sql.prepare('UPDATE studio_conversations SET messages=? WHERE id=?').run(JSON.stringify(legacyMessages), `builder:${productId}`);
+  assert.deepEqual((await json(path)).conversation.messages, legacyMessages, 'Reading a historical conversation never rewrites old suggestions or applies them');
+  const detailsContext = {...initial.context, builderType: 'book', fields: {subtitle: 'Existing subtitle', bookPremise: 'Existing premise', readerLevel: 'Complete beginner', meetingUrl: 'https://private.example.test/PRIVATE_MEETING', communityUrl: 'https://private.example.test/PRIVATE_INVITATION', arbitraryField: 'PRIVATE_UNKNOWN_FIELD'}};
+  const detailsRequest = {requestId: randomUUID(), expectedUpdatedAt: state.conversation.updatedAt, maxCredits: cost, detailsGroup: 'type-details', message: 'Fill the fields in The shape of your book, keeping the existing manuscript.', context: detailsContext};
+  providerMode = 'nullable';
+  providerResponse = {answer: 'Here are the three book-shape fields. Review them before applying; the manuscript stays as it is.', questions: null, suggestion: {summary: 'Clarify the promise and reader experience.', fields: {subtitle: 'A practical handoff, from first brief to final delivery', bookPremise: 'Help independent illustrators build a clear, repeatable client handoff.', readerLevel: 'Working illustrators with basic client experience'}, sections: [{title: 'UNREQUESTED_CHAPTER', body: 'Never add a chapter while filling book details.'}]}};
+  state = await json(path, 'POST', detailsRequest);
+  assert.equal(providerRequest.target, 'details', 'Omitting target uses detail editing in the built application');
+  assert.deepEqual(state.conversation.messages.at(-1).suggestion, {summary: providerResponse.suggestion.summary, fields: providerResponse.suggestion.fields}, 'Book fields survive the real AI transport while unsolicited chapters are removed');
+  assert.deepEqual(state.conversation.messages.at(-1).questions, []);
+  for (const privateValue of ['PRIVATE_ORIGINAL_TEXT', 'PRIVATE_MEETING', 'PRIVATE_INVITATION', 'PRIVATE_UNKNOWN_FIELD']) assert.equal(JSON.stringify(providerRequest).includes(privateValue), false, `Details transport excludes ${privateValue}`);
+  for (const oldOutline of ['HISTORICAL_OUTLINE_RESPONSE', 'HISTORICAL_OUTLINE_QUESTION', 'HISTORICAL_OUTLINE_SUMMARY', 'HISTORICAL_OUTLINE_CHAPTER']) assert.equal(JSON.stringify(providerRequest).includes(oldOutline), false, 'The current field task does not inherit old outline answers, suggestions, or questions');
+  assert.deepEqual(state.conversation.messages.slice(0, legacyMessages.length), legacyMessages, 'Historical messages remain byte-for-byte equivalent in the stored conversation');
+  const afterDetails = state;
+  assert.equal(state.spent, cost); assert.equal(state.credits, 100 - 2 * cost, 'Field filling follows the same paid planning credit ledger');
+  assert.deepEqual(await json(path, 'POST', detailsRequest), state, 'A field request replay is also idempotent');
+  const callsAfterDetails = providerCalls;
+  providerResponse = {answer: 'This suggestion changes only the requested subtitle.', questions: [], suggestion: {summary: 'Sharpen the subtitle without rewriting the book.', title: 'UNREQUESTED_RENAME', fields: {subtitle: 'A calmer, clearer client handoff', bookPremise: 'UNREQUESTED_PREMISE', dailyTime: 'UNREQUESTED_CHALLENGE_FIELD'}, sections: [{title: 'UNREQUESTED_CHAPTER', body: 'Never insert this outline.'}]}};
+  state = await json(path, 'POST', {...detailsRequest, requestId: randomUUID(), expectedUpdatedAt: state.conversation.updatedAt, target: 'outline', detailsGroup: undefined, fieldKeys: ['subtitle'], message: 'Enhance the Subtitle in The shape of your book. Fill only this field.'});
+  assert.equal(providerCalls, callsAfterDetails + 1);
+  assert.equal(providerRequest.target, 'details', 'An explicit field request overrides a legacy persisted outline target through the HTTP boundary');
+  assert.deepEqual(state.conversation.messages.at(-1).suggestion, {summary: providerResponse.suggestion.summary, fields: {subtitle: providerResponse.suggestion.fields.subtitle}}, 'An exact field edit cannot rename the product, add a different type field, or insert manuscript content');
+  for (const invalidSuggestion of [
+    {summary: 'Unsupported private delivery edit.', fields: {meetingUrl: 'https://private.example.test/UNSAFE_MEETING'}},
+    {summary: 'Only an unsolicited outline.', sections: [{title: 'UNREQUESTED_CHAPTER', body: 'Do not insert content.'}]},
+  ]) {
+    const beforeFailure = state, requestId = randomUUID();
+    providerResponse = {answer: 'This output must not become an applicable field edit.', questions: [], suggestion: invalidSuggestion};
+    await json(path, 'POST', {...detailsRequest, requestId, expectedUpdatedAt: state.conversation.updatedAt, fieldKeys: ['subtitle'], message: 'Fill only the subtitle.'}, headers, 502);
+    assert.equal(sql.prepare('SELECT purchased FROM wallets WHERE owner=?').get(owner).purchased, 100 - 3 * cost, 'Out-of-scope or private provider output refunds the paid field attempt');
+    assert.equal(sql.prepare('SELECT state FROM credit_usage WHERE id=?').get(requestId).state, 'refunded');
+    assert.deepEqual((await json(path)).conversation, beforeFailure.conversation, 'A scope violation cannot replace the last accepted conversation');
+  }
+  providerResponse = {answer: 'Here is the outline you explicitly requested. It remains a proposal until Apply.', questions: [], suggestion: {summary: 'A concise client-handoff outline.', sections: [{title: 'Review the brief', body: 'Confirm the intended use and delivery requirements.'}, {title: 'Package the work', body: 'Prepare editable assets and the final handoff checklist.'}]}};
+  state = await json(path, 'POST', {...initial, requestId: randomUUID(), expectedUpdatedAt: state.conversation.updatedAt, maxCredits: cost, target: 'outline', message: 'Suggest a chapter outline for the Reader handoff illustrator book.'});
+  assert.equal(providerRequest.target, 'outline');
+  assert.deepEqual(state.conversation.messages.at(-1).suggestion.sections, providerResponse.suggestion.sections, 'Outline planning remains available only when explicitly requested');
+  assert.equal(state.credits, 100 - 4 * cost);
+  assert.equal(JSON.stringify(sql.prepare('SELECT * FROM products WHERE id=?').get(productId)), unchangedProduct, 'Accepted detail and outline suggestions never auto-apply edits to the product');
+  assert.equal(JSON.stringify(sql.prepare('SELECT * FROM product_builder_workspaces WHERE product_id=?').get(productId)), unchangedBuilder, 'Book fields and original manuscript remain unchanged until the separate Apply action');
+  assert.equal(sql.prepare('SELECT COUNT(*) n FROM ai_product_runs WHERE owner=?').get(owner).n, 0, 'Detail editing cannot bypass full-generation allowance tracking');
+  assert.ok(afterDetails.conversation.messages.at(-1).suggestion.fields.subtitle);
   assert.deepEqual(unexpectedOutbound, [], 'No external request outside the synthetic provider fixture was attempted');
-  console.log('Passed: built HTTP builder assistant — real AI schema transport, nullable suggestion normalization, auth/ownership/origin gates, persisted conversation and idempotent replay, real included allowance and budget, paid consent/debit/refunds, malformed-output safety, lease recovery, and unchanged original product/builder. No external calls.');
+  console.log('Passed: built HTTP builder assistant — detail-first and legacy outline override, actual Book field edits, exact field scope, blocked unsolicited chapters/private delivery edits, private manuscript/history exclusion, unchanged saved history and builder until Apply, explicit outline opt-in, real schema transport, auth/origin, idempotency, budget/allowance, paid consent/debits/refunds and lease recovery. No external calls.');
   console.log('QA fixtures retained: ' + root);
 } finally {
   process.env.OPENAI_API_KEY = '';
