@@ -16,6 +16,7 @@ import {claimProductRun,releaseUnstartedRun,productAllowance} from "@/lib/produc
 import {textCredits} from "@/lib/credit-policy";
 import {providerSettings} from "@/lib/ai";
 import { textGeneration, productSystem } from "@/lib/ai";
+import {generatedOutlineError,generatedSectionError,generatedPackageError} from '@/lib/generation-quality';
 const outlineSchema=z.object({sections:z.array(z.object({title:z.string().min(1).max(150),objective:z.string().min(1).max(1500)})).min(3).max(30),benefits:z.array(z.string().max(300)).min(3).max(8)});
 const sectionBodySchema=z.object({body:z.string().min(300).max(18000)});
 const packageSchema=z.object({launch:z.string().min(600).max(50000),salesCopy:z.string().min(150).max(15000),files:z.array(fileSchema).min(1).max(12),imagePrompt:z.string().min(30).max(4000),videoPrompt:z.string().min(30).max(2500)});
@@ -133,7 +134,7 @@ export async function POST(
             {name:'fivegen_product_outline',schema:zodToJsonSchema(outlineSchema,{target:'openAi'})},
           ),
         );
-      if(brief.format==='Challenge'&&d.sections.length!==(brief.duration||7))throw new ApiError('The generated plan did not match your requested number of days. Retry to correct the outline.',502);
+      const outlineError=generatedOutlineError(brief,d.sections);if(outlineError)throw new ApiError(outlineError,502);
       p.content = {
         ...p.content,
         sections: d.sections.map((s) => ({
@@ -156,6 +157,7 @@ export async function POST(
             {name:'fivegen_product_section',schema:zodToJsonSchema(sectionBodySchema,{target:'openAi'})},
           ),
         );
+      const sectionError=generatedSectionError(p.content.sections,stage,d.body);if(sectionError)throw new ApiError(sectionError,502);
       p.content.sections[stage] = { ...s, body: d.body };
     } else {
       const d = packageSchema
@@ -168,6 +170,7 @@ export async function POST(
             {name:'fivegen_product_package',schema:zodToJsonSchema(packageSchema,{target:'openAi'})},
           ),
         );
+      const packageError=generatedPackageError(d.files);if(packageError)throw new ApiError(packageError,502);
       p.content = { ...p.content, ...d };
     }
     p.content = contentSchema.parse(p.content);

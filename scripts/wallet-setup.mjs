@@ -28,7 +28,7 @@ if(endpoint){
 }
 let portal;
 for await(const row of stripe.billingPortal.configurations.list({limit:100}))if(row.metadata?.purpose==='fivegen_wallet')portal=row;
-const portalSettings={business_profile:{headline:'FiveGen billing',privacy_policy_url:origin.origin+'/privacy',terms_of_service_url:origin.origin+'/terms'},features:{invoice_history:{enabled:true},subscription_cancel:{enabled:true,mode:'at_period_end'},subscription_update:{enabled:false},payment_method_update:{enabled:false},customer_update:{enabled:false}},metadata:{purpose:'fivegen_wallet'}};
+const portalSettings={business_profile:{headline:'FiveGen billing',privacy_policy_url:origin.origin+'/privacy',terms_of_service_url:origin.origin+'/terms'},features:{invoice_history:{enabled:true},subscription_cancel:{enabled:true,mode:'at_period_end'},subscription_update:{enabled:false},payment_method_update:{enabled:true},customer_update:{enabled:false}},metadata:{purpose:'fivegen_wallet'}};
 portal=portal?await stripe.billingPortal.configurations.update(portal.id,portalSettings):await stripe.billingPortal.configurations.create(portalSettings,{idempotencyKey:`fivegen-wallet-portal:${origin.hostname}`});
 const values={...existing,STRIPE_MODE:mode,STRIPE_SECRET_KEY:key,STRIPE_PUBLISHABLE_KEY:process.env.STRIPE_PUBLISHABLE_KEY||existing.STRIPE_PUBLISHABLE_KEY||'',STRIPE_WALLET_WEBHOOK_SECRET:signingSecret,STRIPE_WALLET_PORTAL_CONFIGURATION:portal.id,STRIPE_WALLET_CHECKOUT_ENABLED:'false'};
 writeFileSync(output,Object.entries(values).map(([k,v])=>`${k}=${v}`).join('\n')+'\n',{mode:0o600});

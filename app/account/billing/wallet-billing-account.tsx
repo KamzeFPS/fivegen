@@ -1,6 +1,6 @@
 'use client';
 import {useState} from 'react';
-import {ArrowLeft,ArrowUpRight,CreditCard,Loader2,LogOut,ReceiptText} from 'lucide-react';
+import {ArrowLeft,ArrowUpRight,CreditCard,Loader2,LogOut,ReceiptText,RefreshCw} from 'lucide-react';
 import {Brand} from '@/app/ui-brand';
 import {Button} from '@/components/ui/button';
 import type {walletAccount} from '@/lib/wallet-billing';
@@ -8,22 +8,34 @@ import type {paddleAccount} from '@/lib/paddle/account';
 import {clearWorkspaceDrafts} from '@/lib/workspace-drafts';
 type Account=Awaited<ReturnType<typeof walletAccount>>;
 type Previous=Awaited<ReturnType<typeof paddleAccount>>;
-export function WalletBillingAccount({email,account,previous}:{email:string;account:Account|null;previous:Previous|null}) {
-  const [busy,setBusy]=useState(''),[error,setError]=useState('');
+export function WalletBillingAccount({email,account:initialAccount,previous}:{email:string;account:Account|null;previous:Previous|null}) {
+  const [account,setAccount]=useState(initialAccount),[busy,setBusy]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
   async function portal(provider:'wallet'|'paddle'){
     setBusy(provider);setError('');
     try{const response=await fetch(`/api/${provider}/portal`,{method:'POST'});const data=await response.json() as {url?:string;error?:string};if(!response.ok||!data.url)throw new Error(data.error||'The billing portal is unavailable.');location.assign(data.url);}
     catch(e){setError(e instanceof Error?e.message:'The billing portal is unavailable.');setBusy('');}
+  }
+  async function refresh(){
+    setBusy('refresh');setError('');setNotice('');
+    try{const response=await fetch('/api/wallet/account',{method:'POST',signal:AbortSignal.timeout(60000)}),data=await response.json() as {account?:Account;checked?:number;pending?:number;unavailable?:number;error?:string};if(!response.ok||!data.account)throw new Error(data.error||'Purchases could not be refreshed.');setAccount(data.account);setNotice(data.unavailable?'Some purchases could not be checked yet. Your existing balance is safe; try again shortly.':data.pending?'Your payment is still awaiting confirmation. Please do not purchase again.':'Your purchases and credit delivery are up to date.');}
+    catch(error){setError(error instanceof Error?error.message:'Purchases could not be refreshed.');}
+    finally{setBusy('');}
+  }
+  async function receipt(paymentId:string){
+    setBusy(paymentId);setError('');
+    try{const response=await fetch('/api/wallet/receipt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paymentId})}),data=await response.json() as {url?:string;error?:string};if(!response.ok||!data.url)throw new Error(data.error||'Your receipt is not available yet.');location.assign(data.url);}
+    catch(error){setError(error instanceof Error?error.message:'Your receipt is not available yet.');setBusy('');}
   }
   const hasPrevious=Boolean(previous?.customers.length);
   return <main className="paddle-pricing"><nav className="paddle-nav"><a href="/" aria-label="FiveGen home"><Brand/></a><a href="/pricing" className="paddle-back"><ArrowLeft size={16}/> Plans & credits</a></nav><div className="paddle-content paddle-account">
     <header><span className="paddle-eyebrow">YOUR ACCOUNT</span><h1>Billing & receipts</h1><div className="workspace-billing-identity"><p>{email}</p><button type="button" disabled={!!busy} onClick={()=>{clearWorkspaceDrafts();location.assign('/signout-with-chatgpt');}}><LogOut size={15}/>Sign out</button></div></header>
     {account?.environment==='sandbox'&&<div className="paddle-sandbox"><span>Test billing</span> Separate from your production AI balance.</div>}
     {error&&<p className="paddle-error" role="alert">{error}</p>}
+    {notice&&<p className="wallet-billing-notice" role="status">{notice}</p>}
     <section className="paddle-account-card"><CreditCard size={24}/><h2>Your purchases, in one place.</h2><p>Manage your Stripe subscription, update payment details, and download invoices and receipts.</p><Button disabled={!!busy||!account?.hasCustomer} onClick={()=>portal('wallet')}>{busy==='wallet'?<Loader2 size={17} className="animate-spin"/>:<ArrowUpRight size={17}/>}Manage billing</Button>{!account?.hasCustomer&&<small>Your billing profile appears after your first purchase.</small>}</section>
     {account?.environment==='sandbox'&&<section className="paddle-account-card"><span className="paddle-eyebrow">VERIFIED TEST BALANCE</span><h2>{account.testCredits?.toLocaleString()} test credits</h2><p>Test purchases confirm fulfillment without spending production AI capacity.</p></section>}
     <section className="paddle-account-card"><h2>Subscriptions</h2><p>{account?.subscriptionCredits.toLocaleString()??'0'} subscription credits available{account?.creditsResetAt?` · next reset ${new Date(account.creditsResetAt).toLocaleDateString()}`:''}. Top-up credits never expire.</p>{!account?.subscriptions.length?<p>No subscription yet. <a href="/pricing">Explore plans</a> or choose a one-time pack.</p>:account.subscriptions.map(sub=><div className="paddle-account-row" key={sub.subscription_id}><div><strong>{['active','trialing'].includes(sub.status)?'Subscription active':'Subscription inactive'}</strong><p>{sub.cancel_at?`Renewal canceled · access until ${new Date(sub.cancel_at).toLocaleDateString()}`:sub.period_end?`Current period ends ${new Date(sub.period_end).toLocaleDateString()}`:sub.status}</p></div><span className="paddle-account-status">{sub.status}</span></div>)}</section>
-    <section className="paddle-account-card"><h2><ReceiptText size={21}/> Recent purchases</h2>{!account?.payments.length?<p>No verified purchases yet.</p>:account.payments.map(p=><div className="paddle-account-row" key={p.id}><div><strong>{p.credits.toLocaleString()} credits{p.subscription_id?' / month':''}</strong><p>{new Date(p.created_at).toLocaleDateString()}{p.reversed?` · ${p.reversed} credits reversed`:''}</p></div><span className="paddle-account-status">{p.credited?'Verified':'Processing'}</span></div>)}<small>Amounts and downloadable invoices are available in your secure billing portal.</small></section>
+    <section className="paddle-account-card"><div className="wallet-billing-section-title"><h2><ReceiptText size={21}/> Recent purchases</h2>{account&&<button className="wallet-secondary-button" disabled={!!busy} onClick={()=>void refresh()}>{busy==='refresh'?<Loader2 size={15} className="animate-spin"/>:<RefreshCw size={15}/>}Refresh purchases</button>}</div><p>Missing credits after a payment? Refresh to safely verify delivery. This never creates a new purchase.</p>{!account?.payments.length?<p>No verified purchases yet.</p>:account.payments.map(p=><div className="paddle-account-row" key={p.id}><div><strong>{p.name} · {p.credits.toLocaleString()} credits{p.subscription_id?' / month':''}</strong><p>{new Date(p.created_at).toLocaleDateString()}{p.reversed?` · ${p.reversed} credits reversed`:''}</p><small>USD base amount: ${(p.amount/100).toFixed(2)} · Your receipt shows the final charged total.</small></div><div className="wallet-purchase-actions"><span className="paddle-account-status">{p.reversed>=p.credits?'Reversed':p.reversed?'Partially reversed':p.credited?'Delivered':'Processing'}</span>{Boolean(p.credited)&&<button className="wallet-secondary-button" disabled={!!busy} onClick={()=>void receipt(p.id)}>{busy===p.id?<Loader2 size={15} className="animate-spin"/>:<ReceiptText size={15}/>}Receipt</button>}</div></div>)}<small>Download invoices and manage renewals in your secure billing portal.</small></section>
     {hasPrevious&&<section className="paddle-account-card"><h2>Earlier purchases</h2><p>Your previous purchases and subscriptions remain available. Use their original billing portal for receipts and cancellation.</p><Button disabled={!!busy} onClick={()=>portal('paddle')}>{busy==='paddle'?<Loader2 size={17} className="animate-spin"/>:<ArrowUpRight size={17}/>}Manage earlier billing</Button>{previous!.subscriptions.map(s=><div className="paddle-account-row" key={s.subscription_id}><span>Earlier subscription{s.scheduled_change_action?` · ${s.scheduled_change_action} scheduled`:''}</span><span className="paddle-account-status">{s.status}</span></div>)}</section>}
   </div></main>;
 }

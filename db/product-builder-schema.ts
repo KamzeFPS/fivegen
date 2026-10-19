@@ -16,3 +16,6 @@ export const productBuilderOrderSnapshots=sqliteTable('product_builder_order_sna
 export const productBuilderUploadGrants=sqliteTable('product_builder_upload_grants',{
  orderId:text('order_id').notNull().references(()=>commerceOrders.id),uploadId:text('upload_id').notNull().references(()=>uploads.id),publicationVersion:integer('publication_version').notNull(),createdAt:integer('created_at').notNull(),
 },t=>[primaryKey({columns:[t.orderId,t.uploadId]})]);
+export const productBuilderRevisions=sqliteTable('product_builder_revisions',{
+ productId:text('product_id').notNull().references(()=>products.id),owner:text('owner').notNull(),version:integer('version').notNull(),kind:text('kind').notNull(),label:text('label').notNull(),data:text('data').notNull(),createdAt:integer('created_at').notNull(),
+},t=>[primaryKey({columns:[t.productId,t.version]}),index('idx_product_builder_revisions_owner').on(t.owner,t.productId,t.version)]);

@@ -32,7 +32,7 @@ async function load(path,selectedExports){
  const code=`const {${Object.keys(deps).join(',')}}=globalThis.${key};\n`+ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;
  const result=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));delete globalThis[key];return result;
 }
-for(const path of ['lib/commerce.ts','lib/experience.ts','lib/product.ts','lib/commerce-v2.ts','lib/builder-contract.ts','lib/builder-publication-contract.ts','lib/upload-validation.ts','lib/builder-delivery-server.ts','lib/commerce-v2-server.ts'])Object.assign(deps,await load(path));
+for(const path of ['lib/commerce.ts','lib/experience.ts','lib/product.ts','lib/commerce-v2.ts','lib/builder-contract.ts','lib/builder-assistant-contract.ts','lib/builder-revision-contract.ts','lib/product-readiness.ts','lib/builder-publication-contract.ts','lib/upload-validation.ts','lib/builder-delivery-server.ts','lib/commerce-v2-server.ts'])Object.assign(deps,await load(path));
 Object.assign(deps,await load('lib/server.ts',['productFromRow']));
 const builder=await load('lib/product-builder-server.ts');Object.assign(deps,builder);
 const publication=await load('lib/product-builder-publication.ts');Object.assign(deps,publication);
@@ -105,6 +105,14 @@ try{
  await storage.BUCKET.put(corruptKey,Buffer.alloc(stored.size,120));sql.prepare('UPDATE uploads SET object_key=? WHERE id=?').run(corruptKey,valid);
  await assert.rejects(()=>publication.publishBuilderProduct(integrity.product.id,owner,{expectedVersion:integrity.version}),e=>e.status===409,'Same-size corruption is detected by the publication hash check');
  assert.equal((await builder.getBuilderWorkspace(integrity.product.id,owner)).publication,null,'Failed integrity verification creates no public page');
+ // A whole drafting stub is not finished content. Explanatory code markers
+ // and intentional reusable template fields are still valid content.
+ let placeholder=await builder.createBuilderWorkspace(owner,{type:'book',source:'manual',requestId:randomUUID()});
+ placeholder=await save(placeholder,{...completeDraft(placeholder),sections:[{id:randomUUID(),title:'The first real chapter',body:'[Insert chapter content here]'}]});
+ assert.equal(placeholder.readiness.publishReady,false,'Obvious whole-chapter placeholders block publication on the server');
+ await assert.rejects(()=>publication.publishBuilderProduct(placeholder.product.id,owner,{expectedVersion:placeholder.version}),e=>e.status===409,'A client cannot bypass the placeholder check');
+ placeholder=await save(placeholder,{...placeholder.draft,sections:[{...placeholder.draft.sections[0],body:'This lesson explains how TODO comments work in a real code review. Use one to record a specific deferred task, then include the issue reference and responsible owner.'}]});publishedReady(placeholder,'Explanatory TODO discussion');
+ let templatePlaceholder=await builder.createBuilderWorkspace(owner,{type:'template-kit',source:'manual',requestId:randomUUID()});templatePlaceholder=await save(templatePlaceholder,{...completeDraft(templatePlaceholder),files:[{name:'client-template.md',description:'A reusable client brief',content:'[insert content]'}]});publishedReady(templatePlaceholder,'Intentional reusable template placeholders');
  // The AI source follows the same editing contract. This never invokes an AI
  // provider; it verifies reviewed AI output can be saved and resumed normally.
  let ai=await builder.createBuilderWorkspace(owner,{type:'book',source:'ai',requestId:randomUUID()});ai=await save(ai,completeDraft(ai));publishedReady(ai,'Reviewed AI manuscript');assert.equal(ai.draft.source,'ai');

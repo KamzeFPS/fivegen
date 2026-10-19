@@ -1,9 +1,10 @@
-# Apple Pay and Google Pay
+# Stripe checkout and billing
 
-New FiveGen purchases use Stripe Checkout Sessions + the Express Checkout Element.
-Only Apple Pay and Google Pay are mounted. There is no card form, Link, PayPal or
-Paddle checkout in the new purchase flow. Wallet availability depends on the
-customer's browser, location and wallet setup. Use HTTPS, even for browser tests.
+New FiveGen purchases use Stripe Checkout Sessions with a credit/debit card form
+and Express Checkout for eligible Apple Pay, Google Pay and Link accounts. Wallet
+availability depends on the customer's browser, location and wallet setup; the
+card form remains available when wallets are not. Use HTTPS for wallet tests.
+There is no new Paddle checkout in this flow.
 
 The current catalog is shared between pricing cards and server checkout creation:
 
@@ -17,8 +18,10 @@ The current catalog is shared between pricing cards and server checkout creation
 
 Edit `lib/credit-policy.ts` and `lib/subscriptions.ts` for amounts and allowances;
 `lib/wallet-catalog.ts` supplies the displayed offers. Cards show USD explicitly.
-Stripe supplies the final formatted checkout total. Adaptive Pricing is disabled;
-this flow does not claim that USD prices are localized to another currency.
+Stripe supplies the final formatted checkout total and available local-currency
+choices through Adaptive Pricing. The server verifies exact USD integration
+amounts regardless of the customer's presentment currency. The Stripe receipt is
+the authority for the amount and currency actually charged.
 
 ## Setup
 
@@ -43,6 +46,15 @@ been verified. Set it to `true` only after this verification and Stripe account
 activation. The checkout API also checks live `charges_enabled` before creating
 a session. A missing webhook secret or key mismatch disables checkout.
 
+The administrator can open `/admin/billing` for read-only checks of mode, matching
+keys, account activation, webhook event coverage, portal settings and wallet domain
+registration. The release switch stays off until verification is complete; checks
+do not activate an account, change credentials, or take payments. If Stripe reports
+`charges_enabled=false`, complete its account activation before enabling checkout.
+Enable payment method updates in the existing Stripe portal configuration so
+customers can replace a card as well as cancel and obtain invoices. The setup
+script now enables that feature for configurations it creates or updates.
+
 ## Fulfillment and existing accounts
 
 Raw webhook bodies are verified with the Stripe SDK and notification signing
@@ -50,7 +62,16 @@ secret, not the API key. The server fetches current Stripe state before applying
 changes and matches the stored owner, customer, checkout, quantity, amount and
 subscription interval. A browser return does not itself grant credits. A server
 reconciliation on `/welcome` can recover a completed checkout ahead of a delayed
-webhook, using the same idempotent fulfillment path.
+webhook, using the same idempotent fulfillment path. Billing's **Refresh purchases**
+action also reconciles the signed-in owner's pending purchases and latest paid
+subscription invoice. It never creates a payment or accepts a customer ID from
+the browser. A signed-out checkout return retains its reference through sign-in.
+
+Each delivered purchase has a **Receipt** button. The server checks ownership and
+environment again and reads the verified Stripe charge receipt URL. Receipt links
+are minted on request rather than persisted as public URLs. Billing management,
+receipt access and purchase reconciliation remain available after Terms updates;
+creating a new purchase still requires the current Terms acceptance.
 
 One-time purchases and paid invoices are keyed by Stripe IDs. Test credits are
 isolated from production AI capacity. Annual payments release credits monthly;
@@ -76,3 +97,7 @@ should be made by the agent.
 Current official references: [Express Checkout](https://docs.stripe.com/elements/express-checkout-element),
 [domain registration](https://docs.stripe.com/payments/payment-methods/pmd-registration),
 [wallet testing](https://docs.stripe.com/testing/wallets).
+
+## Production fulfillment destination
+
+The active FiveGen Stripe account was verified from the deployed Render runtime on 2026-10-19. Credit purchases use the permanent live destination `we_1USCgMPmtswS6CM74qeTiMP7` at `https://www.fivegen.ai/api/webhooks/wallet`. Its signing secret is stored in Render environment configuration, separate from the existing product-sales webhook. Keep this destination and its signing secret; it is ongoing fulfillment infrastructure, not a test artifact. The live account, customer portal, and wallet domain were checked before enabling checkout. No real payment was made as part of this release.

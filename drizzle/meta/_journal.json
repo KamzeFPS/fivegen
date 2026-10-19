@@ -141,6 +141,13 @@
       "when": 1792392834010,
       "tag": "0019_marketing_plugins",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1792400400000,
+      "tag": "0020_builder_revisions",
+      "breakpoints": true
     }
   ]
 }

@@ -2,15 +2,16 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, Check, ChevronDown, ChevronUp, Loader2, MessageSquare, Minimize2, RefreshCw, Sparkles, WandSparkles } from 'lucide-react';
-import {builderAgentFieldLabels,builderAgentFieldKeysForContext,type BuilderAgentContext,type BuilderAgentState,type BuilderAgentSuggestion,type BuilderAgentTarget,type BuilderAgentDetailsGroup,type BuilderAgentFieldKey} from '@/lib/builder-assistant-contract';
+import {builderAgentFieldLabels,builderAgentFieldKeysForContext,type BuilderAgentContext,type BuilderAgentState,type BuilderAgentSuggestion,type BuilderAgentTarget,type BuilderAgentDetailsGroup,type BuilderAgentFieldKey,type BuilderAgentRefinement} from '@/lib/builder-assistant-contract';
 import './builder-agent.css';
 
-type AgentRequest = { requestId: string; message: string; expectedUpdatedAt: number; maxCredits: number; target: BuilderAgentTarget; detailsGroup?:BuilderAgentDetailsGroup;fieldKeys?:BuilderAgentFieldKey[];context: BuilderAgentContext };
+type AgentRequest = { requestId: string; message: string; expectedUpdatedAt: number; maxCredits: number; target: BuilderAgentTarget; detailsGroup?:BuilderAgentDetailsGroup;fieldKeys?:BuilderAgentFieldKey[];refinement?:BuilderAgentRefinement;context: BuilderAgentContext };
 export type BuilderAgentFocus={id:string;message:string;detailsGroup:BuilderAgentDetailsGroup;fieldKeys?:BuilderAgentFieldKey[]};
 type Props = {
   productId: string;
   context: BuilderAgentContext;
-  onApply: (suggestion: BuilderAgentSuggestion) => void | boolean | Promise<void | boolean>;
+  onApply: (suggestion: BuilderAgentSuggestion,target?:BuilderAgentTarget,refinement?:BuilderAgentRefinement) => void | boolean | Promise<void | boolean>;
+  onBeforeSend?:()=>Promise<void>;
   onGenerate?: () => void;
   onMinimizedChange?: (minimized: boolean) => void;
   generateDisabled?: boolean;
@@ -21,12 +22,13 @@ function excerpt(context: BuilderAgentContext): BuilderAgentContext {
   return { type: context.type.slice(0, 80),builderType:context.builderType,deliveryFamily:context.deliveryFamily, title: context.title.slice(0, 160), description: context.description.slice(0, 2000), audience: context.audience.slice(0, 1000), language: context.language.slice(0, 80), fields: Object.fromEntries(Object.entries(context.fields || {}).slice(0, 24).map(([key, value]) => [key.slice(0, 80), value.slice(0, 400)])), sections: (context.sections || []).slice(0, 24).map(section => ({ title: section.title.slice(0, 160) || 'Untitled section', body: section.body.slice(0, 280) })) };
 }
 
-export function BuilderAgent({ productId, context, onApply, onGenerate, onMinimizedChange, generateDisabled,focus }: Props) {
+export function BuilderAgent({ productId, context, onApply,onBeforeSend, onGenerate, onMinimizedChange, generateDisabled,focus }: Props) {
   const [state, setState] = useState<BuilderAgentState | null>(null);
   const [minimized, setMinimized] = useState(false), [loading, setLoading] = useState(true), [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(''), [answers, setAnswers] = useState<Record<string, string>>({}), [error, setError] = useState('');
   const [target, setTarget] = useState<BuilderAgentTarget>('details'),[detailsGroup,setDetailsGroup]=useState<BuilderAgentDetailsGroup|undefined>(),[fieldKeys,setFieldKeys]=useState<BuilderAgentFieldKey[]|undefined>(), [applying, setApplying] = useState(''), [applied, setApplied] = useState<string[]>([]);
   const [pending, setPending] = useState<AgentRequest | null>(null), [loadedStorageKey, setLoadedStorageKey] = useState('');
+  const [refineSectionId,setRefineSectionId]=useState(''),[refineText,setRefineText]=useState('');
   const listRef = useRef<HTMLDivElement>(null), inputRef = useRef<HTMLTextAreaElement>(null), sendingRef = useRef(false), followsRef = useRef(true);
   const storageKey = `fivegen:builder-agent:${productId}`;
   const messages = state?.conversation.messages || [], latest = messages.at(-1);
@@ -35,7 +37,9 @@ export function BuilderAgent({ productId, context, onApply, onGenerate, onMinimi
   const scopeLabel=fieldKeys?.length?(fieldKeys.length>3?`Selected fields (${fieldKeys.length})`:fieldKeys.map(key=>builderAgentFieldLabels[key]).join(', ')):detailsGroup==='essentials'?'The essentials':detailsGroup==='type-details'?'Product-specific fields':'Product details';
   const combined = [...questions.filter(q => answers[q]?.trim()).map(q => `${q}\nMy answer: ${answers[q].trim()}`), message.trim()].filter(Boolean).join('\n\n');
   const charge = state && !state.unlimited && state.remaining === 0 ? state.cost : 0;
-  const canSend = Boolean(state?.aiReady && combined.length >= 3 && combined.length <= 3000 && !busy && !loading && !pending && (state.unlimited || state.credits >= charge));
+  const refineSection=context.sections.find(section=>section.id===refineSectionId),refineIndex=refineSection?.body.indexOf(refineText)??-1;
+  const validRefinement=!!refineSection?.id&&!!refineText.trim()&&refineText.length<=1800&&refineIndex>=0&&refineSection.body.indexOf(refineText,refineIndex+1)===-1;
+  const canSend = Boolean(state?.aiReady && combined.length >= 3 && combined.length <= 3000 && !busy && !loading && !pending && (target!=='refine'||validRefinement) && (state.unlimited || state.credits >= charge));
 
   function changeMinimized(value: boolean) { setMinimized(value); onMinimizedChange?.(value); }
   async function reload(signal?: AbortSignal) {
@@ -72,8 +76,11 @@ export function BuilderAgent({ productId, context, onApply, onGenerate, onMinimi
 
   async function send(existing?: AgentRequest) {
     if (sendingRef.current || (!existing && !canSend) || !state) return;
-    const payload: AgentRequest = existing || { requestId: crypto.randomUUID(), message: combined, expectedUpdatedAt: state.conversation.updatedAt, maxCredits: charge, target,...(target==='details'?{detailsGroup,fieldKeys}:{}), context: excerpt(context) };
-    sendingRef.current = true; setBusy(true); setError(''); setPending(payload); followsRef.current = true;
+    sendingRef.current = true; setBusy(true); setError('');
+    try{if(!existing)await onBeforeSend?.();}catch(cause){sendingRef.current=false;setBusy(false);setError(cause instanceof Error?cause.message:'Save your draft before asking AI.');return;}
+    const refinement=target==='refine'&&refineSection?.id?{sectionId:refineSection.id,originalTitle:refineSection.title,originalText:refineText}:undefined;
+    const payload: AgentRequest = existing || { requestId: crypto.randomUUID(), message: combined, expectedUpdatedAt: state.conversation.updatedAt, maxCredits: charge, target,...(target==='details'?{detailsGroup,fieldKeys}:{}),...(refinement?{refinement}:{}), context: target==='refine'&&refinement?{...excerpt(context),sections:[{id:refinement.sectionId,title:refinement.originalTitle,body:refinement.originalText}]}:excerpt(context) };
+    setPending(payload); followsRef.current = true;
     // Save the request identity before transmission, so a lost response can be retried without a second charge.
     try { localStorage.setItem(storageKey, JSON.stringify({ minimized, message, answers, target,detailsGroup,fieldKeys,scopeVersion:2, applied, pending: payload })); } catch {}
     try {
@@ -87,11 +94,12 @@ export function BuilderAgent({ productId, context, onApply, onGenerate, onMinimi
 
   async function apply(id: string, suggestion: BuilderAgentSuggestion) {
     setApplying(id); setError('');
-    try { if (await onApply(suggestion) !== false) setApplied(current => [...current, id]); }
+    try { const original=messages.find(item=>item.id===id);if (await onApply(suggestion,original?.target,original?.refinement) !== false) setApplied(current => [...current, id]); }
     catch (cause) { setError(cause instanceof Error ? cause.message : 'The suggestion could not be applied.'); }
     finally { setApplying(''); }
   }
-  function chooseTarget(value:BuilderAgentTarget){if(busy||pending)return;setTarget(value);setDetailsGroup(undefined);setFieldKeys(undefined);}
+  function chooseRefineSection(id:string){const section=context.sections.find(item=>item.id===id);setRefineSectionId(id);setRefineText(section?.body.slice(0,1000)||'');}
+  function chooseTarget(value:BuilderAgentTarget){if(busy||pending)return;setTarget(value);setDetailsGroup(undefined);setFieldKeys(undefined);if(value==='refine'&&!refineSectionId)chooseRefineSection(context.sections.find(section=>section.id&&section.body.trim())?.id||'');}
 
   if (minimized) return <aside className="builder-agent is-minimized" aria-label="AI product assistant"><button className="builder-agent-reopen" onClick={() => changeMinimized(false)} aria-label="Open AI assistant" title="Open AI assistant"><Sparkles size={19}/><span>AI</span>{busy && <Loader2 size={13} className="spin"/>}</button></aside>;
 
@@ -99,7 +107,7 @@ export function BuilderAgent({ productId, context, onApply, onGenerate, onMinimi
     <header className="builder-agent-heading"><div className="builder-agent-avatar"><Sparkles size={18}/></div><div><h2>FiveGen assistant</h2><p>Your idea. Built together.</p></div><button onClick={() => changeMinimized(true)} aria-label="Minimize AI assistant" title="Minimize assistant"><Minimize2 size={17}/></button></header>
     <div className="builder-agent-history" ref={listRef} onScroll={() => { const list = listRef.current; if (list) followsRef.current = list.scrollHeight - list.scrollTop - list.clientHeight < 90; }}>
       {loading && !state ? <p className="builder-agent-loading" role="status"><Loader2 size={16} className="spin"/>Loading your conversation…</p> : !messages.length && <div className="builder-agent-welcome"><span><WandSparkles size={22}/></span><h3>A second mind for your {context.type.toLowerCase()}.</h3><p>Improve your product fields, plan an outline, or refine an excerpt. Choose the task, then review the proposed updates.</p><div>{[{prompt:'Enhance my product details',mode:'details' as const},{prompt:'Make my product outcome clearer',mode:'details' as const},{prompt:'Suggest an outline for this product',mode:'outline' as const}].map(({prompt,mode}) => <button key={prompt} onClick={() => { chooseTarget(mode);setMessage(prompt); inputRef.current?.focus(); }}><MessageSquare size={13}/>{prompt}</button>)}</div></div>}
-      {messages.map(item => <article className={`builder-agent-message ${item.role}`} key={item.id}><strong>{item.role === 'assistant' ? 'FiveGen' : 'You'}</strong><p>{item.content}</p>{item.suggestion && <div className="builder-agent-suggestion"><span><Sparkles size={13}/>{item.suggestion.sections?.length?'Suggested content':'Suggested field updates'}</span><p>{item.suggestion.summary}</p><details><summary>Review changes<ChevronDown size={13}/></summary>{item.suggestion.title && <div><b>Product name</b><p>{item.suggestion.title}</p></div>}{item.suggestion.description && <div><b>Product description</b><p>{item.suggestion.description}</p></div>}{item.suggestion.audience && <div><b>Who is this for?</b><p>{item.suggestion.audience}</p></div>}{Object.entries(item.suggestion.fields||{}).map(([key,value])=><div key={key}><b>{builderAgentFieldLabels[key as BuilderAgentFieldKey]||key}</b><p>{value}</p></div>)}{item.suggestion.sections?.map((section, index) => <div key={index}><b>{index + 1}. {section.title}</b><p>{section.body}</p></div>)}</details><button disabled={Boolean(applying) || applied.includes(item.id)} onClick={() => void apply(item.id, item.suggestion!)}>{applying === item.id ? <Loader2 size={14} className="spin"/> : applied.includes(item.id) ? <Check size={14}/> : <ChevronUp size={14}/ >}{applied.includes(item.id) ? 'Applied to builder' : 'Review & apply'}</button></div>}{item.questions?.length && (item.id !== latest?.id||!sameScope) ? <details className="builder-agent-previous-questions"><summary>Questions from this step</summary>{item.questions.map(question => <p key={question}>{question}</p>)}</details> : null}</article>)}
+      {messages.map(item => <article className={`builder-agent-message ${item.role}`} key={item.id}><strong>{item.role === 'assistant' ? 'FiveGen' : 'You'}</strong><p>{item.content}</p>{item.suggestion && <div className="builder-agent-suggestion"><span><Sparkles size={13}/>{item.refinement?'Suggested excerpt update':item.suggestion.sections?.length?'Suggested content':'Suggested field updates'}</span><p>{item.suggestion.summary}</p><details><summary>Review changes<ChevronDown size={13}/></summary>{item.suggestion.title && <div><b>Product name</b><p>{item.suggestion.title}</p></div>}{item.suggestion.description && <div><b>Product description</b><p>{item.suggestion.description}</p></div>}{item.suggestion.audience && <div><b>Who is this for?</b><p>{item.suggestion.audience}</p></div>}{Object.entries(item.suggestion.fields||{}).map(([key,value])=><div key={key}><b>{builderAgentFieldLabels[key as BuilderAgentFieldKey]||key}</b><p>{value}</p></div>)}{item.suggestion.sections?.map((section, index) => <div key={index}><b>{index + 1}. {section.title}</b><p>{section.body}</p></div>)}</details><button disabled={Boolean(applying) || applied.includes(item.id)} onClick={() => void apply(item.id, item.suggestion!)}>{applying === item.id ? <Loader2 size={14} className="spin"/> : applied.includes(item.id) ? <Check size={14}/> : <ChevronUp size={14}/ >}{applied.includes(item.id) ? 'Applied to builder' : 'Review & apply'}</button></div>}{item.questions?.length && (item.id !== latest?.id||!sameScope) ? <details className="builder-agent-previous-questions"><summary>Questions from this step</summary>{item.questions.map(question => <p key={question}>{question}</p>)}</details> : null}</article>)}
       {!!questions.length && <fieldset className="builder-agent-answers" disabled={busy}><legend>Answer together, or reply below</legend>{questions.map((question, index) => <label key={`${latest?.id}:${index}`}><span>{index + 1}. {question}</span><textarea rows={2} maxLength={650} placeholder="Your answer…" value={answers[question] || ''} onChange={event => setAnswers(current => ({ ...current, [question]: event.target.value }))}/></label>)}</fieldset>}
       {busy && <p className="builder-agent-thinking" role="status"><Loader2 size={14} className="spin"/>Thinking about your product…</p>}
     </div>
@@ -109,6 +117,7 @@ export function BuilderAgent({ productId, context, onApply, onGenerate, onMinimi
       <form onSubmit={event => { event.preventDefault(); void send(); }}>
         <div className="builder-agent-target" aria-label="Assistant task">{([{id:'details',label:'Product details'},{id:'outline',label:'Outline'},{id:'refine',label:'Refine excerpt'}] as const).map(item=><button key={item.id} type="button" disabled={busy||!!pending} aria-pressed={target===item.id} onClick={()=>chooseTarget(item.id)}>{item.label}</button>)}</div>
         {target==='details'&&<label className="builder-agent-field-scope"><span>Editing</span><select aria-label="Fields to improve" disabled={busy||!!pending} value={fieldKeys?.length?'selected':detailsGroup||'all'} onChange={event=>{setFieldKeys(undefined);setDetailsGroup(event.target.value==='all'?undefined:event.target.value as BuilderAgentDetailsGroup);}}>{fieldKeys?.length&&<option value="selected">{scopeLabel}</option>}<option value="all">All product details</option><option value="essentials">The essentials</option>{builderAgentFieldKeysForContext(context,'type-details').length>0&&<option value="type-details">{context.builderType==='book'?'The shape of your book':'Product-specific fields'}</option>}</select></label>}
+        {target==='refine'&&<div className="builder-agent-refine"><label className="builder-agent-field-scope"><span>Section</span><select aria-label="Section to refine" value={refineSectionId} disabled={busy||!!pending} onChange={event=>chooseRefineSection(event.target.value)}><option value="">Choose written content</option>{context.sections.filter(section=>section.id&&section.body.trim()).map(section=><option key={section.id} value={section.id}>{section.title}</option>)}</select></label><label><span>Original excerpt</span><textarea aria-label="Original excerpt to refine" value={refineText} onChange={event=>setRefineText(event.target.value)} maxLength={1800} rows={3} disabled={busy||!!pending||!refineSection} placeholder="Select a section, then keep or paste the exact passage to improve."/></label><small>{!refineSection?'Add written content to a section before refining.':validRefinement?'Only this passage will change. The rest of your product stays intact.':'Use an exact passage that appears once in this section, up to 1,800 characters.'}</small></div>}
         <textarea ref={inputRef} value={message} onChange={event => setMessage(event.target.value)} rows={3} maxLength={3000} aria-label="Message your product assistant" placeholder={questions.length ? 'Add anything else, then send all answers…' : 'Ask about your product…'} disabled={busy || Boolean(pending)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !window.matchMedia('(pointer: coarse)').matches) { event.preventDefault(); void send(); } }}/>
         <div className="builder-agent-compose-bottom"><span>{busy ? 'Working…' : !state ? 'Private product conversation' : state.unlimited ? 'Unlimited planning' : state.remaining > 0 ? `${state.remaining} included planning messages` : `${state.cost} credits / planning message`}</span><button type="submit" disabled={!canSend} aria-label="Send message and answers">{busy ? <Loader2 size={16} className="spin"/> : <ArrowUp size={16}/>}</button></div>
       </form>

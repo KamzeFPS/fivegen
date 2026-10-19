@@ -9,11 +9,11 @@ import {monthlyWindow,creditPacks} from '../lib/credit-policy.ts';
 import {subscriptionPlans} from '../lib/subscriptions.ts';
 
 const root=resolve('outputs/wallet-billing-qa',randomUUID()),storage=createStorage(root),db=storage.DB,sql=storage.sqlite;
-let environment='production',enabled=true;
+let environment='production',enabled=true,chargesEnabled=true;
 const sessions=new Map(),invoices=new Map(),subscriptions=new Map(),intents=new Map(),charges=new Map(),lineItems=new Map(),invoiceLines=new Map();let lastCheckoutParams=null,lastCheckoutOptions=null,expireCalls=[];const expireCompletes=new Set();
 class ApiError extends Error{constructor(message,status=400){super(message);this.status=status;}}
 const sdk={
-  accounts:{retrieve:async()=>({charges_enabled:true})},
+  accounts:{retrieve:async()=>({charges_enabled:chargesEnabled})},
   customers:{create:async({email})=>({id:'cus_'+email.split('@')[0]})},
   checkout:{sessions:{retrieve:async id=>structuredClone(sessions.get(id)),listLineItems:async id=>({data:lineItems.get(id),has_more:false}),expire:async id=>{expireCalls.push(id);if(expireCompletes.has(id)){sessions.get(id).status='complete';throw new Error('Checkout completed before expiry');}sessions.get(id).status='expired';return structuredClone(sessions.get(id));},create:async(params,options)=>{
     // Match Stripe accounts where Managed Payments is enabled by default.
@@ -41,7 +41,7 @@ function fixture(id,{mode=environment,interval=null,credits=1000,amount=1500,wal
   const metadata={purpose:'fivegen_wallet',fivegen_intent:id};
   sessions.set(session,{id:session,metadata,client_reference_id:id,customer,mode:interval?'subscription':'payment',status:'complete',payment_status:'paid',currency:'usd',amount_subtotal:amount,amount_total:amount,...(presentment?{presentment_details:presentment}:{}),total_details:{amount_discount:0},payment_intent:pi,subscription:sub,invoice,livemode:mode==='production'});
   lineItems.set(session,[{quantity:1,price:{unit_amount:amount,currency:'usd',recurring:interval?{interval}:null}}]);
-  charges.set(charge,{id:charge,livemode:mode==='production',payment_intent:pi,customer,currency:'usd',amount,amount_captured:amount,amount_refunded:0,status:'succeeded',paid:true,captured:true,disputed:false,...(presentment?{presentment_details:presentment}:{}),payment_method_details:link?{type:'link',link:{country:'MN',funding_source_group:link}}:{type:'card',card:{...(wallet?{wallet:{type:wallet}}:{})}}});
+  charges.set(charge,{id:charge,livemode:mode==='production',payment_intent:pi,customer,receipt_url:'https://pay.stripe.com/receipts/payment/'+id,currency:'usd',amount,amount_captured:amount,amount_refunded:0,status:'succeeded',paid:true,captured:true,disputed:false,...(presentment?{presentment_details:presentment}:{}),payment_method_details:link?{type:'link',link:{country:'MN',funding_source_group:link}}:{type:'card',card:{...(wallet?{wallet:{type:wallet}}:{})}}});
   intents.set(pi,{id:pi,livemode:mode==='production',status:'succeeded',customer,currency:'usd',amount,amount_received:amount,charge,...(presentment?{presentment_details:presentment}:{})});
   if(interval){
     subscriptions.set(sub,{id:sub,metadata,livemode:mode==='production',customer,status,cancel_at:null,cancel_at_period_end:false,items:{data:[{quantity:1,price:{unit_amount:amount,currency:'usd',recurring:{interval}},current_period_end:end/1000}]}});
@@ -207,6 +207,50 @@ try {
   await assert.rejects(()=>billing.closeWalletCheckout('attacker',pack.session),e=>e.status===404);
   await assert.rejects(()=>billing.walletPortal('attacker','https://example.test'),e=>e.status===404);
   assert.equal((await billing.walletPortal(pack.id,'https://example.test')).url,'https://billing.stripe.com/test');
+
+  // The release flag cannot bypass account activation or permit an orphan charge.
+  chargesEnabled=false;
+  await assert.rejects(()=>billing.createWalletCheckout('inactive-account','new@example.test','pack:starter','https://example.test'),e=>e.status===503);
+  assert.equal(sql.prepare('SELECT COUNT(*) n FROM wallet_checkout_intents WHERE owner=?').get('inactive-account').n,0);
+  chargesEnabled=true;
+  for(const offer of deps.walletCatalog()){
+    const catalogOwner='catalog-'+offer.id,email=catalogOwner+'@example.test';
+    await billing.createWalletCheckout(catalogOwner,email,offer.id,'https://example.test');
+    assert.equal(lastCheckoutParams.line_items[0].price_data.unit_amount,offer.cents,'Every offer checkout uses the server catalog amount');
+    assert.equal(lastCheckoutParams.line_items[0].price_data.recurring?.interval??null,offer.interval??null);
+    assert.equal(sql.prepare('SELECT credits FROM wallet_checkout_intents WHERE owner=?').get(catalogOwner).credits,offer.credits);
+  }
+  const delayed=fixture('delayed-delivery');selectOwner(delayed);
+  sql.prepare("UPDATE wallet_checkout_intents SET status='open' WHERE id=?").run(delayed.id);
+  const unrelated=fixture('other-owner-unprocessed');selectOwner(unrelated);
+  sql.prepare("UPDATE wallet_checkout_intents SET status='open' WHERE id=?").run(unrelated.id);
+  const recovered=await billing.reconcileWalletAccount(delayed.id);
+  assert.equal(recovered.checked,1);assert.equal(recovered.unavailable,0);
+  assert.equal(balance(delayed.id),1000,'Billing recovers a paid checkout when its webhook is delayed');
+  assert.equal(balance(unrelated.id),0,'Reconciliation never fulfills another account purchase');
+  await billing.reconcileWalletAccount(delayed.id);assert.equal(balance(delayed.id),1000,'A refresh cannot duplicate delivery');
+  const listed=(await billing.walletAccount(delayed.id)).payments;
+  assert.equal(listed.length,1);assert.equal(listed[0].amount,1500);assert.equal(listed[0].name,'Starter');
+  assert.equal((await billing.walletAccount('attacker')).payments.length,0,'Billing history is isolated by signed-in owner');
+  assert.equal((await billing.walletReceipt(delayed.id,delayed.session)).url,'https://pay.stripe.com/receipts/payment/'+delayed.id);
+  await assert.rejects(()=>billing.walletReceipt('attacker',delayed.session),e=>e.status===404);
+  charges.get(delayed.charge).receipt_url='https://malicious.example/receipt';
+  await assert.rejects(()=>billing.walletReceipt(delayed.id,delayed.session),e=>e.status===503,'Receipt redirects only to the verified Stripe host');
+  charges.get(delayed.charge).receipt_url='https://pay.stripe.com/receipts/payment/'+delayed.id;
+  charges.get(delayed.charge).customer='cus_other';
+  await assert.rejects(()=>billing.walletReceipt(delayed.id,delayed.session),e=>e.status===404,'Receipt customer is checked against the signed-in owner');
+  charges.get(delayed.charge).customer=delayed.customer;
+  environment='sandbox';await assert.rejects(()=>billing.walletReceipt(delayed.id,delayed.session),e=>e.status===404,'Receipt environment cannot cross from test to live');environment='production';
+  const recoveringSub=fixture('delayed-renewal',{interval:'month',credits:2500,amount:2900});selectOwner(recoveringSub);
+  await billing.fulfillWalletSession(recoveringSub.session);
+  const renewalInvoice='in_renewal_recovery',renewalPi='pi_renewal_recovery',renewalCharge='ch_renewal_recovery';
+  invoices.set(renewalInvoice,{...structuredClone(invoices.get(recoveringSub.invoice)),id:renewalInvoice,payments:{data:[{status:'paid',payment:{payment_intent:renewalPi}}]}});
+  invoiceLines.set(renewalInvoice,structuredClone(invoiceLines.get(recoveringSub.invoice)));
+  charges.set(renewalCharge,{...structuredClone(charges.get(recoveringSub.charge)),id:renewalCharge,payment_intent:renewalPi});
+  intents.set(renewalPi,{...structuredClone(intents.get(recoveringSub.pi)),id:renewalPi,charge:renewalCharge});
+  subscriptions.get(recoveringSub.sub).latest_invoice=renewalInvoice;
+  await billing.reconcileWalletAccount(recoveringSub.id);await billing.reconcileWalletAccount(recoveringSub.id);
+  assert.equal(sql.prepare('SELECT COUNT(*) n FROM wallet_payments WHERE id=?').get(renewalInvoice).n,1,'The latest paid subscription invoice is recovered and recorded exactly once');
 
   const sdkReal=new Stripe('sk_test_fixture'),secret='whsec_fixture',payload=JSON.stringify({id:'evt_fixture',object:'event',type:'unused.test',livemode:false,data:{object:{}}});
   const signature=sdkReal.webhooks.generateTestHeaderString({payload,secret});

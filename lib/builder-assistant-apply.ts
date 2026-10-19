@@ -3,6 +3,7 @@ import {
   builderAgentFieldKeysForContext,
   builderAgentSuggestionSchema,
   type BuilderAgentSuggestion,
+  builderAgentRefinementSchema,type BuilderAgentRefinement,
 } from './builder-assistant-contract';
 
 /** Apply only reviewed, editable text. The assistant cannot change delivery or sales settings. */
@@ -57,4 +58,16 @@ export function applyBuilderAgentSuggestion(
   // Reject invalid lengths or a capacity overflow; never truncate the user's
   // content to make an AI proposal fit.
   return builderDraftSchema.parse(next);
+}
+
+/** Replace one uniquely identified excerpt, never a chapter list or recording. */
+export function applyBuilderAgentRefinement(draft:BuilderDraft,suggestion:BuilderAgentSuggestion,refinement:BuilderAgentRefinement):BuilderDraft{
+ builderDraftSchema.parse(draft);const scope=builderAgentRefinementSchema.parse(refinement),edit=builderAgentSuggestionSchema.parse(suggestion);
+ if(edit.title||edit.description||edit.audience||Object.keys(edit.fields||{}).length||edit.sections?.length!==1)throw new Error('A refinement must contain one revised excerpt only. Your product is unchanged.');
+ const index=draft.sections.findIndex(section=>section.id===scope.sectionId),section=draft.sections[index];
+ if(!section||section.title!==scope.originalTitle)throw new Error('The selected section changed. Select its current excerpt and ask AI again.');
+ const start=section.body.indexOf(scope.originalText);
+ if(start<0||section.body.indexOf(scope.originalText,start+1)!==-1)throw new Error('The original excerpt changed or appears more than once. Select a unique current excerpt before applying.');
+ const body=section.body.slice(0,start)+edit.sections[0].body+section.body.slice(start+scope.originalText.length);
+ return builderDraftSchema.parse({...draft,sections:draft.sections.map((item,i)=>i===index?{...item,body}:item)});
 }

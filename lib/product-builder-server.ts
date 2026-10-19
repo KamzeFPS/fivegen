@@ -5,6 +5,8 @@ import {slugify,type ProductContent} from './product';
 import {builderDraftSchema,builderFamily,builderTypeDetails,builderTypeForFormat,builderTypes,defaultBuilderDraft,type BuilderDraft,type BuilderWorkspace,type BuilderCheck} from './builder-contract';
 import {commerceAccount,getCommerceOffer} from './commerce-v2-server';
 import {verifyStoredUpload} from './upload-validation';
+import {evaluateProductReadiness,isUnfinishedPlaceholder} from './product-readiness';
+import {builderRevisionKinds,builderRevisionLabels,builderRevisionRestoreSchema,builderRevisionSnapshot,restoreBuilderEditorialRevision,type BuilderRevisionHistory,type BuilderRevisionKind} from './builder-revision-contract';
 
 export const builderHeaders={'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer'};
 const fileTypes=['application/pdf','image/png','image/jpeg','image/webp','text/plain','text/csv'];
@@ -39,6 +41,10 @@ export async function builderReadiness(productId:string,owner:string,draft:Build
  }
  if(family==='community')check('membership',!!draft.fields.memberPromise?.trim()&&!!draft.fields.welcome?.trim()&&!!draft.fields.rules?.trim(),'Add the member promise, welcome and community rules. Your external member-space link stays private.');
  if(draft.coverUploadId)check('cover',await verifiedAsset(owner,productId,draft.coverUploadId,'cover',integrity),'Choose an available image or remove the cover.');
+ const editorial=evaluateProductReadiness(draft),unfinished=editorial.checks.find(item=>item.status==='blocker'&&(
+  /^(?:section-stub-|file-stub-)/.test(item.key)||item.key.startsWith('section-title-')||item.location.field&&isUnfinishedPlaceholder(item.location.field in draft?String(draft[item.location.field as keyof BuilderDraft]):draft.fields[item.location.field]||'')
+ ));
+ check('quality',!unfinished,unfinished?`${unfinished.title}. ${unfinished.message}`:'No unfinished drafting placeholders were found.');
  return {publishReady:checks.every(item=>item.ready),checks:checks.map(item=>({...item,message:item.ready?({details:'Product details are ready.',sections:'Added sections are ready.',files:'Private files are validated.',content:'Your content is ready.',templates:'Reusable files are included.',instructions:'Usage instructions are ready.',lessons:family==='challenge'?'Your self-paced activities are ready.':'Your lessons are ready.',scope:'Your service scope is clear.',session:'Session details are ready.',membership:'Member onboarding is ready.',cover:'Your cover is ready.'} as Record<string,string>)[item.key]||item.message:item.message}))};
 }
 export async function getBuilderWorkspace(productId:string,owner:string):Promise<BuilderWorkspace>{
@@ -65,7 +71,7 @@ export async function createBuilderWorkspace(owner:string,input:unknown){
  return getBuilderWorkspace(id,owner);
 }
 export async function saveBuilderWorkspace(productId:string,owner:string,input:unknown){
- const value=z.object({expectedVersion:z.number().int().min(1),draft:builderDraftSchema}).parse(input);
+ const value=z.object({expectedVersion:z.number().int().min(1),draft:builderDraftSchema,revisionKind:z.enum(builderRevisionKinds).default('manual')}).parse(input);
  await ownedProduct(productId,owner);
  const current=await database().prepare('SELECT * FROM product_builder_workspaces WHERE product_id=? AND owner=?').bind(productId,owner).first();if(!current)throw new ApiError('Product workspace not found.',404);
  const old=builderDraftSchema.parse(JSON.parse(String(current.data))),encoded=JSON.stringify(value.draft);
@@ -82,10 +88,27 @@ export async function saveBuilderWorkspace(productId:string,owner:string,input:u
  const info=builderTypeDetails[value.draft.type],now=Math.max(Date.now(),Number(current.updated_at)+1),content:ProductContent={sections:value.draft.sections,files:value.draft.files,benefits:value.draft.fields.outcome?[value.draft.fields.outcome]:[],launch:''};
  const results=await database().batch([
   database().prepare('UPDATE product_builder_workspaces SET version=version+1,data=?,updated_at=? WHERE product_id=? AND owner=? AND version=?').bind(encoded,now,productId,owner,value.expectedVersion),
-  database().prepare('UPDATE products SET title=?,description=?,audience=?,format=?,price=?,content=?,updated_at=? WHERE id=? AND owner=? AND EXISTS(SELECT 1 FROM product_builder_workspaces WHERE product_id=? AND owner=? AND version=? AND updated_at=?)').bind(value.draft.title||`Untitled ${info.name}`,value.draft.description,value.draft.audience,info.format,value.draft.priceCents,JSON.stringify(content),now,productId,owner,productId,owner,value.expectedVersion+1,now),
+  database().prepare(`INSERT OR IGNORE INTO product_builder_revisions (product_id,owner,version,kind,label,data,created_at) SELECT ?,?,?,'manual',?,?,? WHERE EXISTS(SELECT 1 FROM product_builder_workspaces WHERE product_id=? AND owner=? AND version=? AND updated_at=? AND data=?)`).bind(productId,owner,value.expectedVersion,builderRevisionLabels.manual,JSON.stringify(builderRevisionSnapshot(old)),Number(current.updated_at),productId,owner,value.expectedVersion+1,now,encoded),
+  database().prepare(`INSERT OR IGNORE INTO product_builder_revisions (product_id,owner,version,kind,label,data,created_at) SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM product_builder_workspaces WHERE product_id=? AND owner=? AND version=? AND updated_at=? AND data=?)`).bind(productId,owner,value.expectedVersion+1,value.revisionKind,builderRevisionLabels[value.revisionKind],JSON.stringify(builderRevisionSnapshot(value.draft)),now,productId,owner,value.expectedVersion+1,now,encoded),
+  database().prepare('UPDATE products SET title=?,description=?,audience=?,format=?,price=?,content=?,updated_at=? WHERE id=? AND owner=? AND EXISTS(SELECT 1 FROM product_builder_workspaces WHERE product_id=? AND owner=? AND version=? AND updated_at=? AND data=?)').bind(value.draft.title||`Untitled ${info.name}`,value.draft.description,value.draft.audience,info.format,value.draft.priceCents,JSON.stringify(content),now,productId,owner,productId,owner,value.expectedVersion+1,now,encoded),
  ]);
  if(!results[0].meta.changes)throw new ApiError('This product changed while saving. Reload your saved draft.',409);
  return getBuilderWorkspace(productId,owner);
+}
+export async function getBuilderRevisionHistory(productId:string,owner:string,beforeVersion?:number):Promise<BuilderRevisionHistory>{
+ await ownedProduct(productId,owner);
+ const current=await database().prepare('SELECT version FROM product_builder_workspaces WHERE product_id=? AND owner=?').bind(productId,owner).first();if(!current)throw new ApiError('Product workspace not found.',404);
+ const before=beforeVersion===undefined?Number(current.version)+1:z.number().int().min(1).parse(beforeVersion);
+ const rows=await database().prepare('SELECT version,kind,label,data,created_at FROM product_builder_revisions WHERE product_id=? AND owner=? AND version<? ORDER BY version DESC LIMIT 51').bind(productId,owner,before).all();
+ return {currentVersion:Number(current.version),hasMore:rows.results.length>50,revisions:rows.results.slice(0,50).map(row=>{const draft=builderDraftSchema.parse(JSON.parse(String(row.data)));return {version:Number(row.version),kind:row.kind as BuilderRevisionKind,label:String(row.label),createdAt:Number(row.created_at),title:draft.title,sectionCount:draft.sections.length};})};
+}
+export async function restoreBuilderRevision(productId:string,owner:string,input:unknown){
+ const value=builderRevisionRestoreSchema.parse(input),workspace=await getBuilderWorkspace(productId,owner);
+ if(workspace.version!==value.expectedVersion)throw new ApiError('Your draft changed after this history was opened. Reopen revision history to review the latest saved draft.',409);
+ const revision=await database().prepare('SELECT data FROM product_builder_revisions WHERE product_id=? AND owner=? AND version=?').bind(productId,owner,value.revisionVersion).first();if(!revision)throw new ApiError('Revision not found.',404);
+ const previous=builderDraftSchema.parse(JSON.parse(String(revision.data)));
+ let draft:BuilderDraft;try{draft=restoreBuilderEditorialRevision(workspace.draft,previous);}catch(error){throw new ApiError(error instanceof Error?error.message:'This revision cannot be restored safely.',409);}
+ return saveBuilderWorkspace(productId,owner,{expectedVersion:value.expectedVersion,draft,revisionKind:'restore'});
 }
 export async function adoptBuilderWorkspace(productId:string,owner:string){
  const existing=await database().prepare('SELECT product_id FROM product_builder_workspaces WHERE product_id=? AND owner=?').bind(productId,owner).first();if(existing)return getBuilderWorkspace(productId,owner);
@@ -103,7 +126,7 @@ export async function syncGeneratedBuilderContent(productId:string,owner:string,
  if(workspace.version!==expectedVersion)throw new ApiError('Your draft changed while AI worked. Reload and review the result before applying it.',409);
  const generated=await captureGeneratedBuilderResult(productId,owner);
  if(!generated)throw new ApiError('The generated result is not ready. Resume generation and try again.',409);
- const saved=await saveBuilderWorkspace(productId,owner,{expectedVersion,draft:{...workspace.draft,sections:generated.sections,files:generated.files||[]}});
+ const saved=await saveBuilderWorkspace(productId,owner,{expectedVersion,draft:{...workspace.draft,sections:generated.sections,files:generated.files||[]},revisionKind:'ai-generation'});
  const finished=await database().prepare("SELECT brief FROM generation WHERE product_id=? AND owner=? AND status='completed'").bind(productId,owner).first();
  if(finished)await database().prepare("UPDATE generation SET brief=? WHERE product_id=? AND owner=? AND status='completed' AND brief=?").bind(JSON.stringify({...JSON.parse(String(finished.brief)),builderAppliedVersion:saved.version}),productId,owner,finished.brief).run();
  return saved;

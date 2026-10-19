@@ -14,18 +14,20 @@ class ApiError extends Error{constructor(message,status=400){super(message);this
 const owner='generation-credits',deps={z,zodToJsonSchema,ApiError,database:()=>db,creditPolicy,creditPacks,textCredits,monthlyWindow,mcpCreditLimit:new AsyncLocalStorage(),binding:()=>'',stripe:()=>{throw Error('No payments in this test');}};
 async function load(path){const key='test'+crypto.randomUUID().replaceAll('-','');globalThis[key]={...deps};const source=fs.readFileSync(path,'utf8').replace(/^import[\s\S]*?;\r?\n/gm,'');const code=`const {${Object.keys(deps).join(',')}}=globalThis.${key};\n`+ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;const loaded=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));delete globalThis[key];return loaded;}
 Object.assign(deps,await load('lib/product.ts'),await load('lib/product-recipes.ts'));
+Object.assign(deps,await load('lib/product-readiness.ts'));
+Object.assign(deps,await load('lib/generation-quality.ts'));
 Object.assign(deps,await load('lib/generation-access.ts'));
 Object.assign(deps,await load('lib/product-allowance.ts'));
 Object.assign(deps,await load('lib/subscription-credits.ts'));
 Object.assign(deps,await load('lib/credits.ts'));
-let fail=false,providerCalls=0;
+let fail=false,duplicate=false,blank=false,providerCalls=0;
 Object.assign(deps,{
  identity:async()=>({userId:owner}),sameOrigin:()=>{},failure:e=>Response.json({error:e.message},{status:e.status||500}),
  ownedProduct:async id=>sqlite.prepare('SELECT * FROM products WHERE id=? AND owner=?').get(id,owner),
  productFromRow:r=>({...r,price:r.price/100,content:JSON.parse(r.content),updatedAt:r.updated_at,createdAt:r.created_at}),
  providerSettings:async()=>({config:{textProvider:'openai'}}),productSystem:'test',
  // Only provider transport is replaced; route, schemas, quota, wallets, and SQL are real.
- textGeneration:async(_owner,_system,prompt)=>{providerCalls++;if(fail)throw new ApiError('Provider failure fixture',502);if(prompt.startsWith('Design'))return {sections:[1,2,3].map(n=>({title:'Lesson '+n,objective:'Practice the technique '+n})),benefits:['Understand the inputs','Practice the process','Check your work']};if(prompt.startsWith('Write'))return {body:'A useful concrete exercise with step-by-step instructions. '.repeat(12)};return {launch:'Finished launch material with accurate product descriptions. '.repeat(15),salesCopy:'An honest product description explaining the outcomes and exercises. '.repeat(4),files:[{name:'workbook.md',content:'A completed workbook.',description:'Practice'}],imagePrompt:'Create an original marketing image for this useful product.',videoPrompt:'A cinematic five-second campaign video with an original product identity.'};},
+ textGeneration:async(_owner,_system,prompt)=>{providerCalls++;if(fail)throw new ApiError('Provider failure fixture',502);if(prompt.startsWith('Design'))return {sections:[1,2,3].map(n=>({title:'Lesson '+n,objective:'Practice the technique '+n})),benefits:['Understand the inputs','Practice the process','Check your work']};if(prompt.startsWith('Write')){if(blank)return {body:' '.repeat(500)};const section=duplicate?1:Number(/section (\d+)/.exec(prompt)?.[1]||1);return {body:`Section ${section}. `+'A useful concrete exercise with step-by-step instructions. '.repeat(12)};}return {launch:'Finished launch material with accurate product descriptions. '.repeat(15),salesCopy:'An honest product description explaining the outcomes and exercises. '.repeat(4),files:[{name:'workbook.md',content:'A completed workbook.',description:'Practice'}],imagePrompt:'Create an original marketing image for this useful product.',videoPrompt:'A cinematic five-second campaign video with an original product identity.'};},
 });
 const route=await load('app/api/products/[id]/generate/route.ts');
 const add=()=>{const id=crypto.randomUUID();sqlite.prepare("INSERT INTO products (id,owner,slug,title,description,audience,format,price,color,content,status,created_at,updated_at) VALUES (?,?,?,'Generation test','A useful product with a distinctive audience.','Independent makers','Guide',0,'orange',?,'draft',?,?)").run(id,owner,id,JSON.stringify(deps.emptyContent({format:'Guide'})),Date.now(),Date.now());return id;};
@@ -38,7 +40,11 @@ sqlite.prepare('UPDATE wallets SET purchased=100 WHERE owner=?').run(owner);
 fail=true;await step(fourth,true,502);assert.equal((await deps.creditBalance(owner)).purchased,100,'Failed paid outline is refunded');
 fail=false;await step(fourth,true);assert.equal((await deps.creditBalance(owner)).purchased,90);
 fail=true;await step(fourth,true,502);assert.equal((await deps.creditBalance(owner)).purchased,90,'Failed section is refunded');
-fail=false;let done=false;while(!done)done=(await step(fourth,true)).done;
+fail=false;await step(fourth,true);assert.equal((await deps.creditBalance(owner)).purchased,80);
+const beforeDuplicate=sqlite.prepare('SELECT content FROM products WHERE id=?').get(fourth).content;
+duplicate=true;await step(fourth,true,502);assert.equal((await deps.creditBalance(owner)).purchased,80,'Rejected repeated content is refunded');
+assert.equal(sqlite.prepare('SELECT content FROM products WHERE id=?').get(fourth).content,beforeDuplicate,'A repeated AI chapter never overwrites a saved section');
+duplicate=false;blank=true;await step(fourth,true,502);assert.equal((await deps.creditBalance(owner)).purchased,80,'Whitespace-only content is refunded instead of delivered');assert.equal(sqlite.prepare('SELECT content FROM products WHERE id=?').get(fourth).content,beforeDuplicate);blank=false;let done=false;while(!done)done=(await step(fourth,true)).done;
 assert.equal((await deps.creditBalance(owner)).purchased,50,'Only five completed steps cost credits');
 await step(fourth,true);assert.equal((await deps.creditBalance(owner)).purchased,50,'Completed job cannot charge twice');
 await route.DELETE(new Request('http://local/api/generate',{method:'DELETE'}),{params:Promise.resolve({id:fourth})});
@@ -48,4 +54,12 @@ const walletBefore=(await deps.creditBalance(owner)).purchased;
 for(let n=0;n<2;n++){const id=add();let complete=false;while(!complete){const d=await step(id);assert.equal(d.mode,'unlimited');complete=d.done;}}
 assert.equal((await deps.creditBalance(owner)).purchased,walletBefore,'Unlimited full products do not deduct existing credits');
 assert.equal((await deps.productAllowance(owner)).used,3,'Previous included usage is retained');
+assert.match(deps.generatedOutlineError({format:'Challenge',duration:14},[1,2,3].map(n=>({title:'Day '+n,objective:'Practice a useful activity.'}))),/14 items/);
+assert.match(deps.generatedOutlineError({format:'Book',instructions:'Requested chapters: 8\nTone: warm'},[1,2,3].map(n=>({title:'Chapter '+n,objective:'Teach an original idea.'}))),/8 items/);
+assert.match(deps.generatedOutlineError({format:'Guide'},[{title:' ',objective:'An objective.'}]),/empty content/);
+assert.match(deps.generatedOutlineError({format:'Guide'},[{title:'A useful section',objective:'  '}]),/empty content/);
+assert.equal(deps.generatedOutlineError({format:'Guide'},[1,2,3].map(n=>({title:'Section '+n,objective:'Teach an original idea.'}))),null);
+assert.match(deps.generatedOutlineError({format:'Guide'},[{title:'Start here',objective:'A clear beginning.'},{title:'Start here',objective:'A different objective.'}]),/repeated an item/);
+assert.match(deps.generatedPackageError([{name:'workbook.md',content:'TODO',description:'Workbook'}]),/unfinished supporting file/);
+assert.equal(deps.generatedPackageError([{name:'template.md',content:'## Your project\n[Your name]\nUse this intentionally blank template.',description:'Editable template'}]),null);
 sqlite.close();console.log('Passed: staged generation, normal quotas and credit consent, owner unlimited full products without deductions, refunds, and retries. Provider transport uses isolated fixtures.');

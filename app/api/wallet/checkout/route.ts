@@ -11,13 +11,13 @@ export async function POST(req:Request) {
 }
 export async function GET(req:Request) {
   try {
-    const user=await identity(),sessionId=new URL(req.url).searchParams.get('session_id');
+    const user=await identity({allowUnaccepted:true}),sessionId=new URL(req.url).searchParams.get('session_id');
     if(!sessionId||!/^cs_(test|live)_[a-zA-Z0-9]+$/.test(sessionId))throw new ApiError('Invalid checkout reference.');
     const owned=await database().prepare('SELECT id FROM wallet_checkout_intents WHERE owner=? AND environment=? AND session_id=?').bind(user.userId,walletEnvironment(),sessionId).first();
     if(!owned)throw new ApiError('Checkout not found.',404);
     await fulfillWalletSession(sessionId);
     const account=await walletAccount(user.userId);
-    const intent=await database().prepare('SELECT status,credits,billing_interval FROM wallet_checkout_intents WHERE owner=? AND session_id=?').bind(user.userId,sessionId).first<{status:string;credits:number;billing_interval:string|null}>();
+    const intent=await database().prepare('SELECT status,credits,billing_interval FROM wallet_checkout_intents WHERE owner=? AND environment=? AND session_id=?').bind(user.userId,walletEnvironment(),sessionId).first<{status:string;credits:number;billing_interval:string|null}>();
     return Response.json({...account,checkoutComplete:intent?.status==='complete',purchaseCredits:intent?.credits,monthly:Boolean(intent?.billing_interval)},{headers:{'Cache-Control':'no-store'}});
   }catch(error){return failure(error);}
 }

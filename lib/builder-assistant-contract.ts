@@ -12,6 +12,8 @@ export const builderAgentFieldLabels = {
 export type BuilderAgentFieldKey = keyof typeof builderAgentFieldLabels;
 export type BuilderAgentTarget = 'details' | 'outline' | 'refine';
 export type BuilderAgentDetailsGroup = 'essentials' | 'type-details';
+export const builderAgentRefinementSchema=z.object({sectionId:z.string().uuid(),originalTitle:z.string().min(1).max(150),originalText:z.string().min(1).max(1800)}).strict();
+export type BuilderAgentRefinement=z.infer<typeof builderAgentRefinementSchema>;
 export const builderAgentEssentialFieldKeys: readonly BuilderAgentFieldKey[] = ['title', 'description', 'audience', 'outcome', 'tone'];
 export const builderAgentTypeFieldKeys: Record<BuilderType, readonly BuilderAgentFieldKey[]> = {
   book: ['subtitle', 'bookPremise', 'readerLevel'], guide: ['startingPoint', 'runningExample'], playbook: ['trigger', 'requiredInputs', 'definitionOfDone'], 'mini-course': [], 'video-course': [],
@@ -36,7 +38,7 @@ export const builderAgentSectionSchema = z.object({ title: z.string().trim().min
 export const builderAgentContextSchema = z.object({
   type: z.string().trim().min(1).max(80), builderType: z.enum(builderTypeKeys).optional(), deliveryFamily: z.enum(['document', 'course', 'templates', 'challenge', 'service', 'community', 'custom']).optional(),
   title: z.string().max(160).default(''), description: z.string().max(3000).default(''), audience: z.string().max(1000).default(''), language: z.string().max(80).default('English'),
-  fields: z.record(z.string().max(3000)).refine(value => Object.keys(value).length <= 30, 'Too many context fields.').default({}), sections: z.array(builderAgentSectionSchema.extend({ title: z.string().trim().min(1).max(160) })).max(40).default([]),
+  fields: z.record(z.string().max(3000)).refine(value => Object.keys(value).length <= 30, 'Too many context fields.').default({}), sections: z.array(builderAgentSectionSchema.extend({ id:z.string().uuid().optional(),title: z.string().trim().min(1).max(160) })).max(40).default([]),
 }).refine(value => JSON.stringify(value).length <= 24000, 'Share a shorter excerpt with the assistant.');
 const editorialFieldSchema = z.string().trim().min(1).max(1500);
 const editorialShape = Object.fromEntries(fieldKeys.filter(key => !['title', 'description', 'audience'].includes(key)).map(key => [key, editorialFieldSchema.optional()])) as Record<Exclude<BuilderAgentFieldKey, 'title' | 'description' | 'audience'>, z.ZodOptional<typeof editorialFieldSchema>>;
@@ -50,7 +52,7 @@ export const builderAgentResponseSchema = z.object({ answer: z.string().trim().m
 export type BuilderAgentScope = { target: BuilderAgentTarget; detailsGroup?: BuilderAgentDetailsGroup; fieldKeys: BuilderAgentFieldKey[]; allowSections: boolean };
 export const builderAgentRequestSchema = z.object({
   requestId: z.string().uuid(), message: z.string().trim().min(3).max(3000), expectedUpdatedAt: z.number().int().min(0), maxCredits: z.number().int().min(0).max(30), target: z.enum(['details', 'outline', 'refine']).default('details'),
-  detailsGroup: z.enum(['essentials', 'type-details']).optional(), fieldKeys: z.array(builderAgentFieldKeySchema).min(1).max(fieldKeys.length).refine(keys => new Set(keys).size === keys.length, 'Choose each field once.').optional(), context: builderAgentContextSchema,
+  detailsGroup: z.enum(['essentials', 'type-details']).optional(), fieldKeys: z.array(builderAgentFieldKeySchema).min(1).max(fieldKeys.length).refine(keys => new Set(keys).size === keys.length, 'Choose each field once.').optional(), refinement:builderAgentRefinementSchema.optional(),context: builderAgentContextSchema,
 });
 const namedFieldPatterns: Partial<Record<BuilderAgentFieldKey, RegExp>> = {
   title: /\b(?:product (?:title|name)|(?:my|the|this) title)\b/i, description: /\b(?:(?:product|book|ebook|guide|playbook|course|challenge|workbook|template|service|community) description|(?:my|the|this) description)\b/i, audience: /\b(?:target|intended|my|the) audience\b|who (?:is|this is) (?:this )?for/i,
@@ -78,7 +80,8 @@ export function resolveBuilderAgentScope(input: { message: string; context: Fiel
   const target = input.fieldKeys?.length || input.detailsGroup || explicitDetails ? 'details' : input.target || 'details';
   const detailsGroup = input.detailsGroup || (essentials && !typeDetails ? 'essentials' : typeDetails && !essentials ? 'type-details' : undefined);
   const requested = input.fieldKeys?.length ? input.fieldKeys.filter(key => allowed.includes(key)) : target === 'details' ? (!essentials && !typeDetails && named.length ? named : builderAgentFieldKeysForContext(input.context, detailsGroup)) : named;
-  return { target, ...(detailsGroup ? { detailsGroup } : {}), fieldKeys: requested.filter(key => !preserved.includes(key)), allowSections: target !== 'details' && (!named.length || explicitlySections) };
+  const allowSections=target !== 'details' && (!named.length || explicitlySections);
+  return { target, ...(detailsGroup ? { detailsGroup } : {}), fieldKeys: target==='refine'&&allowSections?[]:requested.filter(key => !preserved.includes(key)), allowSections };
 }
 function wireSchema(scope?: BuilderAgentScope) {
   const allowed = scope?.fieldKeys || fieldKeys;
@@ -86,7 +89,7 @@ function wireSchema(scope?: BuilderAgentScope) {
   return z.object({ answer: z.string().trim().min(3).max(2500), questions: z.array(z.string().trim().min(3).max(300)).max(3).nullable().default([]), suggestion: z.object({
     summary: z.string().trim().min(3).max(500),
     ...(!scope || allowed.includes('title') ? { title: z.string().trim().min(1).max(100).nullable().optional() } : {}), ...(!scope || allowed.includes('description') ? { description: z.string().trim().min(1).max(3000).nullable().optional() } : {}), ...(!scope || allowed.includes('audience') ? { audience: z.string().trim().min(1).max(300).nullable().optional() } : {}),
-    ...(allowed.some(key => !['title', 'description', 'audience'].includes(key)) ? { fields } : {}), ...(!scope || scope.allowSections ? { sections: z.array(builderAgentSectionSchema).max(24).nullable().optional().describe('An outline or small refinement. Combined section body text must not exceed 1800 characters.') } : {}),
+    ...(allowed.some(key => !['title', 'description', 'audience'].includes(key)) ? { fields } : {}), ...(!scope || scope.allowSections ? { sections: z.array(builderAgentSectionSchema).max(scope?.target==='refine'?1:24).nullable().optional().describe(scope?.target==='refine'?'Exactly one replacement for the selected excerpt. Preserve the section title. Do not return an outline or the remainder of the section.':'An outline. Combined section body text must not exceed 1800 characters.') } : {}),
   }).nullable().default(null) });
 }
 export const builderAgentResponseWireSchema = wireSchema();
@@ -120,6 +123,6 @@ export function scopeBuilderAgentResponse(response: z.infer<typeof builderAgentR
 export type BuilderAgentContext = z.infer<typeof builderAgentContextSchema>;
 export type BuilderAgentSuggestion = z.infer<typeof builderAgentSuggestionSchema>;
 export type BuilderAgentRequest = z.infer<typeof builderAgentRequestSchema>;
-export type BuilderAgentMessage = { id: string; role: 'user' | 'assistant'; content: string; questions?: string[]; suggestion?: BuilderAgentSuggestion | null; target?: BuilderAgentTarget; detailsGroup?: BuilderAgentDetailsGroup; fieldKeys?: BuilderAgentFieldKey[] };
+export type BuilderAgentMessage = { id: string; role: 'user' | 'assistant'; content: string; questions?: string[]; suggestion?: BuilderAgentSuggestion | null; target?: BuilderAgentTarget; detailsGroup?: BuilderAgentDetailsGroup; fieldKeys?: BuilderAgentFieldKey[];refinement?:BuilderAgentRefinement };
 export type BuilderAgentConversation = { id: string; messages: BuilderAgentMessage[]; updatedAt: number };
 export type BuilderAgentState = { conversation: BuilderAgentConversation; remaining: number; cost: number; credits: number; unlimited: boolean; aiReady: boolean; spent?: number };

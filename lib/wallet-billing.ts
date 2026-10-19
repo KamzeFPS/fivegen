@@ -218,11 +218,55 @@ export async function walletAccount(owner:string) {
   const [customer,subscriptions,payments,balance,credits]=await Promise.all([
     db.prepare('SELECT customer_id FROM wallet_customers WHERE owner=? AND environment=?').bind(owner,environment).first<{customer_id:string}>(),
     db.prepare('SELECT subscription_id,status,cancel_at,period_end FROM wallet_subscriptions WHERE owner=? AND environment=? ORDER BY updated_at DESC').bind(owner,environment).all<{subscription_id:string;status:string;cancel_at:number|null;period_end:number|null}>(),
-    db.prepare('SELECT id,credits,credited,reversed,subscription_id,created_at FROM wallet_payments WHERE owner=? AND environment=? ORDER BY created_at DESC LIMIT 30').bind(owner,environment).all<{id:string;credits:number;credited:number;reversed:number;subscription_id:string|null;created_at:number}>(),
+    db.prepare('SELECT p.id,p.amount,p.credits,p.credited,p.reversed,p.subscription_id,p.created_at,i.offer_id FROM wallet_payments p JOIN wallet_checkout_intents i ON i.id=p.intent_id WHERE p.owner=? AND p.environment=? ORDER BY p.created_at DESC LIMIT 30').bind(owner,environment).all<{id:string;amount:number;credits:number;credited:number;reversed:number;subscription_id:string|null;created_at:number;offer_id:string}>(),
     db.prepare('SELECT credits FROM wallet_test_balances WHERE owner=?').bind(owner).first<{credits:number}>(),
     subscriptionCreditBalance(owner,environment),
   ]);
-  return {environment,hasCustomer:!!customer,subscriptions:subscriptions.results.map(r=>({...r})),payments:payments.results.map(r=>({...r})),subscriptionCredits:credits.included,creditsResetAt:credits.renewsAt,testCredits:environment==='sandbox'?(balance?.credits??0)+credits.included:null};
+  return {environment,hasCustomer:!!customer,subscriptions:subscriptions.results.map(r=>({...r})),payments:payments.results.map(r=>({...r,name:walletCatalog().find(offer=>offer.id===r.offer_id)?.name??'AI credits'})),subscriptionCredits:credits.included,creditsResetAt:credits.renewsAt,testCredits:environment==='sandbox'?(balance?.credits??0)+credits.included:null};
+}
+
+// A delayed webhook should never require a customer to purchase twice. This
+// action only reads the signed-in owner's existing records and Stripe state;
+// it uses exactly the same verified, idempotent fulfillment as the webhook.
+export async function reconcileWalletAccount(owner:string){
+  const db=database(),environment=walletEnvironment(),sdk=walletStripe();
+  const [pending,subscriptions]=await Promise.all([
+    db.prepare("SELECT session_id FROM wallet_checkout_intents WHERE owner=? AND environment=? AND status='open' AND session_id IS NOT NULL ORDER BY created_at DESC LIMIT 10").bind(owner,environment).all<{session_id:string}>(),
+    db.prepare("SELECT subscription_id FROM wallet_subscriptions WHERE owner=? AND environment=? AND status IN ('active','trialing','past_due','unpaid','incomplete') ORDER BY updated_at DESC LIMIT 5").bind(owner,environment).all<{subscription_id:string}>(),
+  ]);
+  let checked=0,pendingCount=0,unavailable=0;
+  for(const row of pending.results){
+    try{
+      const session=await sdk.checkout.sessions.retrieve(row.session_id);assertMode(session.livemode);
+      if(session.status==='complete'&&session.payment_status==='paid')await fulfillWalletSession(row.session_id);
+      else if(session.status==='expired')await db.prepare("UPDATE wallet_checkout_intents SET status='expired' WHERE owner=? AND environment=? AND session_id=? AND status='open'").bind(owner,environment,row.session_id).run();
+      else pendingCount++;
+      checked++;
+    }catch{unavailable++;}
+  }
+  for(const row of subscriptions.results){
+    try{
+      const synced=await syncWalletSubscription(row.subscription_id);
+      const invoiceId=walletObjectId(synced?.sub.latest_invoice);
+      if(invoiceId)await fulfillWalletInvoice(invoiceId);
+      checked++;
+    }catch{unavailable++;}
+  }
+  return {account:await walletAccount(owner),checked,pending:pendingCount,unavailable};
+}
+
+export async function walletReceipt(owner:string,paymentId:string){
+  const environment=walletEnvironment(),db=database();
+  const row=await db.prepare('SELECT payment_intent FROM wallet_payments WHERE id=? AND owner=? AND environment=? AND credited=1').bind(paymentId,owner,environment).first<{payment_intent:string}>();
+  if(!row)throw new ApiError('Receipt not found.',404);
+  const customer=await db.prepare('SELECT customer_id FROM wallet_customers WHERE owner=? AND environment=?').bind(owner,environment).first<{customer_id:string}>();
+  const payment=await walletStripe().paymentIntents.retrieve(row.payment_intent,{expand:['latest_charge']});assertMode(payment.livemode);
+  const charge=payment.latest_charge;
+  if(!customer||walletObjectId(payment.customer)!==customer.customer_id||!charge||typeof charge==='string'||walletObjectId(charge.customer)!==customer.customer_id||walletObjectId(charge.payment_intent)!==payment.id)throw new ApiError('Receipt not found.',404);
+  assertMode(charge.livemode);
+  const url=charge.receipt_url?new URL(charge.receipt_url):null;
+  if(!url||url.protocol!=='https:'||url.hostname!=='pay.stripe.com')throw new ApiError('Your receipt is not available yet. Use Manage billing to view your invoice.',503);
+  return {url:url.href};
 }
 
 export async function walletPortal(owner:string,origin:string) {
