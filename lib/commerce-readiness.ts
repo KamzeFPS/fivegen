@@ -1,5 +1,5 @@
 import {binding} from './server';
-import {commerceStripe} from './commerce-v2-server';
+import {commerceKey,commerceStripe} from './commerce-v2-server';
 import type {BillingCheck} from './wallet-readiness';
 
 export type CommerceReadiness={mode:'live'|'test'|null;enabled:boolean;readyToEnable:boolean;checkedAt:number;checks:BillingCheck[]};
@@ -10,11 +10,12 @@ const commerceEvents=['checkout.session.completed','checkout.session.async_payme
 // Stripe's endpoint objects do not include the creation parameter `connect`.
 export async function commerceReadiness(origin:string):Promise<CommerceReadiness>{
   const configuredMode=binding('STRIPE_MODE'),mode=configuredMode==='live'||configuredMode==='test'?configuredMode:null;
-  const keyMatches=Boolean(mode&&new RegExp(`^(sk|rk)_${mode}_`).test(binding('STRIPE_SECRET_KEY')));
+  const keyName=binding('STRIPE_COMMERCE_SECRET_KEY')?'STRIPE_COMMERCE_SECRET_KEY':'STRIPE_SECRET_KEY';
+  const keyMatches=Boolean(mode&&new RegExp(`^(sk|rk)_${mode}_`).test(commerceKey()));
   const secretPresent=binding('STRIPE_CONNECT_WEBHOOK_SECRET').startsWith('whsec_'),releaseEnabled=binding('STRIPE_COMMERCE_ENABLED')==='true';
   const checks:BillingCheck[]=[
     {id:'environment',label:'Seller payment environment',status:mode?'ready':'blocked',detail:mode?`${mode==='live'?'Live':'Test'} mode is explicitly selected.`:'STRIPE_MODE must be explicitly set to live or test.',action:mode?undefined:'Set STRIPE_MODE and use a matching server key.'},
-    {id:'keys',label:'Seller Stripe server key',status:keyMatches?'ready':'blocked',detail:keyMatches?'The server key format matches the selected mode. Connect API access is checked separately.':'The server key is missing or does not match the selected mode.',action:keyMatches?undefined:'Check STRIPE_SECRET_KEY in the service environment. A publishable key cannot create connected accounts.'},
+    {id:'keys',label:'Seller Stripe server key',status:keyMatches?'ready':'blocked',detail:keyMatches?`${keyName} matches the selected mode. Connect API access is checked separately.`:`${keyName} is missing or does not match the selected mode.`,action:keyMatches?undefined:`Check ${keyName} in the service environment. A configured dedicated seller key never falls back to the platform billing key.`},
     {id:'signing-secret',label:'Seller webhook signing secret',status:secretPresent?'ready':'blocked',detail:secretPresent?'A seller signing secret is configured; its value is never shown here.':'STRIPE_CONNECT_WEBHOOK_SECRET is missing.',action:secretPresent?'Verify that this secret belongs to the existing Connected accounts destination below. It is separate from the platform subscription webhook secret.':'Save the Connected accounts destination signing secret as STRIPE_CONNECT_WEBHOOK_SECRET. Keep the existing destination.'},
     {id:'switch',label:'Seller connection release switch',status:releaseEnabled?'ready':'blocked',detail:releaseEnabled?'Seller connections are enabled in the service environment.':'Seller connections are disabled by STRIPE_COMMERCE_ENABLED.',action:releaseEnabled?undefined:'Complete the Connect and webhook checks, then set STRIPE_COMMERCE_ENABLED=true and deploy the service.'},
   ];

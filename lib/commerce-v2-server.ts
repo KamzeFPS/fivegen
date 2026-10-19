@@ -14,8 +14,11 @@ export function commerceMode(): 'live'|'test' {
   if(mode!=='live'&&mode!=='test')throw new ApiError('Set an explicit Stripe test or live mode before connecting payments.',503);
   return mode;
 }
+// A dedicated seller key isolates Connect permissions from platform billing.
+// A configured but invalid dedicated key must never fall back to another key.
+export function commerceKey(){return binding('STRIPE_COMMERCE_SECRET_KEY')||binding('STRIPE_SECRET_KEY');}
 export function commerceStripe() {
-  const mode=commerceMode(),key=binding('STRIPE_SECRET_KEY');
+  const mode=commerceMode(),key=commerceKey();
   if(!new RegExp(`^(sk|rk)_${mode}_`).test(key))throw new ApiError('The Stripe key does not match the selected payment mode.',503);
   return new Stripe(key,{maxNetworkRetries:2,timeout:20000});
 }

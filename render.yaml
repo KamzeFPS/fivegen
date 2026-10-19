@@ -34,6 +34,9 @@ services:
         sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
+      # Optional dedicated seller Connect key; blank keeps the existing fallback.
+      - key: STRIPE_COMMERCE_SECRET_KEY
+        sync: false
       - key: STRIPE_MODE
         value: live
       - key: STRIPE_PUBLISHABLE_KEY
