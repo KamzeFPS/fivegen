@@ -13,7 +13,7 @@ import { creditPolicy, creditPacks, textCredits, monthlyWindow } from '../lib/cr
 // identity and AI provider transport use fixtures; no credentials or external calls.
 const root = resolve('outputs/builder-assistant-qa', randomUUID()), storage = createStorage(root), sql = storage.sqlite;
 class ApiError extends Error { constructor(message, status = 400) { super(message); this.status = status; } }
-let owner = 'builder-assistant-fixture', calls = 0, failureMode = '', release = null, held = null, lastInput = null;
+let owner = 'builder-assistant-fixture', calls = 0, failureMode = '', release = null, held = null, lastInput = null, lastSchema = null;
 const dependencies = {
   z, zodToJsonSchema, ApiError, database: () => storage.DB, binding: () => '', creditPolicy, creditPacks, textCredits, monthlyWindow, planningAllowance: 20, mcpCreditLimit: new AsyncLocalStorage(),
   stripe: () => { throw new Error('Payment transport must never run.'); },
@@ -21,9 +21,12 @@ const dependencies = {
   failure: error => Response.json({ error: error.message }, { status: error.status || 400 }),
   ownedProduct: async (id, account) => { const row = sql.prepare('SELECT * FROM products WHERE id=? AND owner=?').get(id, account); if (!row) throw new ApiError('Product not found.', 404); return row; },
   providerSettings: async () => ({ connected: { openai: true }, config: { textProvider: 'openai', paused: false } }),
-  textGeneration: async (_owner, system, input) => {
-    calls++; lastInput = JSON.parse(input); if (held) await held;
+  textGeneration: async (_owner, system, input, _maxTokens, outputSchema) => {
+    calls++; lastInput = JSON.parse(input); lastSchema = outputSchema?.schema; if (held) await held;
     if (failureMode === 'provider') throw new ApiError('Fixture provider unavailable.', 502);
+    if (failureMode === 'nullable') return { answer: 'Keep the existing title and outline. This description focuses the promise for illustrators.', questions: null, suggestion: { summary: 'Clarify the intended audience in the description.', title: null, description: 'A practical handoff process for independent illustrators.', audience: null, sections: null } };
+    if (failureMode === 'discussion') return { answer: 'Your existing structure already supports that goal. We can discuss the intended outcome before proposing edits.', questions: [], suggestion: { summary: 'No changes proposed.', title: null, description: '', audience: null, sections: [] } };
+    if (failureMode === 'malformed') return { answer: 'This answer does not make the invalid proposed edit safe.', questions: [], suggestion: { summary: 'Invalid fixture edit.', title: 100 } };
     return { answer: 'Here is a focused outline for your original practical playbook. Review it before applying.', questions: ['What experience should the reader already have?'], suggestion: { summary: 'A four-step process specific to independent illustrators.', title: 'The Illustrator Handoff Playbook', sections: [{ title: 'Prepare the brief', body: failureMode === 'oversized' ? 'A'.repeat(1801) : 'Identify the client, format and intended use.' }, { title: 'Deliver the work', body: 'Use a repeatable handoff checklist.' }] } };
   },
 };
@@ -34,6 +37,24 @@ async function load(path) {
   const result = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64')); delete globalThis[key]; return result;
 }
 for (const path of ['lib/generation-access.ts', 'lib/product-allowance.ts', 'lib/subscription-credits.ts', 'lib/credits.ts', 'lib/builder-assistant-contract.ts', 'lib/builder-assistant.ts']) Object.assign(dependencies, await load(path));
+const { parseBuilderAgentResponse, builderAgentResponseSchema, builderAgentResponseWireSchema } = dependencies;
+const wireFixture = { answer: 'Here is a clearer product title for your audience.', questions: null, suggestion: { summary: 'Make the target audience explicit.', title: 'The Illustrator Handoff Playbook', description: null, audience: null, sections: null } };
+assert.equal(builderAgentResponseSchema.safeParse(wireFixture).success, false, 'The raw nullable provider shape reproduces the previously rejected valid suggestion');
+assert.equal(builderAgentResponseWireSchema.safeParse(wireFixture).success, true, 'The provider contract explicitly accepts null for unchanged fields');
+assert.deepEqual(parseBuilderAgentResponse(wireFixture).data, { answer: wireFixture.answer, questions: [], suggestion: { summary: wireFixture.suggestion.summary, title: wireFixture.suggestion.title } }, 'Only absent edits are normalized; no product field is cleared');
+assert.deepEqual(wireFixture.suggestion.description, null, 'Parsing never mutates the original provider output');
+for (const suggestion of [{}, { summary: 'No edits needed.', title: null, description: '  ', audience: null, sections: [] }]) {
+  const parsed = parseBuilderAgentResponse({ answer: 'We can discuss the audience before making changes.', suggestion });
+  assert.equal(parsed.success, true); assert.equal(parsed.data.suggestion, null, 'A valid discussion survives an empty, non-applicable suggestion');
+}
+for (const raw of [
+  { answer: 'No', suggestion: null },
+  { answer: 'A valid answer cannot repair malformed questions.', questions: [null], suggestion: null },
+  { answer: 'A valid answer cannot repair an invalid title.', suggestion: { summary: 'Change title.', title: 100 } },
+  { answer: 'A valid answer cannot invent a missing edit summary.', suggestion: { title: 'Changed title' } },
+  { answer: 'A valid answer cannot repair an incomplete section.', suggestion: { summary: 'Add a section.', sections: [{ title: 'Only title' }] } },
+  { answer: 'A valid answer cannot bypass the planning content limit.', suggestion: { summary: 'Oversized edit.', sections: [{ title: 'First', body: 'A'.repeat(900) }, { title: 'Second', body: 'B'.repeat(901) }] } },
+]) assert.equal(parseBuilderAgentResponse(raw).success, false, 'Malformed or oversized applicable edits must still fail safely');
 const route = await load('app/api/products/[id]/builder-assistant/route.ts');
 const productId = randomUUID(), now = Date.now(), initialContent = '{"fixture":"unchanged"}';
 sql.prepare("INSERT INTO products (id,owner,slug,title,description,audience,format,price,color,content,status,created_at,updated_at) VALUES (?,?,?,'Fixture playbook','A practical creator-owned playbook.','Illustrators','Playbook',0,'orange',?,'draft',?,?)").run(productId, owner, productId, initialContent, now, now);
@@ -45,6 +66,8 @@ const input = { requestId: randomUUID(), message: 'Plan my practical illustrator
 try {
   let state = await ok(await read()); assert.equal(state.remaining, 20); assert.equal(state.aiReady, true); assert.equal(state.conversation.messages.length, 0);
   state = await ok(await post(input)); assert.equal(state.remaining, 19); assert.equal(state.spent, 0); assert.equal(calls, 1); assert.equal(state.conversation.messages.length, 2);
+  assert.ok(lastSchema?.properties?.answer, 'Provider requests include the explicit answer shape');
+  assert.equal(lastSchema?.properties?.suggestion?.anyOf?.find(value => value.type === 'object')?.required?.includes('title'), false, 'Unchanged title is optional in the normal JSON-schema contract');
   const first = state;
   assert.equal(sql.prepare('SELECT content FROM products WHERE id=?').get(productId).content, initialContent, 'Assistant suggestions never mutate the product');
   await ok(await post(input)); assert.equal(calls, 1, 'Replay returns persisted response without another AI call');
@@ -58,7 +81,10 @@ try {
   await ok(await post(paid), 402); assert.equal(calls, 1, 'No provider call before explicit credit approval');
   await ok(await post({ ...paid, requestId: randomUUID(), maxCredits: 10 }), 402); assert.equal(calls, 1, 'No provider call when wallet is empty');
   sql.prepare('UPDATE wallets SET purchased=100 WHERE owner=?').run(owner);
+  failureMode = 'nullable';
   state = await ok(await post({ ...paid, requestId: randomUUID(), maxCredits: 10 })); assert.equal(state.spent, 10); assert.equal((await dependencies.creditBalance(owner)).purchased, 90);
+  assert.equal(state.conversation.messages.at(-1).suggestion.description, 'A practical handoff process for independent illustrators.', 'A normalized valid answer completes the paid turn instead of discarding the response');
+  failureMode = '';
   assert.equal(lastInput.target, 'refine'); assert.deepEqual(lastInput.conversation[1].questions, first.conversation.messages[1].questions);
   failureMode = 'provider'; await ok(await post({ ...paid, requestId: randomUUID(), expectedUpdatedAt: state.conversation.updatedAt, maxCredits: 10 }), 502); assert.equal((await dependencies.creditBalance(owner)).purchased, 90, 'Provider failure refunds the actual credit ledger');
   failureMode = 'oversized'; await ok(await post({ ...paid, requestId: randomUUID(), expectedUpdatedAt: state.conversation.updatedAt, maxCredits: 10 }), 502); assert.equal((await dependencies.creditBalance(owner)).purchased, 90, 'Full content cannot be generated through planning; oversized output is rejected and refunded');
@@ -70,6 +96,15 @@ try {
   assert.equal(sql.prepare('SELECT COUNT(*) n FROM ai_product_runs WHERE owner=?').get(owner).n, 0, 'Planning does not create complete-product runs');
   sql.prepare('INSERT INTO terms_acceptances VALUES (?,?,?,?,?)').run(randomUUID(), owner, 'fixture', 'kamzewac@gmail.com', Date.now());
   state = await ok(await post({ ...paid, requestId: randomUUID(), expectedUpdatedAt: state.conversation.updatedAt, maxCredits: 0 })); assert.equal(state.spent, 0); assert.equal((await dependencies.creditBalance(owner)).purchased, 80, 'Verified unlimited owner access preserves wallet balance');
-  console.log('Passed: product-scoped ownership, same-origin protection, persistence, idempotent replay, optimistic conflict/concurrency, shared planning allowance, explicit paid consent, actual ledger debit/refund, bounded suggestions, and unlimited owner access. No external provider calls.');
+  failureMode = 'nullable'; state = await ok(await post({ ...paid, requestId: randomUUID(), expectedUpdatedAt: state.conversation.updatedAt, maxCredits: 0 }));
+  assert.deepEqual(state.conversation.messages.at(-1).questions, []);
+  assert.deepEqual(state.conversation.messages.at(-1).suggestion, { summary: 'Clarify the intended audience in the description.', description: 'A practical handoff process for independent illustrators.' }, 'Nullable unchanged provider fields survive the full route without becoming destructive edits');
+  failureMode = 'discussion'; state = await ok(await post({ ...paid, requestId: randomUUID(), expectedUpdatedAt: state.conversation.updatedAt, maxCredits: 0 }));
+  assert.equal(state.conversation.messages.at(-1).suggestion, null, 'An empty suggestion does not discard a useful discussion answer');
+  failureMode = 'malformed'; await ok(await post({ ...paid, requestId: randomUUID(), expectedUpdatedAt: state.conversation.updatedAt, maxCredits: 0 }), 502);
+  assert.deepEqual((await ok(await read())).conversation, state.conversation, 'Malformed edits cannot replace the last valid conversation');
+  assert.equal(sql.prepare('SELECT content FROM products WHERE id=?').get(productId).content, initialContent, 'All normalization and rejection paths leave product content untouched');
+  assert.equal((await dependencies.creditBalance(owner)).purchased, 80, 'Regression scenarios preserve the owner credit exemption');
+  console.log('Passed: product-scoped ownership, same-origin protection, persistence, idempotent replay, optimistic conflict/concurrency, shared planning allowance, explicit paid consent, actual ledger debit/refund, nullable provider outputs, empty discussion edits, bounded suggestions, malformed edit rejection, and unlimited owner access. No external provider calls.');
   console.log('QA fixtures retained: ' + root);
 } finally { storage.close(); }

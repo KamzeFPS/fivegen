@@ -6,6 +6,8 @@ All new UI creation entries use Choose your type → Build your product → Publ
 
 The contextual assistant appears on the right, minimizes without clearing history or unsent answers, and starts minimized on small screens. Suggestions require review and explicit application. The existing administrator-managed AI connection, shared planning allowance, full-product quota, credit reservations/refunds and verified owner exception are reused. Original files and private meeting/community URLs are excluded from AI context. No provider credential is requested from a customer.
 
+Both text providers receive the response JSON schema explicitly. The assistant accepts `null` for unused optional edits and question lists, then validates the normalized result against its strict content limits before saving it. Empty edit proposals become discussion-only replies; malformed or oversized edits are rejected without modifying the product, and reserved customer credits are refunded. Validation diagnostics contain only provider and schema error paths/codes. `npm run test:ai-format` covers both provider transports and the actual planning ledger; `npm run test:ai-format:runtime` exercises the built HTTP routes with isolated provider responses.
+
 Full generation uses the existing staged generator. Generation results are captured independently before later manual saves; applying a result saves current metadata first and preserves original uploads. Version checks protect concurrent edits. Failed saves remain recoverable without endlessly retrying an unchanged invalid draft. A completed result is marked applied; another full generation requires a deliberate new run under current allowance/credit rules.
 
 ## Publication and selling
