@@ -11,6 +11,7 @@ type Row=Record<string,unknown>;
 type Buyer={userId:string;email:string;displayName?:string};
 const noStore={'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer'};
 export const fileSaleHeaders=noStore;
+// This switch gates publication and checkout, not authenticated private drafts.
 export function fileSalesEnabled(){return binding('FIVEGEN_FILE_SALES_ENABLED')==='true'&&binding('STRIPE_MODE')==='test';}
 function requireFileSales(){if(!fileSalesEnabled())throw new ApiError('File selling is available only in the enabled Stripe test environment. Existing buyer access remains available.',503);}
 
@@ -51,7 +52,7 @@ async function saleRow(productId:string,owner?:string){
 }
 export async function fileSalePaymentReadiness(owner:string):Promise<SaleReadiness['payments']>{
   const result=(state:SaleReadiness['payments']['state'],message:string,recovery:SaleReadiness['payments']['recovery']=null):SaleReadiness['payments']=>({state,message,recovery,environment:'test'});
-  if(!fileSalesEnabled())return result('disabled','New sales are disabled. An administrator must enable the isolated test environment.','admin');
+  if(!fileSalesEnabled())return result('disabled','Publishing and checkout for file products are not available yet. You can upload, save, and preview your product privately.','admin');
   if(!stripeConfigured()||stripeMode()!=='test'||!binding('STRIPE_WEBHOOK_SECRET'))return result('unconfigured','The administrator must configure test payments and verified webhook delivery.','admin');
   const seller=await database().prepare('SELECT stripe_account FROM sellers WHERE owner=?').bind(owner).first();
   if(!seller?.stripe_account)return result('not_connected','No existing connected test seller account is linked. Ask the platform administrator to finish authorized payment setup.','admin');
@@ -109,7 +110,6 @@ export async function getFileSale(productId:string,owner:string):Promise<FileSal
   return {product:{id:productId,slug:String(product.slug),format:String(product.format)},draft,version:Number(row.version),publishedRevisionId:row.published_revision_id?String(row.published_revision_id):null,readiness,uploads:uploads.results as unknown as FileSaleWorkspace['uploads'],publishedSnapshot:published?saleDraftSchema.parse(JSON.parse(String(published.snapshot))):null};
 }
 export async function createFileSale(owner:string,input:unknown){
-  requireFileSales();
   const {preset,requestId}=z.object({preset:z.string().default('playbook'),requestId:z.string().uuid().optional()}).parse(input),template=productPreset(preset);
   if(!template?.available||!['downloads','course'].includes(template.family))throw new ApiError('Choose an available Downloads or Course starter.');
   const id=requestId||crypto.randomUUID(),slug=`${slugify(template.label)}-${id.slice(0,8)}`,now=Date.now();
@@ -123,7 +123,7 @@ export async function createFileSale(owner:string,input:unknown){
   return getFileSale(id,owner);
 }
 export async function saveFileSale(productId:string,owner:string,input:unknown){
-  requireFileSales();const data=z.object({expectedVersion:z.number().int().min(1),draft:saleDraftSchema}).parse(input),{row,draft:previous}=await saleRow(productId,owner);
+  const data=z.object({expectedVersion:z.number().int().min(1),draft:saleDraftSchema}).parse(input),{row,draft:previous}=await saleRow(productId,owner);
   const encoded=JSON.stringify(data.draft);
   if(Number(row.version)!==data.expectedVersion){if(encoded===String(row.data))return getFileSale(productId,owner);throw new ApiError('This draft changed in another tab. Reload before saving.',409);}
   const ids=[...saleUploadIds(data.draft),...(data.draft.coverUploadId?[data.draft.coverUploadId]:[])];

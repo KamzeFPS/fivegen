@@ -87,6 +87,57 @@
   color: #c3bab4;
 }
 
+.growth-app .gen-existing-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 22px;
+  padding: 22px;
+  border: 1px solid #e68a4d40;
+  border-radius: 12px;
+  background: linear-gradient(115deg, #261b13, #171412 70%);
+}
+
+.growth-app .gen-existing-content-copy {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  min-width: 0;
+}
+
+.growth-app .gen-existing-content-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  border: 1px solid #ef9b5d30;
+  border-radius: 11px;
+  background: #f18b3510;
+  color: #f8ad77;
+}
+
+.growth-app .gen-existing-content h2 {
+  font-size: 15px;
+  font-weight: 500;
+  color: #eee1d5;
+}
+
+.growth-app .gen-existing-content p {
+  max-width: 450px;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #b8a79b;
+}
+
+.growth-app .gen-existing-content > .button {
+  min-height: 44px;
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+
 .growth-app .gen-start-manual {
   font-size: 12px;
   color: var(--workspace-subtle);
@@ -134,7 +185,17 @@
   color: #c19d81;
 }
 
+.growth-app .gen-library-tools {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.growth-app .gen-library-tools > .button {
+  min-height: 44px;
+}
+
 .growth-app .gen-library-tools label {
+  margin-right: auto;
   min-width: 300px;
   border-color: #ffffff20;
   color: var(--workspace-subtle);
@@ -303,6 +364,23 @@
 
   .growth-app .gen-starting-points button {
     padding: 12px;
+  }
+
+  .growth-app .gen-existing-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 18px;
+    padding: 18px;
+  }
+
+  .growth-app .gen-existing-content-copy {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .growth-app .gen-existing-content > .button {
+    width: 100%;
+    justify-content: center;
   }
 
   .growth-app .gen-workflow p {

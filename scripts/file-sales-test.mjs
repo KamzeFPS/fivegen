@@ -12,7 +12,7 @@ import {fileSalePdfFixture} from './file-sale-pdf-fixture.mjs';
 const root=resolve('outputs/file-sales-qa',randomUUID()),storage=createStorage(root),sql=storage.sqlite;
 const owner='file-sale-fixture-owner',buyer={userId:'fixture-buyer',email:'buyer@example.test'},other={userId:'fixture-other',email:'other@example.test'};
 let enabled=true,mode='test',configured=true,accountFailure=false,account={charges_enabled:true,payouts_enabled:true,capabilities:{card_payments:'active'}},user=null;
-const sessions=new Map(),idempotency=new Map();let createCalls=0;
+const sessions=new Map(),idempotency=new Map();let createCalls=0,providerCalls=0;
 class ApiError extends Error{constructor(message,status=400){super(message);this.status=status;}}
 let telemetryFailure=false,publicationFailure=false;
 const db=()=>({
@@ -25,6 +25,7 @@ const deps={z,env:{BUCKET:storage.BUCKET},ApiError,database:db,
   identity:async()=>{if(!user)throw new ApiError('Sign in.',401);return user;},
   ownedProduct:async(id,who)=>{const product=await db().prepare('SELECT * FROM products WHERE id=? AND owner=?').bind(id,who).first();if(!product)throw new ApiError('Product not found.',404);return product;},
   stripe:async(path,body,connected,idempotencyKey)=>{
+    providerCalls++;
     if(path.startsWith('accounts/')){if(accountFailure)throw new Error('sensitive provider failure');return structuredClone(account);}
     if(path==='checkout/sessions'){
       assert.equal(connected,'acct_fixture');assert.ok(idempotencyKey);
@@ -62,8 +63,39 @@ const sessionFor=requestId=>sql.prepare('SELECT session_id FROM checkout_intents
 const checkOut=(workspace,requestId=randomUUID())=>sale.startFileSaleCheckout(new Request('http://localhost:5184/api/file-sales/checkout'),{slug:workspace.product.slug,expectedRevisionId:workspace.publishedRevisionId,requestId,email:buyer.email});
 async function complete(sessionId){const session=sessions.get(sessionId);session.payment_status='paid';session.status='complete';return payments.recordPayment(structuredClone(session),'acct_fixture');}
 try{
-  enabled=false;await assert.rejects(()=>sale.createFileSale(owner,{preset:'playbook'}),e=>e.status===503);enabled=true;
-  mode='live';assert.equal(sale.fileSalesEnabled(),false);await assert.rejects(()=>sale.createFileSale(owner,{preset:'playbook'}),e=>e.status===503);mode='test';
+  // Draft authoring is independent of payment rollout. Exercise every disabled
+  // combination against a seller with an otherwise eligible synthetic account,
+  // so an accidental readiness/provider request cannot hide behind no account.
+  const transactionalCounts=()=>Object.fromEntries(['file_sale_revisions','file_sale_grants','orders','checkout_intents'].map(table=>[table,sql.prepare(`SELECT COUNT(*) n FROM ${table}`).get().n]));
+  for(const scenario of [{enabled:false,mode:'test'},{enabled:true,mode:'live'},{enabled:false,mode:'live'}]){
+    enabled=scenario.enabled;mode=scenario.mode;
+    const label=`flag=${enabled}, mode=${mode}`,draftOwner=`private-draft-${randomUUID()}`,draftUser={userId:draftOwner,email:'draft-owner@example.test'};
+    sql.prepare('INSERT INTO sellers (owner,name,stripe_account,created_at) VALUES (?,?,?,?)').run(draftOwner,'Private draft fixture','acct_fixture',Date.now());
+    const callsBefore=providerCalls,transactionsBefore=transactionalCounts();
+    assert.equal(sale.fileSalesEnabled(),false,label);
+    let privateDraft=await sale.createFileSale(draftOwner,{preset:'playbook',requestId:randomUUID()});
+    const fileId=await upload(privateDraft.product.id,pdf,{who:draftOwner});
+    const contents={...privateDraft.draft,title:'A finished private playbook',description:'A creator can prepare their original PDF before selling is available.',priceCents:1900,modules:[{...privateDraft.draft.modules[0],included:true,uploadIds:[fileId]}]};
+    privateDraft=await sale.saveFileSale(privateDraft.product.id,draftOwner,{expectedVersion:privateDraft.version,draft:contents});
+    const resumed=await sale.getFileSale(privateDraft.product.id,draftOwner);
+    assert.deepEqual(resumed.draft,contents,`Private PDF draft saves and resumes with ${label}`);
+    assert.equal(resumed.readiness.payments.state,'disabled',label);
+    assert.equal(resumed.readiness.ready,false,label);
+    assert.ok(resumed.readiness.checks.filter(check=>check.key!=='payments').every(check=>check.ready),`Only selling readiness blocks this complete draft with ${label}`);
+    assert.equal(resumed.publishedRevisionId,null,label);
+    assert.equal(product(privateDraft.product.id).status,'draft',label);
+    assert.equal(await sale.fileSaleUploadAllowed(product(privateDraft.product.id),fileId,undefined,draftUser),true,`Owner can preview their private file with ${label}`);
+    await assert.rejects(()=>sale.getFileSale(privateDraft.product.id,other.userId),e=>e.status===404,`Other users cannot read the workspace with ${label}`);
+    await assert.rejects(()=>sale.saveFileSale(privateDraft.product.id,other.userId,{expectedVersion:resumed.version,draft:contents}),e=>e.status===404,`Other users cannot edit the workspace with ${label}`);
+    await assert.rejects(()=>sale.fileSaleUploadAllowed(product(privateDraft.product.id),fileId,undefined,other),e=>e.status===403,`Other users cannot download the private file with ${label}`);
+    await assert.rejects(()=>sale.fileSaleUploadAllowed(product(privateDraft.product.id),fileId,undefined,null),e=>e.status===403,`Anonymous visitors cannot download the private file with ${label}`);
+    await assert.rejects(()=>sale.publishFileSale(privateDraft.product.id,draftOwner,{expectedVersion:resumed.version}),e=>e.status===503,`Publication stays disabled with ${label}`);
+    await assert.rejects(()=>sale.startFileSaleCheckout(new Request('http://localhost:5184/api/file-sales/checkout'),{slug:privateDraft.product.slug,expectedRevisionId:randomUUID(),requestId:randomUUID(),email:buyer.email}),e=>e.status===503,`Checkout stays disabled with ${label}`);
+    assert.equal(await sale.getPublishedFileSale(privateDraft.product.slug),null,`Private preparation creates no public page with ${label}`);
+    assert.deepEqual(transactionalCounts(),transactionsBefore,`Draft work does not create revisions, grants, orders or checkout intents with ${label}`);
+    assert.equal(providerCalls,callsBefore,`Disabled selling never calls the provider with ${label}`);
+  }
+  enabled=true;mode='test';
   let w=await sale.createFileSale(owner,{preset:'playbook'});
   assert.equal(w.draft.modules[0].kind,'downloads');assert.equal(w.draft.modules[0].included,false);assert.equal(w.readiness.ready,false);
   assert.equal(w.readiness.payments.state,'not_connected');
@@ -207,7 +239,7 @@ try{
     assert.equal((await sale.resolveFileSaleAccess(product(isolated.product.id),String(order.token),null)).modules[0].uploadIds[0],id,'Paid access is granted even when fulfillment analytics fail');
     assert.equal(sql.prepare('SELECT COUNT(*) n FROM file_sale_events WHERE product_id=?').get(isolated.product.id).n,0,'A failed event write is not falsely reported as recorded');
   }finally{telemetryFailure=false;}
-  console.log('Passed: actual SQLite/private blob fixtures, gated test-only selling, provider readiness states, ownership, idempotent create/save/publish/checkout/payment, draft/live isolation, original-byte PDF, missing-file blocks, checkout A/publish B/completion A, future PDF updates, explicit Course grants, retained historical access, rollback, email-independent recovery, sanitized telemetry and legacy isolation.');
+  console.log('Passed: actual SQLite/private blob fixtures, private create/upload/save/resume with flag off or live mode, no provider calls or transaction writes while sales are disabled, gated test-only selling, provider readiness states, ownership, idempotent create/save/publish/checkout/payment, draft/live isolation, original-byte PDF, missing-file blocks, checkout A/publish B/completion A, future PDF updates, explicit Course grants, retained historical access, rollback, email-independent recovery, sanitized telemetry and legacy isolation.');
   console.log('Telemetry verified: observed payment-state transitions deduplicate; public reads stay read-only; atomic publication failures are recorded; analytics failures do not fail saved drafts, publications or paid fulfillment.');
   console.log('Verified preset create/save/resume/publish/synthetic-checkout/access paths: '+testedPresets.join(', ')+'. All persisted formats have an explicit legacy family adapter.');
   console.log('Provider calls were synthetic. No sandbox account, real payment, email, or production deployment was used.');
