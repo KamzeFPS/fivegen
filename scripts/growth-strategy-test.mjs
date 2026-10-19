@@ -100,6 +100,20 @@ try{
   db.prepare('INSERT INTO product_marketing_plugins(product_id,owner,installed,updated_at) VALUES (?,?,?,?)').run(bookId,owner,JSON.stringify(['funnel','automations']),now);
   book=await deps.growthDashboard(owner,30,bookId);assert.ok(book.actions.some(action=>action.href.endsWith('&area=funnel')),'An explicitly installed funnel can be reviewed');assert.ok(book.actions.some(action=>action.href.endsWith('&area=automations')),'An explicitly installed automation can be prepared');
   db.prepare('UPDATE product_marketing_plugins SET installed=? WHERE product_id=?').run('[]',bookId);book=await deps.growthDashboard(owner,30,bookId);assert.ok(!book.actions.some(action=>/area=(funnel|automations|campaigns|offer)/.test(action.href)),'Removed plugins no longer appear as recommended tasks');
+  // Reporting must use the same product-publication precedence as Products.
+  // These local fixtures add no orders and never change any payment state.
+  const publicationFixtures=[['Unpublished builder','published','builder',false],['Published builder with draft row','draft','builder',true],['Unpublished file sale','published','file',false],['Published file sale with draft row','draft','file',true],['Marketing funnel only','draft','legacy',false]];
+  for(const [title,status,kind,published] of publicationFixtures){
+    const fixtureId=randomUUID();db.prepare("INSERT INTO products(id,owner,slug,title,description,audience,format,color,content,status,created_at,updated_at) VALUES (?,?,?,?,'Original content','Readers','Book','orange','{\"sections\":[],\"benefits\":[],\"launch\":\"\"}',?,?,?)").run(fixtureId,owner,'publication-'+fixtureId,title,status,now,now);
+    db.prepare("INSERT INTO growth_funnels(product_id,owner,slug,title,landing,published_at,updated_at) VALUES (?,?,?,?, '{}',?,?)").run(fixtureId,owner,'marketing-'+fixtureId,title,now,now);
+    if(kind==='builder'){
+      db.prepare("INSERT INTO product_builder_workspaces(product_id,owner,version,data,updated_at) VALUES (?,?,1,'{}',?)").run(fixtureId,owner,now);
+      if(published)db.prepare("INSERT INTO product_builder_publications(product_id,owner,version,slug,public_snapshot,content_snapshot,published_at,updated_at) VALUES (?,?,1,?,'{}','{}',?,?)").run(fixtureId,owner,'product-'+fixtureId,now,now);
+    }else if(kind==='file')db.prepare("INSERT INTO file_sale_drafts(product_id,version,data,published_revision_id) VALUES (?,1,'{}',?)").run(fixtureId,published?randomUUID():null);
+    const scopedPublication=await deps.growthDashboard(owner,30,fixtureId);assert.equal(scopedPublication.products[0].published,published,title+' uses its product publication, independently of its live funnel');
+    if(!published)assert.ok(scopedPublication.actions.some(action=>action.title==='Finish your product'),'An unpublished product remains a draft follow-up task');
+    if(kind==='builder'&&!published){db.prepare("INSERT INTO file_sale_drafts(product_id,version,data,published_revision_id) VALUES (?,1,'{}',?)").run(fixtureId,randomUUID());assert.equal((await deps.growthDashboard(owner,30,fixtureId)).products[0].published,false,'A dedicated builder takes precedence over an earlier file-sale publication');}
+  }
   assert.equal((await dashboardRoute.GET(new Request('https://fivegen.test/api/growth/dashboard?days=999'))).status,400);owner='';assert.equal((await dashboardRoute.GET(new Request('https://fivegen.test/api/growth/dashboard'))).status,401);
   console.log('Passed: Offer Lab ownership, revisions, public snapshots, archived research rounds, exact counts and complete streamed CSV beyond1000 responses, survey dedupe/closure, no accidental marketing consent, safe VSL brief handoff, anonymous event dedupe, aligned UTC reporting windows, owner/mode/currency-isolated revenue, product-scoped dashboard auth and all metrics, builder publication without a funnel, opt-in-only marketing recommendations.');
   console.log('QA records retained: '+root);

@@ -151,7 +151,13 @@ try {
   await json('/api/growth/events', 'POST', {slug: funnel.slug, visitor, event: 'visit', campaign: 'runtime_launch'}, anonymous);
   await json('/api/growth/events', 'POST', {slug: funnel.slug, visitor, event: 'cta', campaign: 'runtime_launch'}, anonymous);
   await json('/api/growth/leads', 'POST', {slug: funnel.slug, name: 'Workshop Reader', email: 'lead@example.test', marketing: true, website: ''}, anonymous);
-  dashboard = await json('/api/growth/dashboard?days=7'); assert.equal(dashboard.visits, 1); assert.equal(dashboard.clicks, 1); assert.equal(dashboard.leads, 1); assert.equal(dashboard.purchases, 0); assert.equal(dashboard.sources[0].campaign, 'runtime_launch'); assert.equal(dashboard.products[0].published, true);
+  dashboard = await json('/api/growth/dashboard?days=7'); assert.equal(dashboard.visits, 1); assert.equal(dashboard.clicks, 1); assert.equal(dashboard.leads, 1); assert.equal(dashboard.purchases, 0); assert.equal(dashboard.sources[0].campaign, 'runtime_launch'); assert.equal(dashboard.products[0].published, false,'A published optional funnel does not publish its draft product');
+  await json(`/api/builder/${product.id}`,'POST',{});
+  app.storage.sqlite.prepare("UPDATE products SET status='published' WHERE id=? AND owner=?").run(product.id,owner);
+  const draftProductDashboard=await json(`/api/growth/dashboard?days=7&productId=${product.id}`),draftProductWorkspace=await json('/api/workspace');
+  assert.equal(draftProductDashboard.products[0].published,false,'An unpublished builder takes precedence over the legacy published flag and its live optional funnel');
+  assert.equal(draftProductWorkspace.builders.find(builder=>builder.productId===product.id).pagePublished,false,'Overview and Products agree about the unpublished builder');
+  assert.equal((await fetch(base+'/g/'+funnel.slug)).status,200,'Reporting a product as draft does not unpublish its independent marketing funnel');
   const isolated = await json('/api/growth/dashboard?days=7', 'GET', undefined, otherHeaders); assert.equal(isolated.visits, 0); assert.equal(isolated.leads, 0); assert.equal(isolated.products.length, 0); assert.equal(isolated.revenue.length, 0);
   await json('/api/growth/dashboard?days=14', 'GET', undefined, headers, 400);
   const landingHtml = await (await fetch(base + '/g/' + funnel.slug)).text(); assert.ok(!landingHtml.includes('PRIVATE_CREATOR_STORY')); assert.ok(!landingHtml.includes('PRIVATE_SALES_SCRIPT'));

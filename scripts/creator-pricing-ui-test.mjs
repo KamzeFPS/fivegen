@@ -26,6 +26,7 @@ assert.equal((html.match(/<article/g)||[]).length,3,'Free plus exactly two new m
 for(const text of ['Free','Creator Pro','Scale','$0','$29.00','$99.00','5%','3%','0%'])assert.ok(html.includes(text),`Creator pricing includes ${text}`);
 assert.match(html,/3 AI-generated products each month/);assert.match(html,/20 AI planning messages each month/);
 assert.match(html,/Unlimited manual products/);assert.match(html,/Stripe processing is additional/);
+assert.match(html,/href="\/build\/new">Start creating/,'The Free plan opens product creation instead of returning to the account dashboard');
 assert.match(html,/href="\/checkout\?offer=subscription%3Apro%3Amonth"/);assert.match(html,/href="\/checkout\?offer=subscription%3Ascale%3Amonth"/);
 assert.doesNotMatch(html,/Retired annual Studio|\$690|>Yearly<|>Monthly<|interval=year/,'New buyers are never offered retired annual pricing');
 assert.match(html,/Top-ups never upgrade your plan or change your selling fee/);

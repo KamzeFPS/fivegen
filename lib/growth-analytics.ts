@@ -40,7 +40,10 @@ export async function growthDashboard(owner: string, days: number, productId?: s
     db.prepare("SELECT strftime('%Y-%m-%d',paid_at/1000,'unixepoch') day,COUNT(*) n FROM commerce_orders WHERE owner=? AND mode=? AND status='paid' AND paid_at>=?"+scope+" GROUP BY day").bind(owner,mode,from,selected,selected).all(),
     db.prepare("SELECT campaign,SUM(CASE WHEN event='visit' THEN 1 ELSE 0 END) visits,SUM(CASE WHEN event='cta' THEN 1 ELSE 0 END) clicks FROM growth_events WHERE owner=? AND created_at>=?"+scope+" GROUP BY campaign ORDER BY visits DESC LIMIT 10").bind(owner,from,selected,selected).all(),
     db.prepare(`SELECT p.id,p.title,p.status,f.published_at,m.installed,
+      EXISTS(SELECT 1 FROM product_builder_workspaces w WHERE w.product_id=p.id AND w.owner=p.owner) builder_workspace,
       EXISTS(SELECT 1 FROM product_builder_publications b WHERE b.product_id=p.id AND b.owner=p.owner) builder_published,
+      EXISTS(SELECT 1 FROM file_sale_drafts d WHERE d.product_id=p.id) file_sale,
+      (SELECT d.published_revision_id FROM file_sale_drafts d WHERE d.product_id=p.id) file_sale_published,
       (SELECT COUNT(*) FROM automation_sequences a WHERE a.product_id=p.id AND a.owner=p.owner AND a.status='active') active_sequences,
       (SELECT COUNT(*) FROM growth_events e WHERE e.product_id=p.id AND e.owner=p.owner AND e.event='visit' AND e.created_at>=?) visits,
       (SELECT COUNT(*) FROM growth_leads l WHERE l.product_id=p.id AND l.owner=p.owner AND l.created_at>=?) leads,
@@ -57,7 +60,9 @@ export async function growthDashboard(owner: string, days: number, productId?: s
   const series = (rows: Record<string,unknown>[]) => new Map(rows.map(r=>[String(r.day),Number(r.n)]));
   const visitDays=series(visitsByDay.results),leadDays=series(leadsByDay.results),saleDays=series(salesByDay.results);
   const trend = Array.from({length:days},(_,i)=>{const day = new Date(now-(days-1-i)*86400000).toISOString().slice(0,10);return {day,visits:visitDays.get(day)||0,leads:leadDays.get(day)||0,purchases:saleDays.get(day)||0};});
-  const productDetails=products.results.map(r=>({id:String(r.id),title:String(r.title),published:r.status==='published'||!!r.builder_published||!!r.published_at,funnelPublished:!!r.published_at,plugins:readMarketingPluginIds(r.installed),activeSequences:Number(r.active_sequences),visits:Number(r.visits),leads:Number(r.leads),purchases:Number(r.purchases)}));
+  // Product publication follows its dedicated builder/file-sale state. An
+  // optional marketing funnel can stay public while the product is a draft.
+  const productDetails=products.results.map(r=>({id:String(r.id),title:String(r.title),published:r.builder_workspace?!!r.builder_published:r.file_sale?!!r.file_sale_published:r.status==='published',funnelPublished:!!r.published_at,plugins:readMarketingPluginIds(r.installed),activeSequences:Number(r.active_sequences),visits:Number(r.visits),leads:Number(r.leads),purchases:Number(r.purchases)}));
   const productRows=productDetails.map(({funnelPublished,plugins,activeSequences,...product})=>product);
   const actions: GrowthDashboardData['actions'] = [];
   if (!productRows.length) actions.push({title:'Create your first product',reason:'Add your course, resource, or service. Marketing plugins are available whenever you need them.',label:'Create your product',href:'/?view=create'});
