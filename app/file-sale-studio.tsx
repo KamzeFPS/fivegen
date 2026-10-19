@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, Check, CheckCircle2, Copy, ExternalLink, Eye, FileText, ImagePlus, Loader2, Plus, RefreshCw, ShieldCheck, Upload, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, Check, CheckCircle2, Copy, ExternalLink, Eye, FileText, ImagePlus, Loader2, Megaphone, Plus, RefreshCw, ShieldCheck, Upload, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Brand } from './ui-brand';
 import { FileSalePageView } from './file-sale-page-view';
@@ -182,7 +182,7 @@ export default function FileSaleStudio({ initialId, publishingEnabled }: { initi
   if (!workspace && initialId !== 'new') return <main className="file-sale-app file-sale-loading"><h1>We couldn’t open this product.</h1><p role="alert">{error}</p><a className="button secondary" href="/">Return to your workspace</a></main>;
 
   return <div className="file-sale-app">
-    <header className="file-sale-topbar"><a href="/" aria-label="FiveGen home"><Brand/></a><span className="file-sale-environment"><ShieldCheck size={14}/>{publishingEnabled ? 'Sandbox sales preview' : 'Private product workspace'}</span><a className="text-link" href="/?view=library">My products <ArrowRight size={14}/></a></header>
+    <header className="file-sale-topbar"><a href="/" aria-label="FiveGen home"><Brand/></a><span className="file-sale-environment"><ShieldCheck size={14}/>{publishingEnabled ? 'Sandbox sales preview' : 'Private product workspace'}</span>{workspace&&<a className="text-link file-sale-marketing" href={`/?project=${workspace.product.id}&area=dashboard`}><Megaphone size={14}/>Marketing</a>}<a className="text-link" href="/?view=library">My products <ArrowRight size={14}/></a></header>
     <main className="file-sale-main">
       <div className="file-sale-heading"><div><p className="file-sale-eyebrow">YOUR WORK, READY TO SHARE</p><h1 ref={heading} tabIndex={-1}>{stage === 0 ? 'Start with what you’ve made.' : stage === 1 ? 'A simple offer. A clear next step.' : 'Make a confident first impression.'}</h1><p>{stage === 0 ? 'Upload your file, add the essentials, and build around it.' : stage === 1 ? 'Choose a price and exactly what a purchase includes.' : publishingEnabled ? 'See what buyers see. Check the details, then publish your test page.' : 'Preview your product and save the offer for when publishing is available.'}</p></div><span className="file-sale-save-state" aria-live="polite">{busy ? <><Loader2 size={14} className="spin"/>{busy}…</> : dirty ? 'Unsaved changes' : workspace ? <><Check size={14}/>Draft saved</> : 'Nothing published yet'}</span></div>
       {!publishingEnabled && <div className="file-sale-availability" role="status"><ShieldCheck size={18}/><div><strong>Prepare your product now. Publishing is not enabled yet.</strong><p>Upload files, add a course, set your price, and preview your product. Your work stays private; publishing and payments for file products are not enabled yet.</p></div></div>}

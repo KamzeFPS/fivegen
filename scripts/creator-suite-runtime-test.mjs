@@ -50,6 +50,27 @@ try {
   const productUrl = `/api/products/${product.id}`;
   assert.equal(app.storage.sqlite.prepare('SELECT COUNT(*) n FROM generation WHERE product_id=?').get(product.id).n, 0);
 
+  // Plugin preferences use the built persistent route and never opt products
+  // into tools based on existing content. They are not feature permissions.
+  const pluginsUrl=productUrl+'/marketing-plugins';
+  await json(pluginsUrl,'GET',undefined,anonymous,401);
+  await json(pluginsUrl,'GET',undefined,otherHeaders,404);
+  await json(`/api/products/${randomUUID()}/marketing-plugins`,'GET',undefined,headers,404);
+  const pluginResponse=await fetch(base+pluginsUrl,{headers});assert.equal(pluginResponse.status,200);assert.equal(pluginResponse.headers.get('cache-control'),'private, no-store');
+  let plugins=await pluginResponse.json();assert.deepEqual(plugins,{installed:[],updatedAt:0});
+  const addVsl={pluginId:'vsl',enabled:true,expectedUpdatedAt:0};
+  await json(pluginsUrl,'PATCH',addVsl,anonymous,401);
+  await json(pluginsUrl,'PATCH',addVsl,otherHeaders,404);
+  await json(pluginsUrl,'PATCH',addVsl,{...headers,origin:'https://other.example.test'},403);
+  await json(pluginsUrl,'PATCH',{...addVsl,pluginId:'crm'},headers,400);
+  plugins=await json(pluginsUrl,'PATCH',addVsl);assert.deepEqual(plugins.installed,['vsl']);assert.ok(plugins.updatedAt>0);
+  assert.deepEqual(await json(pluginsUrl),plugins,'A new HTTP read restores installed plugins');
+  assert.deepEqual(await json(pluginsUrl,'PATCH',{...addVsl,expectedUpdatedAt:plugins.updatedAt}),plugins,'Idempotent add preserves the revision');
+  await json(pluginsUrl,'PATCH',{pluginId:'funnel',enabled:true,expectedUpdatedAt:0},headers,409);
+  assert.deepEqual(JSON.parse(app.storage.sqlite.prepare('SELECT installed FROM product_marketing_plugins WHERE product_id=? AND owner=?').get(product.id,owner).installed),['vsl']);
+  plugins=await json(pluginsUrl,'PATCH',{pluginId:'vsl',enabled:false,expectedUpdatedAt:plugins.updatedAt});assert.deepEqual(plugins.installed,[]);
+  assert.equal(app.storage.sqlite.prepare('SELECT updated_at FROM products WHERE id=?').get(product.id).updated_at,product.updatedAt,'Preferences do not alter product content or publication');
+
   // Offer hypotheses are drafts until explicitly published, with round-scoped
   // responses and no fabricated conversion or payment counts.
   const labUrl = productUrl + '/offer-lab';
@@ -127,6 +148,31 @@ try {
   await json('/api/growth/dashboard?days=14', 'GET', undefined, headers, 400);
   const landingHtml = await (await fetch(base + '/g/' + funnel.slug)).text(); assert.ok(!landingHtml.includes('PRIVATE_CREATOR_STORY')); assert.ok(!landingHtml.includes('PRIVATE_SALES_SCRIPT'));
 
+  assert.deepEqual((await json(pluginsUrl)).installed,[],'Saved voice, campaigns, automations and a published funnel never install plugins');
+  assert.ok(!dashboard.actions.some(action=>/area=(funnel|vsl|voice|campaigns|automations|offer)/.test(action.href)),'Default recommendations do not force optional tools');
+  plugins=await json(pluginsUrl,'PATCH',{pluginId:'funnel',enabled:true,expectedUpdatedAt:plugins.updatedAt});
+  plugins=await json(pluginsUrl,'PATCH',{pluginId:'funnel',enabled:false,expectedUpdatedAt:plugins.updatedAt});
+  assert.equal((await fetch(base+'/g/'+funnel.slug)).status,200,'Removing a plugin leaves its published funnel available');
+  assert.equal((await json(campaignUrl)).campaign.items[0].body,item.body,'Removing a plugin preserves campaign content');
+
+  // A real book builder publication has its own sales dashboard without
+  // requiring a funnel. Other product and owner traffic stays outside it.
+  let book=await json('/api/builder','POST',{type:'book',source:'manual',requestId:randomUUID()},headers,201);
+  book=await json(`/api/builder/${book.product.id}`,'PATCH',{expectedVersion:book.version,draft:{...book.draft,title:'A published book without a funnel',description:'An original illustrated workflow guide for independent creators.',audience:'Independent illustrators',fields:{...book.draft.fields,outcome:'Finish a practical client handoff checklist'},sections:[{id:randomUUID(),title:'A practical first chapter',body:'PRIVATE_BOOK_TEXT: Follow these concrete steps to prepare a client handoff, review the worked example, and finish your own checklist.'}]}});
+  book=await json(`/api/builder/${book.product.id}/publish`,'POST',{expectedVersion:book.version});assert.ok(book.publication);assert.equal(book.selling,false);
+  const bookDashboardUrl=`/api/growth/dashboard?days=7&productId=${book.product.id}`;
+  await json(bookDashboardUrl,'GET',undefined,anonymous,401);
+  await json(bookDashboardUrl,'GET',undefined,otherHeaders,404);
+  await json(`/api/growth/dashboard?productId=${randomUUID()}`,'GET',undefined,headers,404);
+  await json('/api/growth/dashboard?productId=not-a-uuid','GET',undefined,headers,400);
+  const bookResponse=await fetch(base+bookDashboardUrl,{headers});assert.equal(bookResponse.status,200);assert.equal(bookResponse.headers.get('cache-control'),'private, no-store');
+  const bookDashboard=await bookResponse.json();assert.equal(bookDashboard.productId,book.product.id);assert.equal(bookDashboard.products.length,1);assert.equal(bookDashboard.products[0].published,true);assert.equal(bookDashboard.visits,0);assert.equal(bookDashboard.leads,0);assert.equal(bookDashboard.bookings,0);assert.equal(bookDashboard.purchases,0);assert.deepEqual(bookDashboard.revenue,[]);assert.deepEqual(bookDashboard.sources,[]);assert.deepEqual(bookDashboard.actions,[],'A published book has no missing-funnel task');assert.ok(bookDashboard.trend.every(day=>day.visits===0&&day.leads===0&&day.purchases===0));
+  const workshopDashboard=await json(`/api/growth/dashboard?days=7&productId=${product.id}`);assert.equal(workshopDashboard.products.length,1);assert.equal(workshopDashboard.visits,1);assert.equal(workshopDashboard.leads,1);assert.equal(workshopDashboard.sources[0].campaign,'runtime_launch');
+  const globalDashboard=await json('/api/growth/dashboard?days=7');assert.equal(globalDashboard.productId,null);assert.equal(globalDashboard.products.length,2);assert.equal(globalDashboard.visits,1);assert.equal(globalDashboard.leads,1);
+  assert.deepEqual(bookDashboard.salesCoverage,{source:'connected-checkout',legacyOrdersExcluded:0});
+  for(const [productId,account,created] of [[book.product.id,owner,Date.now()],[product.id,owner,Date.now()],[book.product.id,owner,Date.now()-8*86400000],[book.product.id,other,Date.now()]])app.storage.sqlite.prepare("INSERT INTO orders(id,product_id,owner,email,amount,provider,token,created_at) VALUES (?,?,?,'legacy@example.test',9900,'stripe',?,?)").run(randomUUID(),productId,account,randomUUID(),created);
+  const legacyCoverage=await json(bookDashboardUrl);assert.equal(legacyCoverage.salesCoverage.legacyOrdersExcluded,1,'Earlier checkout history is flagged with product/owner/date isolation');assert.equal(legacyCoverage.purchases,0);assert.deepEqual(legacyCoverage.revenue,[],'Legacy records with no mode/refund state are never added as current paid revenue');assert.equal((await json('/api/growth/dashboard?days=7')).salesCoverage.legacyOrdersExcluded,2);
+
   // Stripe Connect remains unavailable until administrator configuration.
   const commerceUrl = `/api/commerce/products/${product.id}`; const settings = await json(commerceUrl); assert.equal(settings.account.configured, false);
   await json(commerceUrl, 'GET', undefined, otherHeaders, 404);
@@ -158,7 +204,7 @@ try {
   assert.equal((await fetch(base + '/o/' + lab.slug)).status, 404);
   assert.deepEqual(outbound, [], 'No provider or other external fetch was attempted');
   assert.deepEqual(failures, [], 'All deferred endpoint boundary checks pass');
-  console.log('Passed: built HTTP creator suite — Offer Lab snapshots/responses/CSV export, private reviewed voice sources/audio, campaign citations/approval/reminders, automation draft/config gates, real funnel analytics and owner isolation, Connect settings/config gates, unpaid portal boundaries and actual raw Stripe signature rejection. No external calls.');
+  console.log('Passed: built HTTP creator suite — persistent opt-in marketing plugins with auth/owner/origin/stale boundaries, non-destructive removal, published-book scoped dashboards and global overview, Offer Lab snapshots/responses/CSV export, private reviewed voice sources/audio, campaign citations/approval/reminders, automation draft/config gates, real funnel analytics and owner isolation, Connect settings/config gates, unpaid portal boundaries and actual raw Stripe signature rejection. No external calls.');
   console.log('QA records retained: ' + root);
 } finally {
   process.env.STRIPE_SECRET_KEY = ''; process.env.STRIPE_CONNECT_WEBHOOK_SECRET = '';

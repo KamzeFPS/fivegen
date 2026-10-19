@@ -10,3 +10,5 @@
 
 /* Private authoring stays available while publication is gated. */
 .file-sale-availability{display:flex;gap:12px;align-items:flex-start;border:1px solid #ffffff1a;border-radius:12px;background:#141413;padding:16px 18px;margin:0 0 22px;color:#d7d0c8}.file-sale-availability>svg{flex:none;margin-top:2px;color:#bd9a7d}.file-sale-availability strong{font-size:13px;font-weight:500}.file-sale-availability p{margin:6px 0 0;color:#a39b93;font-size:12px;line-height:1.65}
+
+.file-sale-topbar>.file-sale-marketing{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}@media(max-width:520px){.file-sale-topbar{gap:12px}.file-sale-environment{display:none}}

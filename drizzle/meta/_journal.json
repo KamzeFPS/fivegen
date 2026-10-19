@@ -134,6 +134,13 @@
       "when": 1792390015452,
       "tag": "0018_builder_pdf_updates",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1792392834010,
+      "tag": "0019_marketing_plugins",
+      "breakpoints": true
     }
   ]
 }

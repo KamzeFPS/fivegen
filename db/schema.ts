@@ -7,6 +7,7 @@ export * from './commerce-v2-schema';
 export * from './automation-schema';
 export * from './creator-voice-schema';
 export * from './product-builder-schema';
+export * from './marketing-plugin-schema';
 
 // Existing production migration 0015 is mirrored here so future generation
 // retains administrator grants rather than attempting to remove their table.
