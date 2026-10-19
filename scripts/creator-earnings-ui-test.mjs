@@ -21,6 +21,8 @@ const refunded={...sale,id:'refunded-sale',title:'A refunded purchase',status:'r
 const report={commissionPercent:5,creatorPlan:free,sales:[{currency:'usd',grossAmount:300,orders:3}],totals:[{currency:'usd',grossAmount:200,stripeFeeAmount:68,platformFeeAmount:5,creatorNetAmount:127,confirmedOrders:2}],coverage:{totalOrders:4,confirmedOrders:2,pendingOrders:1,legacyOrders:1,excludedOrders:1},orders:[sale,legacy,pending,refunded],orderLimit:50};
 const render=(value=report,props={})=>renderToStaticMarkup(React.createElement(CreatorEarnings,{report:value,onRefresh(){},...props}));
 const html=render();
+assert.match(html,/<details class="earnings-sales"><summary>/,'The ledger is progressively disclosed instead of making every dashboard load scroll through all sales');
+assert.match(html,/4 orders in this period · 2 fees confirmed · 1 pending/,'The collapsed ledger still exposes coverage and pending payment risk');
 assert.match(html,/USD\s*1\.27/,'Confirmed earnings render the exact server amount, not a guess from the sale price');
 assert.match(html,/USD\s*0\.68/);assert.match(html,/USD\s*0\.05/);assert.match(html,/USD\s*0\.61/);
 assert.match(html,/1 paid sale is awaiting Stripe fee confirmation and excluded/,'Pending rows are visibly excluded from confirmed totals');

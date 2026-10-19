@@ -23,12 +23,12 @@ sql.prepare("INSERT INTO automation_jobs (id,enrollment_id,owner,product_id,step
 sql.prepare('INSERT INTO creator_campaigns (product_id,owner,title,items,updated_at) VALUES (?,?,?,?,?)').run(legacyId, originalOwner, 'Existing campaign', '[{"retained":"draft"}]', now);
 sql.prepare("INSERT INTO creator_voice_sources (id,owner,product_id,title,kind,transcript,permission,approved,updated_at) VALUES (?,?,?,'Original voice','text','Retain my voice',1,1,?)").run(randomUUID(), originalOwner, legacyId, now);
 sql.prepare("INSERT INTO offer_experiments (product_id,owner,slug,draft,published,status,revision,published_revision,published_at,updated_at) VALUES (?,?,?,'{}','{}','published',1,1,?,?)").run(legacyId, originalOwner, `offer-${legacyId}`, now, now);
-function durableState() {
-  const tables = sql.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('fivegen_migrations','product_marketing_plugins') ORDER BY name").all();
+function stateTables() { return sql.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('fivegen_migrations','product_marketing_plugins') ORDER BY name").all(); }
+function durableState(tables = stateTables()) {
   return JSON.stringify(tables.map(({ name }) => [name, sql.prepare(`SELECT * FROM "${name}"`).all()]));
 }
-const beforeMigration = durableState(); storage.close(); storage = createStorage(root); sql = storage.sqlite;
-assert.equal(durableState(), beforeMigration, 'Migration does not alter any historical content or customer state');
+const historicalTables = stateTables(), beforeMigration = durableState(historicalTables); storage.close(); storage = createStorage(root); sql = storage.sqlite;
+assert.equal(durableState(historicalTables), beforeMigration, 'Migration does not alter any historical content or customer state; later additive infrastructure tables are not historical data');
 assert.equal(sql.prepare('SELECT COUNT(*) n FROM product_marketing_plugins').get().n, 0, 'Migration never auto-installs a tool based on legacy content');
 insertProduct(newId, originalOwner);
 const beforeMutations = durableState();

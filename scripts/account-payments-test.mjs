@@ -22,20 +22,25 @@ async function load(path,deps,onlyFunction){
 const componentPath='app/account/payments/seller-payments-account.tsx';
 const routePath='app/account/payments/page.tsx';
 const account={configured:true,enabled:true,mode:'live',connected:false,ready:false,accountId:null};
-const selectedIcons=Object.fromEntries('ArrowLeft ArrowRight Check CheckCircle2 ChevronRight ExternalLink Loader2 RefreshCw ShieldCheck Wallet'.split(' ').map(name=>[name,icons[name]]));
+const selectedIcons=Object.fromEntries('ArrowLeft ArrowRight Check CheckCircle2 ChevronRight CreditCard ExternalLink Loader2 RefreshCw ShieldCheck Wallet'.split(' ').map(name=>[name,icons[name]]));
 const deps={React,useCallback:React.useCallback,useEffect:React.useEffect,useState:React.useState,...selectedIcons,Brand:()=>React.createElement('span',null,'FiveGen')};
 deps.CreatorSaleFees=(await load('app/creator-sale-fees.tsx',{React})).CreatorSaleFees;
+deps.AccountNavigation=(await load('app/account/account-navigation.tsx',deps)).AccountNavigation;
 const ui=await load(componentPath,deps),id='866cfb4b-b55d-4b76-a339-a69368ab7478';
 
 assert.equal(ui.sellerPaymentReturnPath(`/build/${id}`),`/build/${id}`);
 assert.equal(ui.sellerPaymentReturnPath(`/?project=${id}&area=commerce&untrusted=discard`),`/?project=${id}&area=commerce`);
 for(const path of [null,'https://example.test','//example.test','/\\example.test',`/build/${id}/../../callback`,'/account/billing','/?project=not-an-id&area=commerce',`/?project=${id}&area=unrelated`])assert.equal(ui.sellerPaymentReturnPath(path),null,'Only a known internal product route is a return destination');
 const html=renderToStaticMarkup(React.createElement(ui.SellerPaymentsAccount,{email:'seller@example.test',initialAccount:account}));
-assert.match(html,/One connection/);assert.match(html,/Every product/);assert.match(html,/seller@example.test/);assert.match(html,/<option value="" disabled="" selected="">Select your business country/,'A new seller has no guessed legal country');
+assert.match(html,/<h1>Seller payments<\/h1>/);assert.match(html,/Connect Stripe once for every product/);assert.match(html,/seller@example.test/);assert.match(html,/<option value="" disabled="" selected="">Select your business country/,'A new seller has no guessed legal country');
 assert.match(html,/href="\/account\/billing"/,'Purchasing FiveGen credits is separate from receiving product sales');
 assert.equal((html.match(/<form/g)||[]).length,1);
 const readyHtml=renderToStaticMarkup(React.createElement(ui.SellerPaymentsAccount,{email:'seller@example.test',initialAccount:{...account,connected:true,ready:true,accountId:'acct_fixture'}}));
 assert.match(readyHtml,/Connected for all products/);assert.doesNotMatch(readyHtml,/<form/,'Ready profiles are never asked to connect for another product');
+assert.match(readyHtml,/href="https:\/\/dashboard.stripe.com\/acct_fixture\/balance\/overview"/,'Ready sellers can find their actual Stripe balance and payouts');
+assert.match(readyHtml,/aria-current="page"[^>]*>[^<]*<svg[^]*?Seller payments/,'The account navigation identifies the current screen');
+const unsafeAccount=renderToStaticMarkup(React.createElement(ui.SellerPaymentsAccount,{email:'seller@example.test',initialAccount:{...account,connected:true,ready:true,accountId:'acct_..\/evil'}}));
+assert.doesNotMatch(unsafeAccount,/dashboard.stripe.com/,'Malformed account IDs never create a dashboard destination');
 const unavailable=renderToStaticMarkup(React.createElement(ui.SellerPaymentsAccount,{email:'seller@example.test',initialAccount:{...account,enabled:false}}));
 assert.match(unavailable,/FiveGen’s platform payment setup needs attention/);assert.doesNotMatch(unavailable,/<form/,'An unavailable platform does not advertise a working onboarding action');
 

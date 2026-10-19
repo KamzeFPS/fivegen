@@ -4,13 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, ChevronDown, CircleCheck, CircleDashed, Loader2, RefreshCw } from 'lucide-react';
 import type { GrowthDashboardData } from '@/lib/growth-analytics';
 import type {CommerceEarningsRefresh} from '@/lib/commerce-earnings';
-import {CreatorEarnings} from './creator-earnings';
+import {CreatorEarnings, earningsMoney} from './creator-earnings';
 
 const number = (value: number) => value.toLocaleString('en-US');
 const count = (value: number, singular: string, plural = `${singular}s`) => `${number(value)} ${value === 1 ? singular : plural}`;
-const money = (amount: number, currency: string) => new Intl.NumberFormat('en-US', {
-  style: 'currency', currency: currency.toUpperCase(), currencyDisplay: 'code',
-}).format(amount / 100);
+const money = earningsMoney;
 const date = (day: string, includeYear = false) => new Intl.DateTimeFormat('en-US', {
   month: 'short', day: 'numeric', ...(includeYear ? { year: 'numeric' as const } : {}), timeZone: 'UTC',
 }).format(new Date(`${day}T00:00:00Z`));
@@ -86,13 +84,13 @@ export function GrowthDashboard({productId}:{productId?:string}={}) {
   const lastDay = report?.trend.at(-1)?.day;
   const dateRange = firstDay && lastDay ? `${date(firstDay)} – ${date(lastDay, true)}` : '';
   const recommendation=<section className="overview-next-step" aria-labelledby="overview-next-heading">
-    <div className="overview-next-copy"><span className="overview-kicker">Recommended next step · {productId?'this product':'your workspace'}</span><h2 id="overview-next-heading">{nextStep.title}</h2><p>{nextStep.reason}</p></div>
+    <div className="overview-next-copy"><span className="overview-kicker">Next step</span><h2 id="overview-next-heading">{nextStep.title}</h2><p>{nextStep.reason}</p></div>
     <a className="button primary" href={nextStep.href}>{nextStep.label}<ArrowRight size={17}/></a>
   </section>;
 
   return <section className={`overview-dashboard ${productId?'overview-product-dashboard':''}`} aria-busy={loading}>
     <header className="overview-heading">
-      <div><h1>{productId?'Sales & activity':'Overview'}</h1><p>{productId?'Sales and marketing results for this product.':'Your products, your results, and what to do next.'}</p></div>
+      {productId?<div className="overview-product-report-context"><h2 className="overview-sr-only">Sales & activity</h2>{report?.mode==='test'?<p className="overview-test-notice"><strong>Test payments are on.</strong> Results below use test records.</p>:<p className="overview-product-report-period">Performance{dateRange?` · ${dateRange}`:''}</p>}</div>:<div><h1>Overview</h1><p>A clear view of your business.</p></div>}
       <div className="overview-period-tools">
         <label htmlFor="dashboard-period"><span>Reporting period</span><select id="dashboard-period" value={days} onChange={event => {
           setLoading(true);
@@ -108,33 +106,32 @@ export function GrowthDashboard({productId}:{productId?:string}={}) {
       : loading ? <div className="overview-load-state" role="status"><Loader2 className="spin" size={22} /><p>Loading your last {days} days…</p></div> : null}
 
     {report && <>
-      {report.mode === 'test' && <p className="overview-test-notice"><strong>Test payments are on.</strong> Sales, revenue, and bookings below use test records.</p>}
+      {!productId&&report.mode === 'test' && <p className="overview-test-notice"><strong>Test payments are on.</strong> Sales, revenue, and bookings below use test records.</p>}
       {report.salesCoverage.legacyOrdersExcluded>0&&<p className="overview-test-notice" role="note"><strong>Earlier checkout history is separate.</strong> {number(report.salesCoverage.legacyOrdersExcluded)} legacy {report.salesCoverage.legacyOrdersExcluded===1?'order record lacks':'order records lack'} reliable payment-environment and refund status. Current checkout sales and revenue below exclude those records.</p>}
 
-      {!productId&&recommendation}
-
       <section className="overview-results" aria-labelledby="overview-results-heading">
-        <div className="overview-section-heading"><h2 id="overview-results-heading">Your results</h2><p>Last {report.days} days{dateRange && <span> · {dateRange}</span>}</p></div>
+        {productId?<h2 id="overview-results-heading" className="overview-sr-only">Product performance</h2>:<div className="overview-section-heading overview-results-heading"><h2 id="overview-results-heading">Performance</h2><p>{dateRange || `Last ${report.days} days`}</p></div>}
         <div className="overview-metrics">
-          <article className="overview-metric"><h3>{report.salesCoverage.legacyOrdersExcluded?'Current checkout sales':'Product sales'}</h3><strong>{number(report.purchases)}</strong><p>{productId?'Paid orders for this product.':'Paid orders for your products.'}</p></article>
-          <article className="overview-metric overview-revenue"><h3>{report.salesCoverage.legacyOrdersExcluded?'Current checkout gross sales':'Gross sales'}</h3>{report.revenue.length ? <div className="overview-revenue-values">{report.revenue.map(item => <strong key={item.currency}>{money(item.amount, item.currency)}</strong>)}</div> : <strong className="overview-no-sales">No sales in this period</strong>}<p>Customer payments before fees. Your actual earnings are broken down below.</p></article>
-          <article className="overview-metric"><h3>New contacts</h3><strong>{number(report.leads)}</strong><p>New contacts captured for {productId?'this product':'your products'}.</p></article>
-          <article className="overview-metric"><h3>Page visits</h3><strong>{number(report.visits)}</strong><p>Recorded visits to optional marketing pages.</p></article>
+          <article className="overview-metric overview-revenue"><h3>Gross sales</h3>{report.revenue.length ? <div className="overview-revenue-values">{report.revenue.map(item => <strong key={item.currency}>{money(item.amount, item.currency)}</strong>)}</div> : <strong className="overview-no-sales">No sales yet</strong>}<p>Paid orders, before fees</p></article>
+          <article className="overview-metric overview-net"><h3>Net earnings</h3>{report.earnings.totals.length ? <div className="overview-revenue-values">{report.earnings.totals.map(item => <strong key={item.currency}>{money(item.creatorNetAmount,item.currency)}</strong>)}</div> : <strong className="overview-no-sales">{report.earnings.coverage.pendingOrders?'Awaiting fees':'No earnings yet'}</strong>}<p>{report.earnings.coverage.pendingOrders?`${count(report.earnings.coverage.pendingOrders,'sale')} awaiting fees`:'After confirmed Stripe & FiveGen fees'}</p></article>
+          <article className="overview-metric"><h3>Product sales</h3><strong>{number(report.purchases)}</strong><p>Paid orders in this period</p></article>
+          <article className="overview-metric"><h3>New contacts</h3><strong>{number(report.leads)}</strong><p>People who signed up</p></article>
+          <article className="overview-metric"><h3>Page visits</h3><strong>{number(report.visits)}</strong><p>Optional marketing pages</p></article>
         </div>
         {report.visits === 0 && report.leads === 0 && report.purchases === 0 && <p className="overview-results-hint">{!report.products.length ? 'Create a product to start. Sales and activity will appear here as your audience responds.' : published ? 'Your product is published. Sales appear here once payments are connected and customers buy. Marketing plugins are optional.' : 'Finish your product and publish when you’re ready. You can add marketing plugins at any time.'}</p>}
       </section>
 
-      <CreatorEarnings report={report.earnings} refreshing={refreshingFees} onRefresh={()=>void refreshFees()} error={feeError} notice={feeNotice}/>
-
-      {productId&&recommendation}
-      <section className="overview-products" aria-labelledby="overview-products-heading">
+      {!productId&&recommendation}
+      {!productId&&<section className="overview-products" aria-labelledby="overview-products-heading">
         <div className="overview-section-heading"><div><h2 id="overview-products-heading">{productId?'Your product':'Recent products'}</h2><p>Publishing status and results for the last {report.days} days.</p></div><a className="overview-text-link" href="/?view=library">All products <ArrowRight size={15} /></a></div>
         {report.products.length ? <div className="overview-product-list">{report.products.slice(0,4).map(product => <article className="overview-product" key={product.id}>
-          <div className="overview-product-info"><h3><a href={`/?project=${product.id}&area=content`}>{product.title}</a></h3><span className={`overview-product-status ${product.published ? 'published' : ''}`}>{product.published ? <CircleCheck size={14} /> : <CircleDashed size={14} />}{product.published ? 'Product published' : 'Draft product'}</span></div>
+          <div className="overview-product-info"><h3><a href={`/?project=${product.id}&area=content`}>{product.title}</a></h3><span className={`overview-product-status ${product.published ? 'published' : ''}`}>{product.published ? <CircleCheck size={14} /> : <CircleDashed size={14} />}{product.published ? 'Published' : 'Draft'}</span></div>
           <p className="overview-product-activity" aria-label={`Last ${report.days} days: ${count(product.visits, 'visit')}, ${count(product.leads, 'contact')}, ${count(product.purchases, 'sale')}`}><span>{count(product.visits, 'visit')}</span><span>{count(product.leads, 'contact')}</span><span>{count(product.purchases, 'sale')}</span></p>
           <a className="overview-product-open" href={`/?project=${product.id}&area=content`}>Open product<ArrowRight size={16} /></a>
         </article>)}</div> : <div className="overview-products-empty"><h3>Everything starts with one product.</h3><p>Add your lessons, downloads, or mentorship. Choose marketing plugins only when you need them.</p><a className="overview-text-link" href="/?view=create">Create your product <ArrowRight size={16} /></a></div>}
-      </section>
+      </section>}
+
+      <CreatorEarnings report={report.earnings} refreshing={refreshingFees} onRefresh={()=>void refreshFees()} error={feeError} notice={feeNotice}/>
 
       <details className="overview-details">
         <summary><span><strong>More details</strong><span>Daily activity, campaigns, and how your results are counted</span></span><ChevronDown size={19} /></summary>

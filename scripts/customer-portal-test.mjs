@@ -35,7 +35,7 @@ async function harness(search = '') {
     }
   };
   const dependencies = {
-    React, useState, useRef, useCallback, useEffect, Link:'a', location:{search},
+    React, useState, useRef, useCallback, useEffect, Link:'a', Brand:()=>React.createElement('span',null,'FiveGen'), location:{search},
     commerceMoney:amount => `$${(amount / 100).toFixed(2)}`,
     isConsulting:format => format === 'Coaching session',
     commerceResponse:async response => { const data = await response.json(); if (!response.ok) throw new Error(data.error); return data; },
@@ -91,6 +91,11 @@ for (const search of ['', '?order=pending-order']) {
   assert.match(app.text,/Private purchased content for paid-a/);
   assert.equal(app.find('a').find(link => text(link).includes('original.pdf')).props.href,'/api/commerce/customer/paid-a/uploads/original-upload');
   assert.equal(app.find('a').find(link => text(link).includes('workbook.md')).props.href,'/api/commerce/customer/paid-a/files/workbook.md');
+  assert.ok(app.text.indexOf('Download your files')<app.text.indexOf('Inside your product'),'Original downloads appear before reading sections');
+  const otherOrders=app.find('details').find(node=>node.props.className==='customer-other-orders');
+  assert.equal(otherOrders.props.open,false,'Unpaid orders do not crowd the paid library');
+  const reading=app.find('details').find(node=>node.props.className.includes('customer-reading-section'));
+  assert.equal(reading.props.open,true,'The first reading section opens without an extra click');
   assert.equal(app.button('Viewing product').props['aria-pressed'],true);
   await app.click('Viewing product');
   assert.match(app.text,/Private purchased content for paid-a/,'Clicking the already open purchase never clears it');
@@ -168,7 +173,7 @@ for (const search of ['', '?order=pending-order']) {
   await app.respond(0,{orders:[paidA]});
   await app.respond(1,service);
   assert.equal(app.find('video')[0].props.src,'/api/commerce/customer/paid-a/video/private-video');
-  app.find('select')[0].props.onChange({target:{value:'slot-a'}});
+  app.find('select').find(node=>node.props.id!=='customer-product-select').props.onChange({target:{value:'slot-a'}});
   app.find('textarea')[0].props.onChange({target:{value:'My preparation notes'}});
   app.render();
   let prevented = false;

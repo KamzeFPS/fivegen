@@ -15,11 +15,12 @@ import "./automation-design.css";
 import "./workspace-navigation.css";
 import "./workspace-content.css";
 import "./overview-design.css";
+import "./product-experience.css";
 
 export const metadata: Metadata = {
-  title: "FiveGen — Your AI growth operator",
+  title: "FiveGen — Create, publish and sell digital products",
   description:
-    "Build your launch around your expertise. Create a VSL script, publish your landing page, and manage leads while keeping your course in your own voice.",
+    "Turn your expertise into books, courses and digital products. Build with AI or your own content, publish your page, and manage sales from one workspace.",
   icons: {
     icon: "/brand/fivegen-transparent.webp",
     shortcut: "/brand/fivegen-transparent.webp",

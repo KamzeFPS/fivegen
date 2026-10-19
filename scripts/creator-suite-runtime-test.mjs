@@ -51,7 +51,7 @@ try {
   assert.equal(consentCheckout.status,307);
   assert.equal(new URL(consentCheckout.headers.get('location'),base).pathname,'/welcome');
   assert.equal(new URL(consentCheckout.headers.get('location'),base).searchParams.get('return_to'),'/checkout?offer=subscription%3Apro%3Amonth');
-  const home = await fetch(base + '/', {headers}); assert.equal(home.status, 200); assert.match(await home.text(), /Create your product/);
+  const home = await fetch(base + '/', {headers}); assert.equal(home.status, 200); assert.match(await home.text(), /Create product/);
   await json('/api/voice', 'GET', undefined, anonymous, 401);
   await json('/api/growth/dashboard', 'GET', undefined, anonymous, 401);
   const {product} = await json('/api/products', 'POST', {title: 'Creator suite workshop', description: 'A creator-taught workshop with a practical first-client workflow.', audience: 'Independent illustrators', format: 'Video course', price: 0, color: 'orange', generationMode: 'manual'});

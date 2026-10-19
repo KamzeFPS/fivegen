@@ -16,12 +16,12 @@ import './marketing-workspace.css';
 
 export type MarketingTab='dashboard'|MarketingPluginId;
 const plugins: {id:MarketingPluginId;name:string;icon:typeof Video;description:string;detail:string}[]=[
-  {id:'vsl',name:'VSL',icon:Video,description:'Give your product a story worth watching.',detail:'Write a sales video script and attach your own recording.'},
-  {id:'funnel',name:'Funnel',icon:Layers3,description:'Build a path from interest to action.',detail:'Create an optional landing page, capture leads, and shape your launch.'},
-  {id:'campaigns',name:'Campaigns',icon:Megaphone,description:'Plan how your product reaches people.',detail:'Draft posts and emails, then organize your promotion calendar.'},
-  {id:'automations',name:'Automations',icon:Mail,description:'Follow up at the right moment.',detail:'Review and activate email sequences for opted-in leads or verified buyers.'},
-  {id:'offer',name:'Offer tests',icon:FlaskConical,description:'Find out what your audience responds to.',detail:'Test your positioning with surveys and review real responses.'},
-  {id:'voice',name:'Creator voice',icon:Brain,description:'Make your marketing sound like you.',detail:'Keep your recordings and notes in a private voice library.'},
+  {id:'vsl',name:'VSL',icon:Video,description:'Write your sales video script.',detail:'Shape the message and attach your own recording.'},
+  {id:'funnel',name:'Funnel',icon:Layers3,description:'Build a landing page for your launch.',detail:'Capture leads and guide visitors to your product.'},
+  {id:'campaigns',name:'Campaigns',icon:Megaphone,description:'Plan your product promotion.',detail:'Draft posts and emails in a promotion calendar.'},
+  {id:'automations',name:'Automations',icon:Mail,description:'Create email follow-up sequences.',detail:'Review and activate messages for opted-in leads or verified buyers.'},
+  {id:'offer',name:'Offer tests',icon:FlaskConical,description:'Test a product’s positioning.',detail:'Publish a survey and learn from real audience responses.'},
+  {id:'voice',name:'Creator voice',icon:Brain,description:'Keep your marketing in your voice.',detail:'Build a private library of your recordings and notes.'},
 ];
 
 async function settings(productId:string,body?:unknown):Promise<MarketingPluginState>{
@@ -73,7 +73,7 @@ export function MarketingWorkspace({product,tab,aiReady,cost,unlimited,onTab,onR
         const next=event.key==='Home'?0:event.key==='End'?keys.length-1:(index+(event.key==='ArrowRight'?1:-1)+keys.length)%keys.length;
         event.preventDefault();onTab(keys[next]);event.currentTarget.querySelectorAll<HTMLButtonElement>('[role=tab]')[next]?.focus();
       }}>
-        {[{id:'dashboard' as const,name:'Dashboard',icon:BarChart3},...plugins.filter(p=>state.installed.includes(p.id))].map(({id,name,icon:Icon})=><button type="button" key={id} id={`${panelId}-${id}`} role="tab" aria-selected={active===id} aria-controls={panelId} tabIndex={active===id?0:-1} disabled={busy} onClick={()=>onTab(id)}><Icon size={16}/>{name}</button>)}
+        {[{id:'dashboard' as const,name:'Sales',icon:BarChart3},...plugins.filter(p=>state.installed.includes(p.id))].map(({id,name,icon:Icon})=><button type="button" key={id} id={`${panelId}-${id}`} role="tab" aria-selected={active===id} aria-controls={panelId} tabIndex={active===id?0:-1} disabled={busy} onClick={()=>onTab(id)}><Icon size={16}/>{name}</button>)}
       </div>
       <button type="button" className="button secondary marketing-add" disabled={busy} onClick={openManager}><Plus size={15}/>Add plugin{state.installed.length>0&&<span>{state.installed.length}</span>}</button>
     </div>
@@ -81,7 +81,7 @@ export function MarketingWorkspace({product,tab,aiReady,cost,unlimited,onTab,onR
     <div id={panelId} role="tabpanel" aria-labelledby={`${panelId}-${active}`} className="marketing-panel">
       {active==='dashboard'?<>
         <GrowthDashboard productId={product.id}/>
-        {!state.installed.length&&<div className="marketing-optional-callout"><span className="marketing-plugin-symbol"><Puzzle size={22}/></span><div><h2>Your launch, your toolkit.</h2><p>Your sales dashboard is ready. Add a funnel, a sales video, or another plugin only when you need it.</p></div><button className="button secondary" onClick={openManager}>Explore plugins<ArrowRight size={15}/></button></div>}
+        {!state.installed.length&&<div className="marketing-optional-callout"><span className="marketing-plugin-symbol"><Puzzle size={22}/></span><div><h2>More tools, only when you need them</h2><p>Add a sales video, funnel, campaign, or automation. Every plugin is optional.</p></div><button className="button secondary" onClick={openManager}>Explore plugins<ArrowRight size={15}/></button></div>}
       </>:<>
         <div className="marketing-active-tool"><span><Puzzle size={13}/>{selected?.name} plugin</span><button type="button" onClick={openManager} disabled={busy}>Manage plugins</button></div>
         <div key={active}>
@@ -94,13 +94,13 @@ export function MarketingWorkspace({product,tab,aiReady,cost,unlimited,onTab,onR
         </div>
       </>}
     </div>
-    <Dialog open={manager} onOpenChange={value=>{if(!mutation){setManager(value);setRemoving(null);}}}><DialogContent className="marketing-plugin-dialog"><DialogHeader><span className="marketing-dialog-eyebrow"><Puzzle size={15}/>MAKE IT YOURS</span><DialogTitle>Add to your marketing toolkit.</DialogTitle><DialogDescription>Choose the tools this product needs. Your sales dashboard is always included, and CRM stays in Customers.</DialogDescription></DialogHeader>
+    <Dialog open={manager} onOpenChange={value=>{if(!mutation){setManager(value);setRemoving(null);}}}><DialogContent className="marketing-plugin-dialog"><DialogHeader><DialogTitle>Marketing plugins</DialogTitle><DialogDescription>Add tools for this product. Your sales dashboard is always included. Manage contacts separately in Customers.</DialogDescription></DialogHeader>
       <div className="marketing-plugin-scroll">
         {error&&<p className="marketing-plugin-error" role="alert">{error}</p>}
         {notice&&<p className="marketing-notice" role="status"><Check size={14}/>{notice}</p>}
         {removing&&<div className="marketing-remove-warning" role="alert" ref={removalPrompt} tabIndex={-1}><strong>Remove {plugins.find(p=>p.id===removing)?.name} from Marketing?</strong><p>Saved work stays available when you add it again. Published pages and active automations keep running. Open the plugin first if you want to stop them.</p><div><button className="button secondary" disabled={!!mutation} onClick={()=>setRemoving(null)}>Keep plugin</button><button className="button secondary" disabled={!!mutation} onClick={()=>void changePlugin(removing,false)}>{mutation?<Loader2 size={14} className="spin"/>:null}Remove plugin</button></div></div>}
         <div className="marketing-plugin-grid">{plugins.map(({id,name,icon:Icon,description,detail})=>{const installed=state.installed.includes(id);return <article className={`marketing-plugin-card ${installed?'is-installed':''}`} key={id} data-plugin={id}>
-          <div className="marketing-plugin-card-top"><span className="marketing-plugin-symbol"><Icon size={21}/></span><small>{installed?<><Check size={12}/>Added</>:'OPTIONAL'}</small></div>
+          <div className="marketing-plugin-card-top"><span className="marketing-plugin-symbol"><Icon size={21}/></span><small>{installed?<><Check size={12}/>Installed</>:'Optional'}</small></div>
           <h3>{name}</h3><p>{description}</p><span className="marketing-plugin-detail">{detail}</span>
           <div className="marketing-plugin-card-actions">{installed?<><button className="button secondary" disabled={!!mutation} onClick={()=>{setManager(false);setRemoving(null);onTab(id);}}>Open<ArrowRight size={14}/></button><button className="marketing-remove" aria-label={`Remove ${name}`} disabled={!!mutation} onClick={()=>{setError('');setNotice('');setRemoving(id);}}>Remove</button></>:<button className="button secondary" aria-label={`Add ${name}`} disabled={!!mutation} onClick={()=>void changePlugin(id,true)}>{mutation===id?<Loader2 className="spin" size={14}/>:<Plus size={14}/>}Add plugin</button>}</div>
         </article>;})}</div>

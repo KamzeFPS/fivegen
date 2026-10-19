@@ -1,8 +1,8 @@
 'use client';
 
 import {useCallback,useEffect,useState} from 'react';
-import {ArrowLeft,ArrowRight,Check,CheckCircle2,ChevronRight,ExternalLink,Loader2,RefreshCw,ShieldCheck,Wallet} from 'lucide-react';
-import {Brand} from '@/app/ui-brand';
+import {ArrowRight,Check,CheckCircle2,ChevronRight,ExternalLink,Loader2,RefreshCw,ShieldCheck,Wallet} from 'lucide-react';
+import {AccountNavigation} from '@/app/account/account-navigation';
 import {CreatorSaleFees} from '@/app/creator-sale-fees';
 import type {CreatorPlanState} from '@/lib/creator-plans';
 
@@ -46,7 +46,7 @@ export function SellerPaymentsAccount({email,initialAccount}:{email:string;initi
       const data=await response.json() as SellerPaymentStatus&{error?:string};
       if(!response.ok||typeof data.connected!=='boolean')throw new Error(data.error||'Your payment connection could not be checked. Please try again.');
       setAccount(data);
-      if(data.ready&&data.enabled)setNotice('Your payment account is ready for every product in this profile.');
+      if(data.ready&&data.enabled)setNotice(initial&&returned!=='returned'?'':'Your payment account is ready for every product in this profile.');
       else if(!initial)setNotice(data.connected?'Stripe still needs information before you can accept payments. Continue setup to review it.':'Your profile has no connected payment account yet.');
       else setNotice(returned==='refresh'?'Your Stripe setup link expired. Continue setup below to get a fresh link.':'');
     }catch(failure){setError(failure instanceof Error?failure.message:'Your payment connection could not be checked. Please try again.');setNotice('');}
@@ -78,9 +78,9 @@ export function SellerPaymentsAccount({email,initialAccount}:{email:string;initi
   }
 
   return <main className="paddle-pricing seller-payments-page">
-    <nav className="paddle-nav"><a href="/" aria-label="FiveGen home"><Brand/></a><a href={returnTo||'/?view=library'} className="paddle-back"><ArrowLeft size={16}/>{returnTo?'Back to my product':'Back to my products'}</a></nav>
+    <AccountNavigation active="payments" backHref={returnTo||'/?view=library'} backLabel={returnTo?'Back to my product':'Back to my products'}/>
     <div className="paddle-content seller-payments-content">
-      <header className="seller-payments-heading"><span className="paddle-eyebrow">YOUR PROFILE · SELLER PAYMENTS</span><h1>One connection.<br/><span>Every product.</span></h1><p>Connect your Stripe account once. All products in your FiveGen profile use the same payment connection.</p><span className="seller-payments-email">{email}</span></header>
+      <header className="seller-payments-heading"><span className="paddle-eyebrow">ACCOUNT SETTINGS</span><h1>Seller payments</h1><p>Connect Stripe once for every product. Manage your sales balance and bank payouts securely in Stripe.</p><span className="seller-payments-email">{email}</span></header>
       {error&&<div className="paddle-error seller-payment-error" role="alert"><div><strong>We couldn’t complete that step.</strong><p>{error}</p><p>Your products and published pages are unchanged.</p></div></div>}
       {notice&&<p className="seller-payment-notice" role="status">{notice}</p>}
       <div className="seller-payments-layout">
@@ -93,10 +93,11 @@ export function SellerPaymentsAccount({email,initialAccount}:{email:string;initi
             {!account.connected&&<label className="seller-payment-country" htmlFor="seller-business-country"><span>Legal business country</span><select id="seller-business-country" name="country" required value={country} disabled={!!busy} onChange={event=>setCountry(event.target.value)}><option value="" disabled>Select your business country</option>{countries.map(item=><option key={item.code} value={item.code}>{item.name}</option>)}</select><small>Choose where your business is legally based. Stripe confirms country and account availability during setup.</small></label>}
             <button type="submit" className="seller-payment-primary" disabled={!!busy||(!account.connected&&!country)}>{busy==='connect'?<><Loader2 size={17} className="animate-spin"/>Opening Stripe…</>:<>{account.connected?'Continue Stripe setup':'Connect Stripe'}<ExternalLink size={16}/></>}</button>
           </form>}
-          <div className="seller-payment-actions">{ready&&<a href={returnTo||'/?view=library'} className="seller-payment-products">{returnTo?'Return to my product':'My products'}<ArrowRight size={16}/></a>}<button type="button" className="seller-payment-refresh" onClick={()=>void refresh()} disabled={!!busy}>{busy==='refresh'?<Loader2 size={15} className="animate-spin"/>:<RefreshCw size={15}/>}Refresh connection</button></div>
+          <div className="seller-payment-actions">{ready&&account.accountId&&/^acct_[A-Za-z0-9]+$/.test(account.accountId)&&<a href={`https://dashboard.stripe.com/${encodeURIComponent(account.accountId)}/balance/overview`} className="seller-payment-dashboard" target="_blank" rel="noopener noreferrer">Open Stripe dashboard<ExternalLink size={16}/></a>}<button type="button" className="seller-payment-refresh" onClick={()=>void refresh()} disabled={!!busy}>{busy==='refresh'?<Loader2 size={15} className="animate-spin"/>:<RefreshCw size={15}/>}Refresh connection</button></div>
+          {ready&&<a href={returnTo||'/?view=library'} className="seller-payment-return">{returnTo?'Return to my product':'My products'}<ArrowRight size={16}/></a>}
           <small className="seller-payment-secure"><ShieldCheck size={14}/>Business and bank details are handled securely by Stripe.</small>
         </section>
-        <aside className="seller-payments-aside"><section aria-labelledby="seller-how-it-works"><span className="paddle-eyebrow">HOW IT WORKS</span><h2 id="seller-how-it-works">Set up once.<br/>Launch on your terms.</h2><ol><li><span>01</span><div><strong>Connect your profile</strong><p>Complete your business and payout details on Stripe.</p></div></li><li><span>02</span><div><strong>Publish any product</strong><p>Your page can be published before payment setup is complete.</p></div></li><li><span>03</span><div><strong>Start selling when ready</strong><p>Turn on sales for a finished product. It uses this shared connection.</p></div></li></ol><div className="seller-payments-fees"><CreatorSaleFees compact plan={account.creatorPlan}/></div></section><a href="/account/billing" className="seller-billing-link"><span><strong>FiveGen plans & credits</strong><small>Manage your own purchases and receipts.</small></span><ChevronRight size={17}/></a></aside>
+        <aside className="seller-payments-aside"><section aria-label="Payment setup and fees"><details className="seller-how-details"><summary>How selling and payouts work</summary><ol><li><span>01</span><div><strong>Connect your profile</strong><p>Complete your business and bank details on Stripe.</p></div></li><li><span>02</span><div><strong>Publish, then enable sales</strong><p>Publish first if you prefer. Sales open when payments and delivery are ready.</p></div></li><li><span>03</span><div><strong>Receive bank payouts</strong><p>Stripe manages your payout schedule. Your available balance can differ from total earnings while payments settle.</p></div></li></ol></details><div className="seller-payments-fees"><CreatorSaleFees compact plan={account.creatorPlan}/></div></section><a href="/account/billing" className="seller-billing-link"><span><strong>FiveGen plans & credits</strong><small>Your subscription, top-ups and receipts.</small></span><ChevronRight size={17}/></a></aside>
       </div>
       <footer className="seller-payment-footer"><Check size={14}/>Payment setup is optional until you want to accept orders. <a href="/terms">Terms</a><a href="/privacy">Privacy</a></footer>
     </div>
