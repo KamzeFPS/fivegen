@@ -165,8 +165,11 @@ export async function fulfillCommerceSession(sessionId:string,account:string) {
   const client=commerceStripe(),mode=commerceMode(),db=database(),session=await commerceProvider('verify the payment',()=>client.checkout.sessions.retrieve(sessionId,{expand:['payment_intent.latest_charge']},{stripeAccount:account}));
   const id=session.metadata?.fivegen_order;if(!id)return;
   const order=await db.prepare('SELECT * FROM commerce_orders WHERE id=? AND account_id=? AND mode=?').bind(id,account,mode).first();if(!order)throw new ApiError('Unknown checkout intent.',400);
-  if(session.livemode!==(mode==='live')||session.mode!=='payment'||session.client_reference_id!==id||session.metadata?.fivegen_product!==order.product_id||session.amount_total!==order.amount||session.currency!==order.currency||session.customer_details?.email?.trim().toLowerCase()!==order.email||order.session_id&&order.session_id!==session.id)throw new ApiError('Payment does not match the checkout intent.',400);
+  if(session.livemode!==(mode==='live')||session.mode!=='payment'||session.client_reference_id!==id||session.metadata?.fivegen_product!==order.product_id||session.amount_total!==order.amount||session.currency!==order.currency||order.session_id&&order.session_id!==session.id)throw new ApiError('Payment does not match the checkout intent.',400);
+  // Stripe may not populate customer_details until checkout completes. An
+  // abandoned checkout stays pending; it must not break the buyer's library.
   if(session.payment_status!=='paid'||session.status!=='complete')return;
+  if(session.customer_details?.email?.trim().toLowerCase()!==order.email)throw new ApiError('Payment does not match the checkout intent.',400);
   const payment=session.payment_intent;if(!payment||typeof payment==='string')throw new ApiError('Payment verification is incomplete.',502);
   if(payment.status!=='succeeded'||payment.amount_received!==order.amount||payment.currency!==order.currency||payment.livemode!==(mode==='live')||payment.metadata?.fivegen_order!==id)throw new ApiError('Payment verification failed.',400);
   const charge=payment.latest_charge;if(!charge||typeof charge==='string')throw new ApiError('Payment charge verification is incomplete.',502);
@@ -196,14 +199,27 @@ export async function customerOrder(req:Request,id:string,paid=true) {
   if(!await cookieOwns(req,order)&&(!user?.email||user.email.toLowerCase()!==order.email))throw new ApiError('Open this page in the browser you purchased with, or sign in using your purchase email.',403);
   if(paid&&order.status!=='paid')throw new ApiError(order.status==='revoked'?'Access was revoked after a refund or dispute.':'Payment has not been confirmed yet.',403);return order;
 }
-export async function customerLibrary(req:Request,id?:string) {
-  if(id){const order=await customerOrder(req,id,false);if(order.status==='pending'&&order.session_id)await fulfillCommerceSession(String(order.session_id),String(order.account_id));}
+export async function customerLibraryStatus(req:Request,id?:string) {
+  let paymentStatusError:string|undefined;
+  if(id){
+    // Ownership is checked before querying Stripe, even if another purchase in
+    // this browser is already paid. Identifiers alone never authorize recovery.
+    const order=await customerOrder(req,id,false);
+    if(order.status==='pending'&&order.session_id){
+      try{await fulfillCommerceSession(String(order.session_id),String(order.account_id));}
+      catch(error){
+        if(!(error instanceof ApiError))throw error;
+        paymentStatusError='We could not refresh this checkout’s payment status. Your other paid purchases are still available. Please try again shortly.';
+      }
+    }
+  }
   const mode=commerceMode(),user=await identity({allowUnaccepted:true}).catch(()=>null);
   const cookieIds=(req.headers.get('cookie')||'').split(';').map(c=>/^fivegen_purchase_([a-f0-9]{8})([a-f0-9]{4})([a-f0-9]{4})([a-f0-9]{4})([a-f0-9]{12})=/.exec(c.trim())).filter(Boolean).slice(0,20).map(m=>m!.slice(1).join('-'));
   const ids=Array.from(new Set([id||'',...cookieIds]));
   const rows=await database().prepare(`SELECT * FROM commerce_orders WHERE mode=? AND (email=? OR id IN (${ids.map(()=>'?').join(',')})) ORDER BY created_at DESC LIMIT 100`).bind(mode,user?.email?.toLowerCase()||'',...ids).all();
-  const orders=[];for(const order of rows.results){if(!await cookieOwns(req,order)&&(!user?.email||user.email.toLowerCase()!==order.email))continue;orders.push({id:order.id,title:order.title,status:order.status,amount:order.amount,currency:order.currency,mode:order.mode,createdAt:order.created_at});}return orders;
+  const orders=[];for(const order of rows.results){if(!await cookieOwns(req,order)&&(!user?.email||user.email.toLowerCase()!==order.email))continue;orders.push({id:order.id,title:order.title,status:order.status,amount:order.amount,currency:order.currency,mode:order.mode,createdAt:order.created_at});}return {orders,...(paymentStatusError?{paymentStatusError}:{})};
 }
+export async function customerLibrary(req:Request,id?:string){return (await customerLibraryStatus(req,id)).orders;}
 export async function customerProduct(req:Request,id:string) {
   const order=await customerOrder(req,id),product=await database().prepare('SELECT * FROM products WHERE id=? AND owner=?').bind(order.product_id,order.owner).first();if(!product)throw new ApiError('Product unavailable. Contact your creator.',404);
   const frozen=await builderOrderDelivery(id),content=frozen||contentSchema.parse(JSON.parse(String(product.content))),offer=frozen||await getCommerceOffer(String(order.product_id),String(order.owner));

@@ -32,6 +32,7 @@
     "test:growth:suite:runtime": "node scripts/creator-suite-runtime-test.mjs",
     "preview:connect": "node --env-file-if-exists=.env.render.local scripts/stripe-connect-preview.mjs",
     "test:builders": "node scripts/product-builder-test.mjs && node scripts/account-payments-test.mjs && node scripts/builder-assistant-test.mjs && node scripts/builder-revision-test.mjs && node scripts/product-quality-test.mjs",
+    "test:buyer-access": "node scripts/commerce-v2-test.mjs && node scripts/customer-portal-test.mjs",
     "test:marketing-plugins": "node scripts/marketing-plugins-test.mjs",
     "test:ai-format": "node scripts/ai-response-schema-test.mjs && node scripts/builder-assistant-test.mjs && node scripts/builder-assistant-apply-test.mjs",
     "test:ai-format:runtime": "node scripts/builder-assistant-runtime-test.mjs",
