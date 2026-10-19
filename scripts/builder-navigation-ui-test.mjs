@@ -7,20 +7,23 @@ import {ArrowUpRight,CheckCircle2,ChevronDown,ClipboardCheck,Info,TriangleAlert}
 
 const source=readFileSync('app/builder-navigation.ts','utf8');
 const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;
-const {builderNavigationForLocation,initialBuilderPanel}=await import('data:text/javascript;base64,'+Buffer.from(compiled).toString('base64'));
+const {builderNavigationForLocation,builderPublicationStatus,initialBuilderPanel}=await import('data:text/javascript;base64,'+Buffer.from(compiled).toString('base64'));
 const empty={source:'manual',sections:[],files:[],uploadIds:[]};
 assert.equal(initialBuilderPanel(empty),'details','A new manual product starts with its brief');
 assert.equal(initialBuilderPanel({...empty,source:'ai'}),'details','A new AI product starts with its brief');
 assert.equal(initialBuilderPanel({...empty,source:'upload'}),'resources','Choosing existing content opens the upload surface immediately');
-for(const content of [{sections:[{title:'A chapter',body:'Existing work'}]},{files:[{name:'resource.md',content:'Existing file'}]}]){
+for(const content of [{sections:[{title:'A chapter',body:'Existing work'}]}]){
  assert.equal(initialBuilderPanel({...empty,...content}),'content','Opening an existing authored product goes directly to the work');
 }
+assert.equal(initialBuilderPanel({...empty,files:[{name:'worksheet.md',content:'An editable download'}]}),'resources','Editable downloads open in Files instead of an empty chapter editor');
+assert.equal(initialBuilderPanel({...empty,type:'template-kit',sections:[{body:'Instructions'}],files:[{name:'template.csv',content:'A,B'}]}),'resources','Template kits open the actual files even when instructions exist');
 assert.equal(initialBuilderPanel({...empty,uploadIds:['original-pdf']}),'resources','An original-file-only product opens its Files panel without an empty manuscript');
 for(const [location,family,stage,panel,field] of [
  [{step:'details',field:'title'},'document',1,'details','title'],
  [{step:'details',field:'subtitle'},'document',1,'details','subtitle'],
  [{step:'content',sectionIndex:13},'challenge',1,'content',undefined],
- [{step:'content',fileIndex:2},'templates',1,'content',undefined],
+ [{step:'content',fileIndex:2},'templates',1,'resources',undefined],
+ [{step:'content'},'templates',1,'resources',undefined],
  [{step:'content',uploadId:'original-pdf'},'document',1,'resources',undefined],
  [{step:'review',field:'coverUploadId'},'document',1,'appearance','coverUploadId'],
  [{step:'review'},'service',1,'details','meetingUrl'],
@@ -45,3 +48,30 @@ const checks=[{key:'required',status:'blocker',title:'Required content',message:
 const rendered=renderToStaticMarkup(React.createElement(ProductReadiness,{report:{ready:false,blockers:1,advisories:1,checks,originalFileOnly:false},onFix(){}}));
 const optionalStart=rendered.indexOf('<details class="product-readiness-optionals"');assert.ok(optionalStart>0,'Optional improvements are grouped into a native disclosure');assert.doesNotMatch(rendered,/<details[^>]*\bopen(?:[=> ]|$)/,'Optional improvements start collapsed');assert.ok(rendered.indexOf('Required content')<optionalStart,'Blocking items remain outside the collapsed advice');assert.ok(rendered.indexOf('Optional cover advice')>optionalStart,'Optional checks and their original fix actions remain available inside the disclosure');delete globalThis[viewKey];
 console.log('Readiness UI: blocking issues visible; optional advice collapsed and retained.');
+
+const proposalSource=readFileSync('app/builder-proposal-review.tsx','utf8').replace(/^import[\s\S]*?;\r?\n/gm,'');
+const proposalKey='builderProposalReviewTest';globalThis[proposalKey]={React};
+const proposalCompiled='const {React}=globalThis.'+proposalKey+';\n'+ts.transpileModule(proposalSource,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React}}).outputText;
+const {BuilderProposedSections}=await import('data:text/javascript;base64,'+Buffer.from(proposalCompiled).toString('base64'));
+const proposalSections=Array.from({length:14},(_,index)=>({title:'Proposed chapter '+(index+1),body:'Complete proposal body '+(index+1)+' '+('Detailed text. '.repeat(120))+'END_OF_PROPOSAL_'+(index+1)}));
+proposalSections[0].body+='<script>untrusted()</script>';
+const proposalHtml=renderToStaticMarkup(React.createElement(BuilderProposedSections,{sections:proposalSections,unit:'Chapter',plural:'chapters'}));
+for(const section of proposalSections){assert.ok(proposalHtml.includes(section.title),'Every proposed title is visible before replacement');assert.ok(proposalHtml.includes(section.body.split('END_OF_PROPOSAL_')[0].slice(0,80)),'Every proposed section body is visible before replacement');}
+assert.match(proposalHtml,/END_OF_PROPOSAL_14/,'The review retains the end of a long multi-section proposal');assert.match(proposalHtml,/Review the full text below/);assert.ok(proposalHtml.includes('&lt;script&gt;untrusted()&lt;/script&gt;'),'Proposed content remains escaped text');assert.doesNotMatch(proposalHtml,/<script>/);delete globalThis[proposalKey];
+console.log('Proposal review: all titles and full bodies visible, long proposals retained, untrusted HTML escaped.');
+
+for(const [workspace,dirty,label,hasUnpublishedChanges] of [
+ [{version:1,selling:false,publication:null},false,'Private draft',false],
+ [{version:1,selling:false,publication:null},true,'Private draft',false],
+ [{version:4,selling:false,publication:{version:4}},false,'Page published',false],
+ [{version:5,selling:false,publication:{version:4}},false,'Unpublished changes',true],
+ [{version:4,selling:false,publication:{version:4}},true,'Unpublished changes',true],
+ [{version:4,selling:true,publication:{version:4}},false,'Selling',false],
+ [{version:4,selling:true,publication:{version:4}},true,'Selling · draft changes',true],
+ [{version:5,selling:true,publication:{version:4}},false,'Selling · draft changes',true],
+]){const before=structuredClone(workspace);assert.deepEqual(builderPublicationStatus(workspace,dirty),{label,hasUnpublishedChanges},'Publication UI uses exact persisted versions and pending local edits without hiding active sales');assert.deepEqual(workspace,before,'Deriving publication status does not alter sales or publication');}
+console.log('Publication status: private drafts, unchanged live pages, saved/unpersisted draft changes and active sales remain distinct.');
+
+const composeSource=readFileSync('app/builder-agent-compose.tsx','utf8').replace(/^import[\s\S]*?;\r?\n/gm,'');const composeKey='builderComposeFrameTest';globalThis[composeKey]={React};const composeCompiled='const {React}=globalThis.'+composeKey+';\n'+ts.transpileModule(composeSource,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React}}).outputText;const {BuilderAgentComposerFrame}=await import('data:text/javascript;base64,'+Buffer.from(composeCompiled).toString('base64'));
+const composeHtml=renderToStaticMarkup(React.createElement(BuilderAgentComposerFrame,{footer:React.createElement('div',{className:'builder-agent-compose-bottom'},React.createElement('button',{type:'submit'},'Send all answers'))},React.createElement('details',{open:true},React.createElement('summary',null,'Original excerpt'),React.createElement('label',null,'Exact passage',React.createElement('textarea',{defaultValue:'A long exact passage. '.repeat(80)}))),React.createElement('textarea',{'aria-label':'Message',defaultValue:'Please refine this passage.'})));
+const composeScrollEnd=composeHtml.indexOf('</div>');assert.ok(composeHtml.indexOf('Original excerpt')<composeScrollEnd,'Expanded refinement controls stay in the bounded scrollable form body');assert.ok(composeHtml.indexOf('Send all answers')>composeScrollEnd,'The submit control stays outside the scrolling refinement content');assert.match(composeHtml,/details open/,'The full excerpt capability remains reachable even when expanded');delete globalThis[composeKey];console.log('Assistant composer: expanded excerpt remains available; Send stays outside the bounded scrolling controls.');

@@ -31,8 +31,10 @@ function saleFee(sale:Sale,kind:'stripe'|'platform'|'net'){
 export function CreatorEarnings({report,refreshing=false,onRefresh,error='',notice=''}:{report:CommerceEarningsReport;refreshing?:boolean;onRefresh:()=>void;error?:string;notice?:string}){
   const {coverage}=report;
   return <section className="creator-earnings" aria-labelledby="creator-earnings-heading">
-    <header className="earnings-heading"><div><h2 id="creator-earnings-heading">Earnings breakdown</h2><p>Your {report.creatorPlan.name} plan has a {report.creatorPlan.commissionPercent}% FiveGen fee on new sales. Stripe processing fees are separate and vary.</p><a className="earnings-plan-link" href="/account/billing">Manage plan</a></div><button type="button" className="earnings-refresh" onClick={onRefresh} disabled={refreshing} aria-label="Check actual Stripe fees">{refreshing?<Loader2 size={15} className="spin"/>:<RefreshCw size={15}/>}<span>{refreshing?'Checking Stripe…':'Refresh fees'}</span></button></header>
-    {error&&<p className="earnings-notice is-error" role="alert">{error}</p>}{notice&&<p className="earnings-notice" role="status">{notice}</p>}
+    <details className="earnings-breakdown">
+    <summary className="earnings-disclosure"><span><strong id="creator-earnings-heading">Fees & earnings</strong><small>{report.creatorPlan.name} · {report.creatorPlan.commissionPercent}% FiveGen fee · Stripe fees additional</small></span><span className="earnings-disclosure-action"><span className="earnings-show-label">Show fees</span><span className="earnings-hide-label">Hide fees</span><ChevronDown size={16}/></span></summary>
+    <div className="earnings-breakdown-body">
+    <header className="earnings-heading"><div><h2>Actual fee breakdown</h2><p>Your {report.creatorPlan.name} plan has a {report.creatorPlan.commissionPercent}% FiveGen fee on new sales. Stripe processing fees are separate and vary. <a className="earnings-plan-link" href="/account/billing">Manage plan</a></p></div><button type="button" className="earnings-refresh" onClick={onRefresh} disabled={refreshing} aria-label="Check actual Stripe fees">{refreshing?<Loader2 size={15} className="spin"/>:<RefreshCw size={15}/>}<span>{refreshing?'Checking Stripe…':'Refresh fees'}</span></button></header>
     {report.totals.length?<div className="earnings-currency-list">{report.totals.map(total=><article className="earnings-currency" key={total.currency}>
       <header><h3>{total.currency.toUpperCase()} · Confirmed settlements</h3><span>{total.confirmedOrders.toLocaleString('en-US')} confirmed {total.confirmedOrders===1?'sale':'sales'}</span></header>
       <dl className="earnings-equation"><div><dt>Sales before fees</dt><dd>{earningsMoney(total.grossAmount,total.currency)}</dd></div><div><dt>Stripe fees</dt><dd>− {earningsMoney(total.stripeFeeAmount,total.currency)}</dd></div><div><dt>FiveGen fees</dt><dd>− {earningsMoney(total.platformFeeAmount,total.currency)}</dd></div><div className="earnings-net"><dt>Your earnings</dt><dd>{earningsMoney(total.creatorNetAmount,total.currency)}</dd></div></dl>
@@ -47,5 +49,9 @@ export function CreatorEarnings({report,refreshing=false,onRefresh,error='',noti
       {hasSettlement(sale)&&!excluded(sale)&&sale.availability==='pending'&&<p className="earnings-settlement-note">Stripe settlement pending{sale.availableAt?` · expected availability ${when(sale.availableAt)}`:''}. This is not yet an available bank payout.</p>}
       {excluded(sale)&&<p className="earnings-settlement-note">Original purchase amount shown for reference. Excluded from current earnings; Stripe has the refund or dispute balance details.</p>}
     </article>)}</div></details>}
+    </div></details>
+    {coverage.pendingOrders>0&&<p className="earnings-coverage-warning">{coverage.pendingOrders.toLocaleString('en-US')} paid {coverage.pendingOrders===1?'sale awaits':'sales await'} fee confirmation. Confirmed net earnings exclude these sales.</p>}
+    {coverage.excludedOrders>0&&<p className="earnings-coverage-warning">{coverage.excludedOrders.toLocaleString('en-US')} refunded or revoked {coverage.excludedOrders===1?'order is':'orders are'} excluded from earnings.</p>}
+    {error&&<p className="earnings-notice is-error" role="alert">{error}</p>}{notice&&<p className="earnings-notice" role="status">{notice}</p>}
   </section>;
 }

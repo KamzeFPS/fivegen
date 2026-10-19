@@ -1,7 +1,7 @@
 'use client';
 
 import {useCallback,useEffect,useState} from 'react';
-import {ArrowRight,Check,CheckCircle2,ChevronRight,ExternalLink,Loader2,RefreshCw,ShieldCheck,Wallet} from 'lucide-react';
+import {ArrowRight,Check,ChevronRight,ExternalLink,Loader2,RefreshCw,ShieldCheck,Wallet} from 'lucide-react';
 import {AccountNavigation} from '@/app/account/account-navigation';
 import {CreatorSaleFees} from '@/app/creator-sale-fees';
 import type {CreatorPlanState} from '@/lib/creator-plans';
@@ -80,16 +80,16 @@ export function SellerPaymentsAccount({email,initialAccount}:{email:string;initi
   return <main className="paddle-pricing seller-payments-page">
     <AccountNavigation active="payments" backHref={returnTo||'/?view=library'} backLabel={returnTo?'Back to my product':'Back to my products'}/>
     <div className="paddle-content seller-payments-content">
-      <header className="seller-payments-heading"><span className="paddle-eyebrow">ACCOUNT SETTINGS</span><h1>Seller payments</h1><p>Connect Stripe once for every product. Manage your sales balance and bank payouts securely in Stripe.</p><span className="seller-payments-email">{email}</span></header>
+      <header className="seller-payments-heading"><h1>Seller payments</h1><p>Connect Stripe once for every product. Manage your balance and bank payouts in Stripe.</p><span className="seller-payments-email">{email}</span></header>
       {error&&<div className="paddle-error seller-payment-error" role="alert"><div><strong>We couldn’t complete that step.</strong><p>{error}</p><p>Your products and published pages are unchanged.</p></div></div>}
       {notice&&<p className="seller-payment-notice" role="status">{notice}</p>}
       <div className="seller-payments-layout">
         <section className="paddle-account-card seller-payment-card" aria-labelledby="seller-connection-title">
           <div className="seller-payment-card-top"><span className="seller-payment-icon"><Wallet size={24}/></span><span className={`seller-payment-badge ${ready?'is-ready':''}`}><span/>{busy==='refresh'?'Checking connection':ready?'Ready to accept payments':!available?'Platform setup needed':account.connected?'Setup incomplete':'Not connected'}{account.mode&&<small>{account.mode==='live'?'Live':'Test'}</small>}</span></div>
           <h2 id="seller-connection-title">{ready?'Your Stripe account is connected.':account.connected?'Finish your Stripe setup.':'Connect payments to your profile.'}</h2>
-          <p>{ready?'Your connection is available across all of your products. You never need to connect Stripe again for each new product.':account.connected?'Your existing account is saved. Continue with Stripe to review any missing business details, verification or payout information.':'Stripe securely collects your business details and payout information. You’ll return here when setup is complete.'}</p>
+          <p>{ready?'Connected for all products. View your available balance, bank details and payout schedule in the Stripe dashboard.':account.connected?'Continue with Stripe to review any missing business details, verification or payout information.':'Stripe securely collects your business details and payout information. You’ll return here when setup is complete.'}</p>
           {!available&&<div className="seller-payment-platform"><ShieldCheck size={19}/><p>FiveGen’s platform payment setup needs attention. You can keep building and publishing while the administrator resolves it. Refresh the connection to check again.</p></div>}
-          {ready?<div className="seller-payment-ready"><CheckCircle2 size={19}/><div><strong>Connected for all products</strong><p>Publish complete content, then turn on sales in each product when you’re ready to launch.</p></div></div>:available&&<form onSubmit={event=>void connect(event)}>
+          {!ready&&available&&<form onSubmit={event=>void connect(event)}>
             {!account.connected&&<label className="seller-payment-country" htmlFor="seller-business-country"><span>Legal business country</span><select id="seller-business-country" name="country" required value={country} disabled={!!busy} onChange={event=>setCountry(event.target.value)}><option value="" disabled>Select your business country</option>{countries.map(item=><option key={item.code} value={item.code}>{item.name}</option>)}</select><small>Choose where your business is legally based. Stripe confirms country and account availability during setup.</small></label>}
             <button type="submit" className="seller-payment-primary" disabled={!!busy||(!account.connected&&!country)}>{busy==='connect'?<><Loader2 size={17} className="animate-spin"/>Opening Stripe…</>:<>{account.connected?'Continue Stripe setup':'Connect Stripe'}<ExternalLink size={16}/></>}</button>
           </form>}

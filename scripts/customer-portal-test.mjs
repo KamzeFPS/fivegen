@@ -91,7 +91,7 @@ for (const search of ['', '?order=pending-order']) {
   assert.match(app.text,/Private purchased content for paid-a/);
   assert.equal(app.find('a').find(link => text(link).includes('original.pdf')).props.href,'/api/commerce/customer/paid-a/uploads/original-upload');
   assert.equal(app.find('a').find(link => text(link).includes('workbook.md')).props.href,'/api/commerce/customer/paid-a/files/workbook.md');
-  assert.ok(app.text.indexOf('Download your files')<app.text.indexOf('Inside your product'),'Original downloads appear before reading sections');
+  assert.ok(app.text.indexOf('Download your files')<app.text.indexOf('Contents'),'Original downloads appear before reading sections');
   const otherOrders=app.find('details').find(node=>node.props.className==='customer-other-orders');
   assert.equal(otherOrders.props.open,false,'Unpaid orders do not crowd the paid library');
   const reading=app.find('details').find(node=>node.props.className.includes('customer-reading-section'));

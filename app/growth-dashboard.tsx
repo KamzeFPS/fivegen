@@ -84,8 +84,8 @@ export function GrowthDashboard({productId}:{productId?:string}={}) {
   const lastDay = report?.trend.at(-1)?.day;
   const dateRange = firstDay && lastDay ? `${date(firstDay)} – ${date(lastDay, true)}` : '';
   const recommendation=<section className="overview-next-step" aria-labelledby="overview-next-heading">
-    <div className="overview-next-copy"><span className="overview-kicker">Next step</span><h2 id="overview-next-heading">{nextStep.title}</h2><p>{nextStep.reason}</p></div>
-    <a className="button primary" href={nextStep.href}>{nextStep.label}<ArrowRight size={17}/></a>
+    <div className="overview-next-copy"><span className="overview-kicker">Next up</span><h2 id="overview-next-heading">{nextStep.title}</h2><p>{nextStep.reason}</p></div>
+    <a className="button secondary" href={nextStep.href}>{nextStep.label}<ArrowRight size={17}/></a>
   </section>;
 
   return <section className={`overview-dashboard ${productId?'overview-product-dashboard':''}`} aria-busy={loading}>
@@ -114,20 +114,19 @@ export function GrowthDashboard({productId}:{productId?:string}={}) {
         <div className="overview-metrics">
           <article className="overview-metric overview-revenue"><h3>Gross sales</h3>{report.revenue.length ? <div className="overview-revenue-values">{report.revenue.map(item => <strong key={item.currency}>{money(item.amount, item.currency)}</strong>)}</div> : <strong className="overview-no-sales">No sales yet</strong>}<p>Paid orders, before fees</p></article>
           <article className="overview-metric overview-net"><h3>Net earnings</h3>{report.earnings.totals.length ? <div className="overview-revenue-values">{report.earnings.totals.map(item => <strong key={item.currency}>{money(item.creatorNetAmount,item.currency)}</strong>)}</div> : <strong className="overview-no-sales">{report.earnings.coverage.pendingOrders?'Awaiting fees':'No earnings yet'}</strong>}<p>{report.earnings.coverage.pendingOrders?`${count(report.earnings.coverage.pendingOrders,'sale')} awaiting fees`:'After confirmed Stripe & FiveGen fees'}</p></article>
-          <article className="overview-metric"><h3>Product sales</h3><strong>{number(report.purchases)}</strong><p>Paid orders in this period</p></article>
-          <article className="overview-metric"><h3>New contacts</h3><strong>{number(report.leads)}</strong><p>People who signed up</p></article>
-          <article className="overview-metric"><h3>Page visits</h3><strong>{number(report.visits)}</strong><p>Optional marketing pages</p></article>
+          <article className="overview-metric"><h3>Orders</h3><strong>{number(report.purchases)}</strong><p>Confirmed purchases</p></article>
         </div>
+        <dl className="overview-audience"><div><dt>New contacts</dt><dd>{number(report.leads)}</dd></div><div><dt>Marketing page visits</dt><dd>{number(report.visits)}</dd></div></dl>
         {report.visits === 0 && report.leads === 0 && report.purchases === 0 && <p className="overview-results-hint">{!report.products.length ? 'Create a product to start. Sales and activity will appear here as your audience responds.' : published ? 'Your product is published. Sales appear here once payments are connected and customers buy. Marketing plugins are optional.' : 'Finish your product and publish when you’re ready. You can add marketing plugins at any time.'}</p>}
       </section>
 
       {!productId&&recommendation}
       {!productId&&<section className="overview-products" aria-labelledby="overview-products-heading">
-        <div className="overview-section-heading"><div><h2 id="overview-products-heading">{productId?'Your product':'Recent products'}</h2><p>Publishing status and results for the last {report.days} days.</p></div><a className="overview-text-link" href="/?view=library">All products <ArrowRight size={15} /></a></div>
+        <div className="overview-section-heading"><h2 id="overview-products-heading">Recent products</h2><a className="overview-text-link" href="/?view=library">All products <ArrowRight size={15} /></a></div>
         {report.products.length ? <div className="overview-product-list">{report.products.slice(0,4).map(product => <article className="overview-product" key={product.id}>
           <div className="overview-product-info"><h3><a href={`/?project=${product.id}&area=content`}>{product.title}</a></h3><span className={`overview-product-status ${product.published ? 'published' : ''}`}>{product.published ? <CircleCheck size={14} /> : <CircleDashed size={14} />}{product.published ? 'Published' : 'Draft'}</span></div>
           <p className="overview-product-activity" aria-label={`Last ${report.days} days: ${count(product.visits, 'visit')}, ${count(product.leads, 'contact')}, ${count(product.purchases, 'sale')}`}><span>{count(product.visits, 'visit')}</span><span>{count(product.leads, 'contact')}</span><span>{count(product.purchases, 'sale')}</span></p>
-          <a className="overview-product-open" href={`/?project=${product.id}&area=content`}>Open product<ArrowRight size={16} /></a>
+          <a className="overview-product-open" href={`/?project=${product.id}&area=content`}>Open<ArrowRight size={16} /></a>
         </article>)}</div> : <div className="overview-products-empty"><h3>Everything starts with one product.</h3><p>Add your lessons, downloads, or mentorship. Choose marketing plugins only when you need them.</p><a className="overview-text-link" href="/?view=create">Create your product <ArrowRight size={16} /></a></div>}
       </section>}
 
