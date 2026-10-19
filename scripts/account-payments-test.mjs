@@ -24,6 +24,7 @@ const routePath='app/account/payments/page.tsx';
 const account={configured:true,enabled:true,mode:'live',connected:false,ready:false,accountId:null};
 const selectedIcons=Object.fromEntries('ArrowLeft ArrowRight Check CheckCircle2 ChevronRight ExternalLink Loader2 RefreshCw ShieldCheck Wallet'.split(' ').map(name=>[name,icons[name]]));
 const deps={React,useCallback:React.useCallback,useEffect:React.useEffect,useState:React.useState,...selectedIcons,Brand:()=>React.createElement('span',null,'FiveGen')};
+deps.CreatorSaleFees=(await load('app/creator-sale-fees.tsx',{React})).CreatorSaleFees;
 const ui=await load(componentPath,deps),id='866cfb4b-b55d-4b76-a339-a69368ab7478';
 
 assert.equal(ui.sellerPaymentReturnPath(`/build/${id}`),`/build/${id}`);

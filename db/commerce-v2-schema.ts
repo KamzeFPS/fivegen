@@ -14,8 +14,15 @@ export const commerceOrders = sqliteTable('commerce_orders', {
   id: text('id').primaryKey(), owner: text('owner').notNull(), productId: text('product_id').notNull(), accountId: text('account_id').notNull(), mode: text('mode').notNull(),
   email: text('email').notNull(), amount: integer('amount').notNull(), currency: text('currency').notNull(), title: text('title').notNull(), campaign: text('campaign').notNull().default(''),
   status: text('status').notNull().default('pending'), sessionId: text('session_id').unique(), paymentIntent: text('payment_intent'),
+  expectedFeeBps: integer('expected_fee_bps').notNull().default(0), expectedFeeAmount: integer('expected_fee_amount').notNull().default(0),
+  earningsCheckedAt: integer('earnings_checked_at').notNull().default(0),
   accessHash: text('access_hash').notNull(), createdAt: integer('created_at').notNull(), paidAt: integer('paid_at'),
 }, t => [index('commerce_order_email').on(t.email,t.mode), index('commerce_order_owner').on(t.owner,t.mode,t.paidAt), uniqueIndex('commerce_payment').on(t.accountId,t.mode,t.paymentIntent)]);
+export const commerceEarnings = sqliteTable('commerce_earnings', {
+  orderId:text('order_id').primaryKey().references(()=>commerceOrders.id),chargeId:text('charge_id').notNull(),chargeApplicationFeeAmount:integer('charge_application_fee_amount').notNull(),refundedAmount:integer('refunded_amount').notNull(),disputed:integer('disputed').notNull(),
+  balanceTransactionId:text('balance_transaction_id'),settlementAmount:integer('settlement_amount'),settlementCurrency:text('settlement_currency'),stripeFeeAmount:integer('stripe_fee_amount'),platformFeeAmount:integer('platform_fee_amount'),creatorNetAmount:integer('creator_net_amount'),
+  availability:text('availability').notNull().default('pending'),availableAt:integer('available_at'),updatedAt:integer('updated_at').notNull(),
+});
 export const commerceRevocations = sqliteTable('commerce_revocations', {
   key: text('key').primaryKey(), accountId: text('account_id').notNull(), mode: text('mode').notNull(), paymentIntent: text('payment_intent').notNull(), reason: text('reason').notNull(), createdAt: integer('created_at').notNull(),
 });

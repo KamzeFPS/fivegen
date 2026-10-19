@@ -8,6 +8,7 @@ import { contentSchema, publishContentError } from './product';
 import { enrollAutomationPurchase } from './automation-server';
 import {builderPublishedDelivery,builderOrderDelivery,verifyBuilderDelivery,builderDownloadMetadata,builderPrivateDownload} from './builder-delivery-server';
 import {builderDeliverySnapshotSchema} from './builder-publication-contract';
+import {COMMERCE_COMMISSION_BPS,commerceCommission,commerceFeeSnapshot} from './commerce-fees';
 
 export function commerceMode(): 'live'|'test' {
   const mode=binding('STRIPE_MODE');
@@ -42,8 +43,12 @@ async function commerceProvider<T>(operation:string,work:()=>Promise<T>):Promise
   }
 }
 async function refreshCommerceAccount(accountId:string,mode:'test'|'live'){
-  const account=await commerceProvider('check the payment account',()=>commerceStripe().v2.core.accounts.retrieve(accountId,{include:['configuration.merchant']}));
+  const account=await commerceProvider('check the payment account',()=>commerceStripe().v2.core.accounts.retrieve(accountId,{include:['configuration.merchant','defaults']}));
   if(account.id!==accountId||account.livemode!==(mode==='live'))throw new ApiError('The connected account does not match the selected Stripe mode.',409);
+  if(account.defaults?.responsibilities?.fees_collector!=='stripe'){
+    await database().prepare("UPDATE commerce_accounts SET status='pending',updated_at=? WHERE account_id=? AND mode=?").bind(Date.now(),accountId,mode).run();
+    throw new ApiError('FiveGen’s administrator must correct this seller account’s Stripe fee responsibility before new sales can start. Stripe processing fees must be paid by the connected account. Existing purchases remain available.',503);
+  }
   const capabilities=account.configuration?.merchant?.capabilities;
   const ready=!account.closed&&capabilities?.card_payments?.status==='active'&&capabilities?.stripe_balance?.payouts?.status==='active';
   await database().prepare('UPDATE commerce_accounts SET status=?,updated_at=? WHERE account_id=? AND mode=?').bind(ready?'ready':'pending',Date.now(),accountId,mode).run();
@@ -141,19 +146,42 @@ export async function createCommerceCheckout(req:Request,input:unknown) {
    if(row.publication_version){
     const snapshot=builderDeliverySnapshotSchema.parse(JSON.parse(String(row.content_snapshot)));
     const results=await db.batch([
-     db.prepare(`INSERT INTO commerce_orders (id,owner,product_id,account_id,mode,email,amount,currency,title,status,access_hash,created_at,campaign) SELECT ?,?,?,?,?,?,?,?,?,'pending',?,?,? WHERE EXISTS(SELECT 1 FROM product_builder_publications b JOIN commerce_offers o ON o.product_id=b.product_id WHERE b.product_id=? AND b.version=? AND o.enabled=1 AND o.enabled_mode=? AND o.updated_at=?)`).bind(value.requestId,row.owner,row.product_id,row.account_id,mode,email,row.amount,row.currency,row.title,hash,now,value.campaign,row.product_id,row.publication_version,mode,row.updated_at),
+     db.prepare(`INSERT INTO commerce_orders (id,owner,product_id,account_id,mode,email,amount,currency,title,status,access_hash,created_at,campaign,expected_fee_bps,expected_fee_amount) SELECT ?,?,?,?,?,?,?,?,?,'pending',?,?,?,?,? WHERE EXISTS(SELECT 1 FROM product_builder_publications b JOIN commerce_offers o ON o.product_id=b.product_id WHERE b.product_id=? AND b.version=? AND o.enabled=1 AND o.enabled_mode=? AND o.updated_at=?)`).bind(value.requestId,row.owner,row.product_id,row.account_id,mode,email,row.amount,row.currency,row.title,hash,now,value.campaign,COMMERCE_COMMISSION_BPS,commerceCommission(Number(row.amount)),row.product_id,row.publication_version,mode,row.updated_at),
      db.prepare('INSERT INTO product_builder_order_snapshots (order_id,product_id,publication_version,snapshot,created_at) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM commerce_orders WHERE id=? AND access_hash=?)').bind(value.requestId,row.product_id,row.publication_version,JSON.stringify(snapshot),now,value.requestId,hash),
     ]);if(!results[0].meta.changes)throw new ApiError('This product changed. Reload the page before paying.',409);
-   }else await db.prepare('INSERT INTO commerce_orders (id,owner,product_id,account_id,mode,email,amount,currency,title,status,access_hash,created_at,campaign) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(value.requestId,row.owner,row.product_id,row.account_id,mode,email,row.amount,row.currency,row.title,'pending',hash,now,value.campaign).run();
+   }else await db.prepare('INSERT INTO commerce_orders (id,owner,product_id,account_id,mode,email,amount,currency,title,status,access_hash,created_at,campaign,expected_fee_bps,expected_fee_amount) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(value.requestId,row.owner,row.product_id,row.account_id,mode,email,row.amount,row.currency,row.title,'pending',hash,now,value.campaign,COMMERCE_COMMISSION_BPS,commerceCommission(Number(row.amount))).run();
   }
   if(row.publication_version){const frozen=await db.prepare('SELECT publication_version FROM product_builder_order_snapshots WHERE order_id=?').bind(value.requestId).first();if(Number(frozen?.publication_version)!==Number(row.publication_version))throw new ApiError('This checkout belongs to an earlier offer. Start a new checkout from the product page.',409);}
   const order=existing||await db.prepare('SELECT * FROM commerce_orders WHERE id=?').bind(value.requestId).first();const origin=new URL(req.url).origin;
-  const session=await commerceProvider('open secure checkout',()=>client.checkout.sessions.create({mode:'payment',payment_method_types:['card'],customer_email:email,client_reference_id:value.requestId,metadata:{fivegen_order:value.requestId,fivegen_product:String(row.product_id)},payment_intent_data:{metadata:{fivegen_order:value.requestId}},line_items:[{quantity:1,price_data:{currency:String(order!.currency),unit_amount:Number(order!.amount),product_data:{name:String(order!.title).slice(0,120)}}}],success_url:`${origin}/customer?order=${value.requestId}`,cancel_url:`${origin}/${row.publication_version?'b':'g'}/${encodeURIComponent(value.slug)}`},{stripeAccount:String(row.account_id),idempotencyKey:`fivegen-order-${mode}-${value.requestId}`}));
+  const session=await commerceProvider('open secure checkout',()=>client.checkout.sessions.create({mode:'payment',payment_method_types:['card'],customer_email:email,client_reference_id:value.requestId,metadata:{fivegen_order:value.requestId,fivegen_product:String(row.product_id)},payment_intent_data:{metadata:{fivegen_order:value.requestId},...(Number(order!.expected_fee_bps)>0?{application_fee_amount:Number(order!.expected_fee_amount)}:{})},line_items:[{quantity:1,price_data:{currency:String(order!.currency),unit_amount:Number(order!.amount),product_data:{name:String(order!.title).slice(0,120)}}}],success_url:`${origin}/customer?order=${value.requestId}`,cancel_url:`${origin}/${row.publication_version?'b':'g'}/${encodeURIComponent(value.slug)}`},{stripeAccount:String(row.account_id),idempotencyKey:`fivegen-order-${mode}-${value.requestId}`}));
   await db.prepare('UPDATE commerce_orders SET session_id=? WHERE id=? AND session_id IS NULL').bind(session.id,value.requestId).run();
   if(!session.url)throw new ApiError('Stripe did not return a checkout page.',502);
   return {url:session.url,orderId:value.requestId,cookie:token?commerceCookie(value.requestId,token,origin):null};
 }
 function objectId(value:string|{id:string}|null|undefined){return typeof value==='string'?value:value?.id||null;}
+async function recordCommerceEarnings(order:Record<string,unknown>,payment:Stripe.PaymentIntent,charge:Stripe.Charge){
+  const fee=payment.application_fee_amount||0;
+  if(fee!==Number(order.expected_fee_amount)||charge.application_fee_amount!=null&&charge.application_fee_amount!==fee)throw new ApiError('Payment commission does not match the checkout intent.',400);
+  const value=commerceFeeSnapshot(charge,fee),db=database();
+  await db.prepare(`INSERT INTO commerce_earnings (order_id,charge_id,charge_application_fee_amount,refunded_amount,disputed,balance_transaction_id,settlement_amount,settlement_currency,stripe_fee_amount,platform_fee_amount,creator_net_amount,availability,available_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+   ON CONFLICT(order_id) DO UPDATE SET charge_id=excluded.charge_id,charge_application_fee_amount=excluded.charge_application_fee_amount,refunded_amount=MAX(commerce_earnings.refunded_amount,excluded.refunded_amount),disputed=MAX(commerce_earnings.disputed,excluded.disputed),balance_transaction_id=COALESCE(excluded.balance_transaction_id,commerce_earnings.balance_transaction_id),settlement_amount=COALESCE(excluded.settlement_amount,commerce_earnings.settlement_amount),settlement_currency=COALESCE(excluded.settlement_currency,commerce_earnings.settlement_currency),stripe_fee_amount=COALESCE(excluded.stripe_fee_amount,commerce_earnings.stripe_fee_amount),platform_fee_amount=COALESCE(excluded.platform_fee_amount,commerce_earnings.platform_fee_amount),creator_net_amount=COALESCE(excluded.creator_net_amount,commerce_earnings.creator_net_amount),availability=CASE WHEN excluded.balance_transaction_id IS NULL THEN commerce_earnings.availability ELSE excluded.availability END,available_at=COALESCE(excluded.available_at,commerce_earnings.available_at),updated_at=excluded.updated_at`).bind(order.id,value.chargeId,value.chargeApplicationFeeAmount,value.refundedAmount,+value.disputed,value.balanceTransactionId,value.settlementAmount,value.settlementCurrency,value.stripeFeeAmount,value.platformFeeAmount,value.creatorNetAmount,value.availability,value.availableAt,Date.now()).run();
+  return value.balanceTransactionId!==null;
+}
+// Owner and environment are always resolved server-side before any provider read.
+// This function performs no charge, transfer, payout or refund operations.
+export async function refreshCommerceOrderEarnings(orderId:string,owner:string):Promise<boolean>{
+ const mode=commerceMode(),db=database(),order=await db.prepare('SELECT * FROM commerce_orders WHERE id=? AND owner=? AND mode=?').bind(orderId,owner,mode).first();
+ if(!order)throw new ApiError('Sale not found.',404);
+ if(!['paid','revoked'].includes(String(order.status))||!order.payment_intent)return false;
+ const known=await db.prepare('SELECT key FROM commerce_accounts WHERE owner=? AND account_id=? AND mode=?').bind(owner,order.account_id,mode).first();
+ if(!known)throw new ApiError('The sale does not belong to this connected account.',409);
+ const payment=await commerceProvider('refresh sale earnings',()=>commerceStripe().paymentIntents.retrieve(String(order.payment_intent),{expand:['latest_charge.balance_transaction']},{stripeAccount:String(order.account_id),timeout:5000,maxNetworkRetries:0}));
+ if(payment.id!==order.payment_intent||payment.status!=='succeeded'||payment.amount_received!==order.amount||payment.currency!==order.currency||payment.livemode!==(mode==='live')||payment.metadata?.fivegen_order!==orderId)throw new ApiError('The sale does not match the verified payment.',409);
+ const charge=payment.latest_charge;
+ if(!charge||typeof charge==='string'||objectId(charge.payment_intent)!==payment.id||charge.amount!==order.amount||charge.currency!==order.currency||charge.livemode!==(mode==='live'))throw new ApiError('Sale charge verification is incomplete.',502);
+ if(charge.amount_refunded>0||charge.disputed)await revokeCommercePayment(String(order.account_id),mode,payment.id,charge.disputed?'disputed':'refunded');
+ return recordCommerceEarnings(order,payment,charge);
+}
 export async function revokeCommercePayment(account:string,mode:string,paymentIntent:string,reason:string) {
   const db=database(),now=Date.now();await db.batch([
     db.prepare('INSERT OR IGNORE INTO commerce_revocations (key,account_id,mode,payment_intent,reason,created_at) VALUES (?,?,?,?,?,?)').bind(`${mode}:${account}:${paymentIntent}`,account,mode,paymentIntent,reason,now),
@@ -171,13 +199,19 @@ export async function fulfillCommerceSession(sessionId:string,account:string) {
   if(session.payment_status!=='paid'||session.status!=='complete')return;
   if(session.customer_details?.email?.trim().toLowerCase()!==order.email)throw new ApiError('Payment does not match the checkout intent.',400);
   const payment=session.payment_intent;if(!payment||typeof payment==='string')throw new ApiError('Payment verification is incomplete.',502);
-  if(payment.status!=='succeeded'||payment.amount_received!==order.amount||payment.currency!==order.currency||payment.livemode!==(mode==='live')||payment.metadata?.fivegen_order!==id)throw new ApiError('Payment verification failed.',400);
+  if(payment.status!=='succeeded'||payment.amount_received!==order.amount||payment.currency!==order.currency||payment.livemode!==(mode==='live')||payment.metadata?.fivegen_order!==id||(payment.application_fee_amount||0)!==Number(order.expected_fee_amount))throw new ApiError('Payment verification failed.',400);
   const charge=payment.latest_charge;if(!charge||typeof charge==='string')throw new ApiError('Payment charge verification is incomplete.',502);
+  if(objectId(charge.payment_intent)!==payment.id||charge.amount!==order.amount||charge.currency!==order.currency||charge.livemode!==(mode==='live'))throw new ApiError('Payment charge verification failed.',400);
+  if(charge.application_fee_amount!=null&&charge.application_fee_amount!==Number(order.expected_fee_amount))throw new ApiError('Payment commission verification failed.',400);
   if(charge.amount_refunded>0||charge.disputed)await revokeCommercePayment(account,mode,payment.id,charge.disputed?'disputed':'refunded');
   const now=Date.now();await db.prepare("UPDATE commerce_orders SET session_id=?,payment_intent=?,status=CASE WHEN status='revoked' OR EXISTS(SELECT 1 FROM commerce_revocations WHERE account_id=? AND mode=? AND payment_intent=?) THEN 'revoked' ELSE 'paid' END,paid_at=COALESCE(paid_at,?) WHERE id=? AND account_id=? AND mode=?").bind(session.id,payment.id,account,mode,payment.id,now,id,account,mode).run();
   // A sale advances an existing lead; purchase alone never grants marketing consent.
   await db.prepare("UPDATE growth_leads SET status='won',updated_at=? WHERE product_id=? AND owner=? AND email=? AND EXISTS(SELECT 1 FROM commerce_orders WHERE id=? AND status='paid' AND mode='live')").bind(now,order.product_id,order.owner,order.email,id).run();
   await enrollAutomationPurchase(id).catch(()=>{console.error('Purchase automation will retry during reconciliation.');});
+  // Fee publication and restricted balance-read permissions must never block
+  // delivery of a fully verified paid product. Owners can refresh the ledger.
+  await recordCommerceEarnings(order,payment,charge).catch(()=>{console.warn('Sale earnings will retry during reconciliation.');});
+  await refreshCommerceOrderEarnings(String(order.id),String(order.owner)).catch(()=>{console.warn('Detailed Stripe fees are not available yet.');});
 }
 export async function processCommerceEvent(event:Stripe.Event) {
   const mode=commerceMode(),db=database();if(event.livemode!==(mode==='live'))throw new ApiError('Wrong Stripe payment mode.',400);

@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, ChevronDown, CircleCheck, CircleDashed, Loader2, RefreshCw } from 'lucide-react';
 import type { GrowthDashboardData } from '@/lib/growth-analytics';
+import type {CommerceEarningsRefresh} from '@/lib/commerce-earnings';
+import {CreatorEarnings} from './creator-earnings';
 
 const number = (value: number) => value.toLocaleString('en-US');
 const count = (value: number, singular: string, plural = `${singular}s`) => `${number(value)} ${value === 1 ? singular : plural}`;
@@ -19,6 +21,9 @@ export function GrowthDashboard({productId}:{productId?:string}={}) {
   const [data, setData] = useState<GrowthDashboardData | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [refreshingFees,setRefreshingFees]=useState(false);
+  const [feeError,setFeeError]=useState(''),[feeNotice,setFeeNotice]=useState('');
+  const feeScope=useRef('');feeScope.current=`${days}:${productId||''}`;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -49,6 +54,21 @@ export function GrowthDashboard({productId}:{productId?:string}={}) {
     setRefresh(value => value + 1);
   }
 
+  async function refreshFees(){
+    if(refreshingFees)return;
+    const requestedScope=feeScope.current;
+    setRefreshingFees(true);setFeeError('');setFeeNotice('');
+    try{
+      const response=await fetch('/api/commerce/earnings/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({days,...(productId?{productId}:{})}),signal:AbortSignal.timeout(60000)});
+      const result=await response.json() as CommerceEarningsRefresh&{error?:string};
+      if(feeScope.current!==requestedScope)return;
+      if(!response.ok)throw new Error(result.error||'Stripe fees could not be checked. Your sales are unchanged.');
+      setFeeNotice(`${result.refreshed.toLocaleString('en-US')} ${result.refreshed===1?'sale checked':'sales checked'} with Stripe.${result.pending?' Some payments are still awaiting fee confirmation.':''}${result.failed?' Some records could not be refreshed. Please try again.':''}`);
+      reload();
+    }catch(cause){if(feeScope.current===requestedScope)setFeeError(cause instanceof Error?cause.message:'Stripe fees could not be checked. Please try again.');}
+    finally{setRefreshingFees(false);}
+  }
+
   // Hide the old figures as soon as the period changes, before the next request starts.
   const report = !loading && !error && data?.days === days&&data.productId===(productId||null) ? data : null;
   const published = report?.products.filter(product => product.published).length || 0;
@@ -77,6 +97,7 @@ export function GrowthDashboard({productId}:{productId?:string}={}) {
         <label htmlFor="dashboard-period"><span>Reporting period</span><select id="dashboard-period" value={days} onChange={event => {
           setLoading(true);
           setError('');
+          setFeeError('');setFeeNotice('');
           setDays(Number(event.target.value));
         }}><option value={7}>Last 7 days</option><option value={30}>Last 30 days</option><option value={90}>Last 90 days</option></select></label>
         <button className="overview-refresh" disabled={loading} onClick={reload} aria-label="Refresh overview" title="Refresh overview"><RefreshCw size={17} /></button>
@@ -96,12 +117,14 @@ export function GrowthDashboard({productId}:{productId?:string}={}) {
         <div className="overview-section-heading"><h2 id="overview-results-heading">Your results</h2><p>Last {report.days} days{dateRange && <span> · {dateRange}</span>}</p></div>
         <div className="overview-metrics">
           <article className="overview-metric"><h3>{report.salesCoverage.legacyOrdersExcluded?'Current checkout sales':'Product sales'}</h3><strong>{number(report.purchases)}</strong><p>{productId?'Paid orders for this product.':'Paid orders for your products.'}</p></article>
-          <article className="overview-metric overview-revenue"><h3>{report.salesCoverage.legacyOrdersExcluded?'Current checkout revenue':'Revenue'}</h3>{report.revenue.length ? <div className="overview-revenue-values">{report.revenue.map(item => <strong key={item.currency}>{money(item.amount, item.currency)}</strong>)}</div> : <strong className="overview-no-sales">No sales in this period</strong>}<p>{report.revenue.length > 1 ? 'Product sales, shown separately by currency.' : 'Money from your paid product orders.'}</p></article>
+          <article className="overview-metric overview-revenue"><h3>{report.salesCoverage.legacyOrdersExcluded?'Current checkout gross sales':'Gross sales'}</h3>{report.revenue.length ? <div className="overview-revenue-values">{report.revenue.map(item => <strong key={item.currency}>{money(item.amount, item.currency)}</strong>)}</div> : <strong className="overview-no-sales">No sales in this period</strong>}<p>Customer payments before fees. Your actual earnings are broken down below.</p></article>
           <article className="overview-metric"><h3>New contacts</h3><strong>{number(report.leads)}</strong><p>New contacts captured for {productId?'this product':'your products'}.</p></article>
           <article className="overview-metric"><h3>Page visits</h3><strong>{number(report.visits)}</strong><p>Recorded visits to optional marketing pages.</p></article>
         </div>
         {report.visits === 0 && report.leads === 0 && report.purchases === 0 && <p className="overview-results-hint">{!report.products.length ? 'Create a product to start. Sales and activity will appear here as your audience responds.' : published ? 'Your product is published. Sales appear here once payments are connected and customers buy. Marketing plugins are optional.' : 'Finish your product and publish when you’re ready. You can add marketing plugins at any time.'}</p>}
       </section>
+
+      <CreatorEarnings report={report.earnings} refreshing={refreshingFees} onRefresh={()=>void refreshFees()} error={feeError} notice={feeNotice}/>
 
       {productId&&recommendation}
       <section className="overview-products" aria-labelledby="overview-products-heading">

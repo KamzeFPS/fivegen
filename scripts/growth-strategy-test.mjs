@@ -9,6 +9,7 @@ const root=resolve('outputs/growth-strategy-qa',randomUUID()),storage=createStor
 let owner='creator-a',mode='test',growth={updatedAt:1,brief:{story:'My real story',proof:'My evidence'},assets:null};
 class ApiError extends Error {constructor(message,status=400){super(message);this.status=status;}}
 const deps={z,ApiError,database:()=>storage.DB,binding:name=>name==='STRIPE_MODE'?mode:'',
+  commerceMode:()=>{if(!['test','live'].includes(mode))throw new ApiError('Choose a payment mode',503);return mode;},refreshCommerceOrderEarnings:async()=>false,
   identity:async()=>{if(!owner)throw new ApiError('Sign in',401);return {userId:owner};},
   sameOrigin:req=>{if(req.headers.get('origin')&&req.headers.get('origin')!==new URL(req.url).origin)throw new ApiError('Wrong origin',403);},
   failure:e=>Response.json({error:e.message},{status:e.status||(e.issues?400:500)}),
@@ -22,6 +23,7 @@ Object.assign(deps,await load('lib/growth-funnel.ts'));
 Object.assign(deps,await load('lib/offer-lab.ts'));
 Object.assign(deps,await load('lib/offer-lab-server.ts'));
 Object.assign(deps,await load('lib/marketing-plugins.ts'));
+Object.assign(deps,await load('lib/commerce-earnings-server.ts'));
 Object.assign(deps,await load('lib/growth-analytics.ts'));
 const labRoute=await load('app/api/products/[id]/offer-lab/route.ts'),publicRoute=await load('app/api/offer-lab/respond/route.ts'),eventRoute=await load('app/api/growth/events/route.ts'),dashboardRoute=await load('app/api/growth/dashboard/route.ts');
 const exportRoute=await load('app/api/products/[id]/offer-lab/export/route.ts');

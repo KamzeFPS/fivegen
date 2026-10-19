@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { ApiError, binding, database, ownedProduct } from './server';
 import { getPublicFunnel, limitLeadCapture } from './growth-funnel-server';
 import { readMarketingPluginIds } from './marketing-plugins';
+import { commerceEarnings } from './commerce-earnings-server';
+import type { CommerceEarningsReport } from './commerce-earnings';
 export const growthEventSchema = z.object({ slug: z.string().min(1).max(120), visitor: z.string().uuid(), event: z.enum(['visit','vsl_play','cta']), campaign: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/).default('direct') });
 export async function trackGrowthEvent(input: unknown) {
   const value = growthEventSchema.parse(input), funnel = await getPublicFunnel(value.slug), now = Date.now();
@@ -12,6 +14,7 @@ export async function trackGrowthEvent(input: unknown) {
   return { recorded: true };
 }
 export type GrowthDashboardData = {
+  earnings: CommerceEarningsReport;
   productId: string|null;
   salesCoverage: { source:'connected-checkout'; legacyOrdersExcluded:number };
   days: number; mode: 'test'|'live'; visits: number; plays: number; clicks: number; leads: number; bookings: number; purchases: number;
@@ -70,6 +73,6 @@ export async function growthDashboard(owner: string, days: number, productId?: s
   if(welcome)actions.push({title:'Prepare your welcome emails',reason:`The Automations plugin is enabled for “${welcome.title}”, with no active sequence. Write and approve a welcome for people who agree to receive your emails.`,label:'Open email automations',href:`/?project=${welcome.id}&area=automations`});
   const promotion=productDetails.find(p=>p.plugins.includes('campaigns'));
   if(!actions.length&&promotion)actions.push({title:'Prepare your next promotion',reason:'Use your Campaigns plugin to turn one of your own recordings into posts and emails for your product.',label:'Open campaigns',href:`/?project=${promotion.id}&area=campaigns`});
-  return { productId:selected,salesCoverage:{source:'connected-checkout',legacyOrdersExcluded:Number(legacyOrders?.n||0)},days,mode,visits:count('visit'),plays:count('vsl_play'),clicks:count('cta'),leads:Number(leadCount?.n||0),bookings:Number(bookings?.n||0),purchases:revenue.results.reduce((n,r)=>n+Number(r.n),0),
+  return { earnings:await commerceEarnings(owner,days,productId),productId:selected,salesCoverage:{source:'connected-checkout',legacyOrdersExcluded:Number(legacyOrders?.n||0)},days,mode,visits:count('visit'),plays:count('vsl_play'),clicks:count('cta'),leads:Number(leadCount?.n||0),bookings:Number(bookings?.n||0),purchases:revenue.results.reduce((n,r)=>n+Number(r.n),0),
     revenue:revenue.results.map(r=>({currency:String(r.currency),amount:Number(r.amount),orders:Number(r.n)})),trend,sources:sources.results.map(r=>({campaign:String(r.campaign),visits:Number(r.visits),clicks:Number(r.clicks)})),products:productRows,actions:actions.slice(0,4) };
 }

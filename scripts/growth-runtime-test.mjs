@@ -12,7 +12,7 @@ const root=resolve('outputs/growth-runtime-qa',randomUUID());
 const probe=createServer();await new Promise(done=>probe.listen(0,'127.0.0.1',done));
 const port=probe.address().port;await new Promise(done=>probe.close(done));
 const base=`http://127.0.0.1:${port}`;
-Object.assign(process.env,{NODE_ENV:'production',APP_ORIGIN:base,PORT:String(port),FIVEGEN_RUNTIME:'render',FIVEGEN_DATA_DIR:root,GOOGLE_CLIENT_ID:'fixture',GOOGLE_CLIENT_SECRET:'fixture',CREDENTIAL_ENCRYPTION_KEY:'local-growth-test-key-'.repeat(3),RENDER_EXTERNAL_URL:'',RENDER:'',PRODUCT_DOMAIN:'',PADDLE_ENVIRONMENT:'sandbox',OPENAI_API_KEY:'',ANTHROPIC_API_KEY:'',FAL_KEY:'',PADDLE_API_KEY:'',STRIPE_SECRET_KEY:''});
+Object.assign(process.env,{NODE_ENV:'production',APP_ORIGIN:base,PORT:String(port),FIVEGEN_RUNTIME:'render',FIVEGEN_DATA_DIR:root,GOOGLE_CLIENT_ID:'fixture',GOOGLE_CLIENT_SECRET:'fixture',CREDENTIAL_ENCRYPTION_KEY:'local-growth-test-key-'.repeat(3),RENDER_EXTERNAL_URL:'',RENDER:'',PRODUCT_DOMAIN:'',PADDLE_ENVIRONMENT:'sandbox',OPENAI_API_KEY:'',ANTHROPIC_API_KEY:'',FAL_KEY:'',PADDLE_API_KEY:'',STRIPE_SECRET_KEY:'',STRIPE_MODE:'test'});
 const seed=createStorage(root),owner='growth-runtime-owner',other='growth-runtime-other';
 const tokens=[randomBytes(32).toString('base64url'),randomBytes(32).toString('base64url')];
 const version=readFileSync('lib/terms.ts','utf8').match(/TERMS_VERSION='([^']+)'/)[1];
