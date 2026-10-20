@@ -36,6 +36,7 @@ async function load(path) {
   const result = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64')); delete globalThis[key]; return result;
 }
 Object.assign(deps, await load('lib/automation.ts'));
+Object.assign(deps,await load('lib/purchase-email.ts'));
 Object.assign(deps, await load('lib/automation-server.ts'));
 const api = await load('app/api/automations/route.ts'), worker = await load('app/api/automations/dispatch/route.ts'), unsubscribe = await load('app/api/automations/unsubscribe/route.ts');
 const base = 'https://fivegen.test';

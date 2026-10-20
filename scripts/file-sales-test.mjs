@@ -47,6 +47,7 @@ Object.assign(deps,await load('lib/file-sale-contract.ts'));
 Object.assign(deps,await load('lib/credit-policy.ts'));
 Object.assign(deps,{createHash});Object.assign(deps,await load('lib/upload-validation.ts'));
 const sale=await load('lib/file-sales.ts');Object.assign(deps,sale);
+Object.assign(deps,await load('lib/purchase-email.ts'));
 const payments=await load('lib/payments.ts');
 Object.assign(deps,payments,{failure:e=>Response.json({error:e.message},{status:e.status||500}),assertStripeMode:live=>{if(live!==false)throw new ApiError('Wrong environment.',400);}});
 const webhook=await load('app/api/webhooks/stripe/route.ts');
@@ -161,6 +162,7 @@ try{
   sessions.get(sessionA).livemode=true;await assert.rejects(()=>complete(sessionA),e=>e.status===403);sessions.get(sessionA).livemode=false;
   const orders=await Promise.all(Array.from({length:5},()=>complete(sessionA))),orderA=orders[0];
   assert.equal(sql.prepare('SELECT COUNT(*) n FROM orders WHERE id=?').get(sessionA).n,1);
+  assert.equal(sql.prepare('SELECT COUNT(*) n FROM purchase_emails WHERE order_id=?').get(sessionA).n,1,'Verified original-file payments create one durable confirmation identity');assert.equal(sql.prepare('SELECT status FROM purchase_emails WHERE order_id=?').get(sessionA).status,'suppressed','Legacy sandbox sales never mail real purchasers');
   assert.equal(orderA.sale_revision_id,originalRevision,'Completing A after publishing B must grant A');
   let access=await sale.resolveFileSaleAccess(product(w.product.id),String(orderA.token),null);
   assert.deepEqual(access.modules.map(m=>m.kind),['downloads']);assert.equal(access.uploads[0].id,first);

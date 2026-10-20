@@ -3,6 +3,10 @@ import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import React from 'react';
 import ts from 'typescript';
+import * as icons from 'lucide-react';
+
+const presentationCode=ts.transpileModule(readFileSync('app/customer/presentation.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;
+const presentation=await import('data:text/javascript;base64,'+Buffer.from(presentationCode).toString('base64'));
 
 // Run the shipped component's effects and event callbacks with a deterministic
 // hook/fetch harness. These fixtures never touch Stripe, identities or a database.
@@ -14,6 +18,7 @@ function nodes(value) { return Array.isArray(value) ? value.flatMap(nodes) : Rea
 function text(value) { return Array.isArray(value) ? value.map(text).join(' ') : React.isValidElement(value) ? text(value.props.children) : value == null || typeof value === 'boolean' ? '' : String(value); }
 
 async function harness(search = '') {
+  const browserLocation={search,href:'https://www.fivegen.ai/customer'+search};
   const hooks = [], pendingEffects = [], requests = [];
   let cursor = 0, dirty = true, tree, Component, disposed = false, updatesAfterDispose = 0;
   const useState = initial => {
@@ -35,7 +40,10 @@ async function harness(search = '') {
     }
   };
   const dependencies = {
-    React, useState, useRef, useCallback, useEffect, Link:'a', Brand:()=>React.createElement('span',null,'FiveGen'), location:{search},
+    ...Object.fromEntries(['ArrowDownToLine','ArrowLeft','ArrowRight','BookOpen','CalendarDays','CheckCircle2','ChevronDown','Clock3','FileText','GraduationCap','Layers','LockKeyhole','Play','Users'].map(name=>[name,icons[name]])),...presentation,CustomerLearning:()=>null,
+    Dialog:()=>null,DialogContent:()=>null,DialogHeader:()=>null,DialogTitle:()=>null,DialogDescription:()=>null,DialogFooter:()=>null,
+    React, useState, useRef, useCallback, useEffect, Link:'a', Brand:()=>React.createElement('span',null,'FiveGen'), location:browserLocation,
+    window:{location:browserLocation,history:{replaceState(_state,_title,url){browserLocation.href=String(url);browserLocation.search=new URL(String(url)).search;}}},
     commerceMoney:amount => `$${(amount / 100).toFixed(2)}`,
     isConsulting:format => format === 'Coaching session',
     commerceResponse:async response => { const data = await response.json(); if (!response.ok) throw new Error(data.error); return data; },
@@ -101,6 +109,7 @@ for (const search of ['', '?order=pending-order']) {
   assert.match(app.text,/Private purchased content for paid-a/,'Clicking the already open purchase never clears it');
   assert.equal(app.requests.length,2);
   await app.click('Check payment status');
+  assert.equal(app.requests[2].url,'/api/commerce/customer?order=pending-order','Payment checks target the pending order, never the currently open paid product');
   assert.match(app.text,/Private purchased content for paid-a/,'Payment refresh keeps the paid content visible');
   await app.respond(2,{error:'Stripe is temporarily unavailable.'},503);
   assert.match(app.text,/Stripe is temporarily unavailable/);
@@ -121,6 +130,7 @@ for (const search of ['', '?order=pending-order']) {
   assert.match(app.text,/Private purchased content for paid-a/);
   assert.doesNotMatch(app.text,/Private purchased content for paid-b/);
   await app.click('Check payment status');
+  assert.equal(app.requests[3].url,'/api/commerce/customer?order=pending-order','Switching products does not redirect reconciliation to an unrelated paid purchase');
   await app.respond(3,{orders:[paidA,paidB,pending]});
   assert.equal(app.button('Viewing product').props.children[0].props.children,paidA.title,'Refreshing preserves the customer’s current selection');
   assert.equal(app.requests.length,4);
@@ -186,6 +196,11 @@ for (const search of ['', '?order=pending-order']) {
   await app.respond(2,{...service,booking:{starts_at:1900000000000,ends_at:1900001800000,intake:'My preparation notes'}});
   assert.match(app.text,/Your session is confirmed/);
   await app.click('Cancel booking');
+  assert.equal(app.requests.length,3,'Opening cancellation first asks for confirmation');
+  await app.click('Keep my session');
+  assert.equal(app.requests.length,3,'Keeping a session never releases it');
+  await app.click('Cancel booking');
+  await app.click('Confirm cancellation');
   assert.equal(app.requests[3].options.method,'DELETE');
   await app.respond(3,service);
   assert.match(app.text,/Book your session/);

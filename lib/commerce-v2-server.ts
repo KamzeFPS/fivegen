@@ -6,11 +6,12 @@ import { commerceOfferSchema, isConsulting } from './commerce-v2';
 import type { CommerceOffer } from './commerce-v2';
 import { contentSchema, publishContentError } from './product';
 import { enrollAutomationPurchase } from './automation-server';
-import {builderPublishedDelivery,builderOrderDelivery,verifyBuilderDelivery,builderDownloadMetadata,builderPrivateDownload} from './builder-delivery-server';
-import {builderDeliverySnapshotSchema} from './builder-publication-contract';
+import {builderPublishedDelivery,builderOrderDelivery,verifyBuilderDelivery,builderDownloadMetadata,builderPrivateDownload,builderBuyerCover,builderPrivateCover} from './builder-delivery-server';
+import {builderDeliverySnapshotSchema,builderPublishedPresentation,builderBuyerPresentation} from './builder-publication-contract';
 import {commerceCommission,commerceFeeSnapshot} from './commerce-fees';
 import { creatorPlan } from './creator-plan-server';
 import { freeCreatorPlan } from './creator-plans';
+import {commercePurchaseEmailStatement,purchaseEmailState} from './purchase-email';
 
 export function commerceMode(): 'live'|'test' {
   const mode=binding('STRIPE_MODE');
@@ -147,7 +148,8 @@ export async function createCommerceCheckout(req:Request,input:unknown) {
   if(existing){if(existing.email!==email||existing.product_id!==row.product_id||existing.account_id!==row.account_id||existing.mode!==mode||!await cookieOwns(req,existing))throw new ApiError('Start a new checkout attempt.',409);if(existing.status!=='pending')throw new ApiError('This checkout is already complete. Open your customer portal.',409);}
   else {const recent=await db.prepare('SELECT COUNT(*) AS count FROM commerce_orders WHERE product_id=? AND created_at>?').bind(row.product_id,Date.now()-3600000).first();if(Number(recent?.count)>300)throw new ApiError('Too many checkout attempts. Try again later.',429);token=crypto.randomUUID()+crypto.randomUUID();const now=Date.now(),hash=await commerceHash(token),plan=await creatorPlan(String(row.owner),mode,now);
    if(row.publication_version){
-    const snapshot=builderDeliverySnapshotSchema.parse(JSON.parse(String(row.content_snapshot)));
+    const reviewed=JSON.parse(String(row.content_snapshot));
+    const snapshot=builderDeliverySnapshotSchema.parse({...reviewed,...builderPublishedPresentation(reviewed,JSON.parse(String(row.public_snapshot)))});
     const results=await db.batch([
      db.prepare(`INSERT INTO commerce_orders (id,owner,product_id,account_id,mode,email,amount,currency,title,status,access_hash,created_at,campaign,expected_fee_bps,expected_fee_amount,fee_plan_id) SELECT ?,?,?,?,?,?,?,?,?,'pending',?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM product_builder_publications b JOIN commerce_offers o ON o.product_id=b.product_id WHERE b.product_id=? AND b.version=? AND o.enabled=1 AND o.enabled_mode=? AND o.updated_at=?)`).bind(value.requestId,row.owner,row.product_id,row.account_id,mode,email,row.amount,row.currency,row.title,hash,now,value.campaign,plan.commissionBps,commerceCommission(Number(row.amount),plan.commissionBps),plan.id,row.product_id,row.publication_version,mode,row.updated_at),
      db.prepare('INSERT INTO product_builder_order_snapshots (order_id,product_id,publication_version,snapshot,created_at) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM commerce_orders WHERE id=? AND access_hash=?)').bind(value.requestId,row.product_id,row.publication_version,JSON.stringify(snapshot),now,value.requestId,hash),
@@ -207,7 +209,10 @@ export async function fulfillCommerceSession(sessionId:string,account:string) {
   if(objectId(charge.payment_intent)!==payment.id||charge.amount!==order.amount||charge.currency!==order.currency||charge.livemode!==(mode==='live'))throw new ApiError('Payment charge verification failed.',400);
   if(charge.application_fee_amount!=null&&charge.application_fee_amount!==Number(order.expected_fee_amount))throw new ApiError('Payment commission verification failed.',400);
   if(charge.amount_refunded>0||charge.disputed)await revokeCommercePayment(account,mode,payment.id,charge.disputed?'disputed':'refunded');
-  const now=Date.now();await db.prepare("UPDATE commerce_orders SET session_id=?,payment_intent=?,status=CASE WHEN status='revoked' OR EXISTS(SELECT 1 FROM commerce_revocations WHERE account_id=? AND mode=? AND payment_intent=?) THEN 'revoked' ELSE 'paid' END,paid_at=COALESCE(paid_at,?) WHERE id=? AND account_id=? AND mode=?").bind(session.id,payment.id,account,mode,payment.id,now,id,account,mode).run();
+  const now=Date.now();await db.batch([
+    db.prepare("UPDATE commerce_orders SET session_id=?,payment_intent=?,status=CASE WHEN status='revoked' OR EXISTS(SELECT 1 FROM commerce_revocations WHERE account_id=? AND mode=? AND payment_intent=?) THEN 'revoked' ELSE 'paid' END,paid_at=COALESCE(paid_at,?) WHERE id=? AND account_id=? AND mode=?").bind(session.id,payment.id,account,mode,payment.id,now,id,account,mode),
+    ...(order.status==='pending'?[commercePurchaseEmailStatement(id,now)]:[]),
+  ]);
   // A sale advances an existing lead; purchase alone never grants marketing consent.
   await db.prepare("UPDATE growth_leads SET status='won',updated_at=? WHERE product_id=? AND owner=? AND email=? AND EXISTS(SELECT 1 FROM commerce_orders WHERE id=? AND status='paid' AND mode='live')").bind(now,order.product_id,order.owner,order.email,id).run();
   await enrollAutomationPurchase(id).catch(()=>{console.error('Purchase automation will retry during reconciliation.');});
@@ -260,11 +265,14 @@ export async function customerLibrary(req:Request,id?:string){return (await cust
 export async function customerProduct(req:Request,id:string) {
   const order=await customerOrder(req,id),product=await database().prepare('SELECT * FROM products WHERE id=? AND owner=?').bind(order.product_id,order.owner).first();if(!product)throw new ApiError('Product unavailable. Contact your creator.',404);
   const frozen=await builderOrderDelivery(id),content=frozen||contentSchema.parse(JSON.parse(String(product.content))),offer=frozen||await getCommerceOffer(String(order.product_id),String(order.owner));
-  const service=frozen?frozen.deliveryFamily==='service':isConsulting(String(product.format));
+  const format=frozen?.format||String(product.format),presentation=builderBuyerPresentation(frozen,format);
+  const service=presentation.deliveryFamily==='service';
   const booking=await database().prepare("SELECT b.id,b.intake,b.status,s.starts_at,s.ends_at FROM commerce_bookings b JOIN commerce_slots s ON s.id=b.slot_id WHERE b.order_id=? AND b.status='confirmed'").bind(id).first();
   const slots=service?(await database().prepare("SELECT s.id,s.starts_at,s.ends_at FROM commerce_slots s WHERE s.product_id=? AND s.starts_at>? AND NOT EXISTS(SELECT 1 FROM commerce_bookings b WHERE b.slot_id=s.id AND b.status='confirmed' AND b.mode=?) ORDER BY s.starts_at LIMIT 100").bind(order.product_id,Date.now(),order.mode).all()).results:[];
-  return {id,title:frozen?.title||String(product.title),format:frozen?.format||String(product.format),sections:content.sections,files:(content.files||[]).map(f=>({name:f.name,description:f.description})),downloads:await builderDownloadMetadata(id,String(order.product_id),String(order.owner)),service,serviceScope:frozen?.serviceScope||'',preparation:frozen?.preparation||'',communityUrl:frozen?.deliveryFamily==='community'&&safeDeliveryUrl(frozen.communityUrl)?frozen.communityUrl:'',intakePrompt:offer.intakePrompt,meetingUrl:booking?offer.meetingUrl:'',booking,slots};
+  const cover=await builderBuyerCover(order,frozen);
+  return {id,title:frozen?.title||String(product.title),format,...presentation,coverUrl:cover?`/api/commerce/customer/${encodeURIComponent(id)}/cover`:null,deliveryEmail:await purchaseEmailState(id),sections:content.sections,files:(content.files||[]).map(f=>({name:f.name,description:f.description})),downloads:await builderDownloadMetadata(id,String(order.product_id),String(order.owner)),service,serviceScope:frozen?.serviceScope||'',preparation:frozen?.preparation||'',communityUrl:presentation.deliveryFamily==='community'&&safeDeliveryUrl(frozen?.communityUrl||'')?frozen!.communityUrl:'',intakePrompt:offer.intakePrompt,meetingUrl:booking?offer.meetingUrl:'',booking,slots};
 }
+export async function customerCover(req:Request,id:string){const order=await customerOrder(req,id);return builderPrivateCover(order);}
 export async function customerFile(req:Request,id:string,name:string) {
   const order=await customerOrder(req,id),frozen=await builderOrderDelivery(id),product=frozen?null:await database().prepare('SELECT content FROM products WHERE id=? AND owner=?').bind(order.product_id,order.owner).first();if(!frozen&&!product)throw new ApiError('File not found.',404);const file=(frozen||contentSchema.parse(JSON.parse(String(product!.content)))).files?.find(f=>f.name===name);if(!file)throw new ApiError('File not found.',404);
   return new Response(file.content,{headers:{'Content-Type':'application/octet-stream','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(name)}`,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});

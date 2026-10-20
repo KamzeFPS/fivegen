@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {money,type Product} from "@/lib/product";
 import {CreditsPanel} from "./credits-panel";
+import {PurchaseEmailStatus} from './purchase-email-status';
 import type {CreditBalance} from "@/lib/credit-policy";
 import type { ProviderConfig } from "@/lib/ai";
 import './settings-experience.css';
@@ -70,9 +71,10 @@ type Settings = {
 export function AIProviders({signedIn,onUpdate}:{signedIn:boolean;onUpdate:()=>void}){
   const [s,setS]=useState<Settings|null>(null),[keys,setKeys]=useState({openai:"",anthropic:"",fal:"",resend:""}),[busy,setBusy]=useState(false),[error,setError]=useState("");
   const [metrics,setMetrics]=useState<{fees:number;creditSales:number;subscriptions:number;todayBudgetUsed:number;accounts:number}|null>(null);
+  const [emailStatusRevision,setEmailStatusRevision]=useState(0);
   async function load(){if(!signedIn)return;setError('');try{const settings=await request<Settings>("/api/providers");setS(settings);if(settings.admin)setMetrics(await request("/api/admin"));}catch(e){setError((e as Error).message);}}
   useEffect(()=>{void load();},[signedIn]);
-  async function save(remove?:"openai"|"anthropic"|"fal"|"resend"){if(!s)return;setBusy(true);setError("");try{await request("/api/providers","PUT",{config:s.config,...keys,remove});setKeys({openai:"",anthropic:"",fal:"",resend:""});await load();onUpdate();toast.success("Platform AI settings saved");}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+  async function save(remove?:"openai"|"anthropic"|"fal"|"resend"){if(!s)return;setBusy(true);setError("");try{await request("/api/providers","PUT",{config:s.config,...keys,remove});setKeys({openai:"",anthropic:"",fal:"",resend:""});await load();setEmailStatusRevision(value=>value+1);onUpdate();toast.success("Platform AI settings saved");}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
   if(!s&&signedIn)return <section className="platform-settings"><header className="platform-settings-heading"><h1>Platform settings</h1><p>Manage FiveGen’s AI providers and platform controls.</p></header>{error?<div className="platform-settings-load" role="alert"><p>{error}</p><button className="button secondary" onClick={()=>void load()}>Try again</button></div>:<div className="platform-settings-load" role="status"><Loader2 className="spin" size={20}/><p>Loading platform settings…</p></div>}</section>;
   if(!s?.admin)return <CreditsPanel signedIn={signedIn}/>;
   const names={openai:'OpenAI',anthropic:'Anthropic',fal:'fal.ai',resend:'Resend'};
@@ -89,6 +91,7 @@ export function AIProviders({signedIn,onUpdate}:{signedIn:boolean;onUpdate:()=>v
     </div></section>
     <div className="platform-settings-save"><button className="button primary" disabled={busy||!s.secure} onClick={()=>void save()}>{busy?<Loader2 className="spin" size={16}/>:<ShieldCheck size={16}/>}Save platform settings</button><p>Changes take effect after you save.</p></div>{!s.secure&&<p className="field-help">Encrypted credential storage needs to be configured on the server.</p>}
     </fieldset>
+    <PurchaseEmailStatus revision={emailStatusRevision}/>
     <details className="credit-history"><summary>Credit pricing and capacity</summary><p>One-time packs: $15 for 1,000 credits, $35 for 2,500, or $75 for 6,000. Three complete AI product runs per account are included each UTC month. The daily AI spending cap applies to standard accounts; unlimited owner access is exempt, with provider usage still recorded; monitor usage and provider costs as your audience grows.</p><p>Subscription credits and one-time packs power images, videos, and individual rewrites. AI products beyond the monthly allowance use credits per completed step.</p></details>
   </section></div>;
 }

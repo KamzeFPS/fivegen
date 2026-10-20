@@ -85,6 +85,10 @@ try{
   const draft=completeDraft(workspace);Object.assign(draft,{sections:[],files:[],uploadIds:[original]});workspace=await save(workspace,draft);
   assert.equal(workspace.draft.sections.length,0);publishedReady(workspace,`${type} original upload`);
   workspace=await publication.publishBuilderProduct(workspace.product.id,owner,{expectedVersion:workspace.version});
+  const purchasedPresentation=(await deps.builderPublishedDelivery(workspace.product.id)).snapshot;
+  assert.equal(purchasedPresentation.builderType,type,'Published delivery freezes the dedicated builder type');
+  assert.equal(purchasedPresentation.description,workspace.draft.description,'Published delivery includes the reviewed product description');
+  assert.equal(purchasedPresentation.usageInstructions,workspace.draft.fields.usageInstructions,'Buyer instructions survive publication serialization');
   const publicPage=await publication.getPublicBuilderProduct(workspace.product.slug);assert.equal(JSON.stringify(publicPage).includes(original),false,`${type}: the original file identity is private`);
   const missingDraft={...workspace.draft,uploadIds:[]};const missing=await save(workspace,missingDraft);assert.equal(missing.readiness.publishReady,false,`${type}: removing its sole original blocks publication`);
  }

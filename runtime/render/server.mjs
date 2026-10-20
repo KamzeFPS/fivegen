@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { getStorage } from './storage.mjs';
 import { createAuth, stripHeaders } from './auth.mjs';
 import { createPaddleWebhookIpGuard } from './paddle-webhook-ips.mjs';
+import {initializePurchaseEmailDispatchSecret,startPurchaseEmailWorker} from './purchase-email-worker.mjs';
 
 export function readConfig(source = process.env) {
   const origin = new URL(source.APP_ORIGIN || source.RENDER_EXTERNAL_URL || '');
@@ -40,6 +41,7 @@ export async function start() {
   process.env.APP_ORIGIN = config.origin;
   process.env.MCP_ORIGIN = config.origin;
   process.env.VINEXT_TRUST_PROXY = '1';
+  initializePurchaseEmailDispatchSecret();
   const storage = getStorage();
   const auth = createAuth(config, storage);
   const allowPaddleWebhookSource = createPaddleWebhookIpGuard();
@@ -132,10 +134,14 @@ export async function start() {
   };
   const dispatchTimer = setInterval(() => { void dispatch(); }, 60000);
   dispatchTimer.unref();
+  // Transactional confirmations are independent of optional marketing queues.
+  const purchaseEmailWorker=startPurchaseEmailWorker(config);
+  server.once('close',()=>purchaseEmailWorker.stop());
   const shutdown = () => {
     if (stopping) return;
     stopping = true;
     clearInterval(dispatchTimer);
+    purchaseEmailWorker.stop();
     server.close(() => { storage.close(); process.exit(0); });
     server.closeIdleConnections();
     // Exit before Render's default 30-second limit for disk-backed services.

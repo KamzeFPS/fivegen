@@ -46,8 +46,10 @@ async function load(path, selectedExports) {
 for (const path of ['lib/commerce.ts', 'lib/experience.ts', 'lib/product.ts', 'lib/product-presets.ts', 'lib/file-sale-contract.ts', 'lib/credit-policy.ts', 'lib/upload-validation.ts', 'lib/export.ts', 'lib/bundle.ts']) Object.assign(dependencies, await load(path));
 Object.assign(dependencies, await load('lib/server.ts', ['productFromRow']));
 const sales = await load('lib/file-sales.ts'); Object.assign(dependencies, sales);
+Object.assign(dependencies,await load('lib/purchase-email.ts'));
 Object.assign(dependencies, await load('lib/payments.ts'));
 Object.assign(dependencies, await load('lib/access.ts'));
+Object.assign(dependencies, await load('lib/builder-contract.ts'));
 Object.assign(dependencies, await load('lib/builder-publication-contract.ts'));
 Object.assign(dependencies, await load('lib/builder-delivery-server.ts'));
 const uploadRoute = await load('app/api/uploads/[id]/route.ts');

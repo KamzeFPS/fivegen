@@ -58,6 +58,8 @@ Email delivery requires the administrator's Resend configuration, a verified `EM
 
 The Blueprint keeps `AUTOMATIONS_WORKER_ENABLED=false`. When deliberately enabled with a worker secret, the Render process dispatches at most five queued messages once per minute. Marketing messages require consent and stop after unsubscribe or a verified live purchase. Purchase onboarding requires a verified live order. Durable jobs catch up after restarts; paused sequences do not send.
 
+New verified-live purchase confirmations use their own worker and do not enable or drain marketing automations. With Resend, a verified sender and canonical HTTPS `APP_ORIGIN` configured, the production server processes at most two purchase confirmations per minute. Its private loopback credential is generated in memory at startup; it is never returned to the client or written to logs. `PURCHASE_EMAILS_WORKER_ENABLED=false` pauses this independent timer. The durable outbox survives restart and retains the same provider idempotency identity. Check readiness and delivery counts in Platform settings → Purchase confirmations. Sandbox and legacy file-offer confirmations stay suppressed.
+
 An external scheduler can also call `/api/automations/dispatch` with the worker secret. Disabling the Render timer does not disable a separately configured scheduler, so inspect both when pausing delivery. See the [README email configuration](../README.md#email-delivery-and-runtime) for details.
 
 ## Data and operations
