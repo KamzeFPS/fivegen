@@ -1,4 +1,5 @@
 import {randomBytes} from 'node:crypto';
+import {loopbackRequest} from './loopback-http.mjs';
 
 // This credential is only for this process's loopback requests. A restart can
 // rotate it safely: email jobs and provider idempotency are stored separately.
@@ -6,7 +7,7 @@ export function initializePurchaseEmailDispatchSecret(source=process.env){
   if(!source.PURCHASE_EMAIL_DISPATCH_SECRET?.trim())source.PURCHASE_EMAIL_DISPATCH_SECRET=randomBytes(32).toString('base64url');
 }
 
-export function startPurchaseEmailWorker(config,{source=process.env,fetcher=fetch,interval=setInterval,clear=clearInterval,log=console.error}={}){
+export function startPurchaseEmailWorker(config,{source=process.env,fetcher=loopbackRequest,interval=setInterval,clear=clearInterval,log=console.error}={}){
   let stopped=false,dispatching=false;
   const tick=async()=>{
     if(stopped||dispatching||source.PURCHASE_EMAILS_WORKER_ENABLED==='false'||(source.PURCHASE_EMAIL_DISPATCH_SECRET||'').length<32)return;

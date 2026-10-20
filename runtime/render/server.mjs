@@ -2,10 +2,12 @@ import { readFileSync } from 'node:fs';
 import { statfs } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {randomBytes} from 'node:crypto';
 import { getStorage } from './storage.mjs';
 import { createAuth, stripHeaders } from './auth.mjs';
 import { createPaddleWebhookIpGuard } from './paddle-webhook-ips.mjs';
 import {initializePurchaseEmailDispatchSecret,startPurchaseEmailWorker} from './purchase-email-worker.mjs';
+import {loopbackRequest} from './loopback-http.mjs';
 
 export function readConfig(source = process.env) {
   const origin = new URL(source.APP_ORIGIN || source.RENDER_EXTERNAL_URL || '');
@@ -42,8 +44,12 @@ export async function start() {
   process.env.MCP_ORIGIN = config.origin;
   process.env.VINEXT_TRUST_PROXY = '1';
   initializePurchaseEmailDispatchSecret();
+  if(!process.env.AUTH_EMAIL_DISPATCH_SECRET?.trim())process.env.AUTH_EMAIL_DISPATCH_SECRET=randomBytes(32).toString('base64url');
   const storage = getStorage();
-  const auth = createAuth(config, storage);
+  const auth = createAuth(config, storage,{sendEmail:async payload=>{
+    const response=await loopbackRequest(`http://127.0.0.1:${config.port}/api/auth/email-delivery`,{method:'POST',headers:{Host:new URL(config.origin).host,Authorization:`Bearer ${process.env.AUTH_EMAIL_DISPATCH_SECRET}`,'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(20000)});
+    return response.ok;
+  }});
   const allowPaddleWebhookSource = createPaddleWebhookIpGuard();
   const { startProdServer } = await import('vinext/server/prod-server');
   // Initialize Vinext on loopback, then install our authentication boundary
@@ -88,6 +94,7 @@ export async function start() {
       let routePath;
       try { routePath = decodeURIComponent(url.pathname).replace(/\/+$/, ''); }
       catch { res.writeHead(400); res.end(); return; }
+      if(['/signin','/signup','/forgot-password','/verify-email','/reset-password'].includes(routePath)||routePath.startsWith('/api/auth/')){res.setHeader('Cache-Control','private, no-store');res.setHeader('Referrer-Policy','no-referrer');}
       const fileSalePage=process.env.FIVEGEN_FILE_SALES_ENABLED==='true'&&process.env.STRIPE_MODE==='test'&&/^\/p\/[^/]+$/.test(routePath);
       if ((productHost && host !== authority.host && !['www','app'].includes(host.slice(0,-domain.length-1))) || (!fileSalePage&&/^\/(?:p|f|r|invite|partners)(?:\/|$)/.test(routePath)) || /^\/api\/(?:checkout|quote|connect\/stripe|referrals|invite|leads|visits|crm)(?:\/|$)/.test(routePath) || /^\/api\/products\/[^/]+\/slots(?:\/|$)/.test(routePath)) { res.writeHead(410,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:'FiveGen is a private AI creation studio. Storefronts, seller payments, referrals and payouts are no longer available.'}));return; }
       if (routePath === '/api/webhooks/paddle' && process.env.PADDLE_ENVIRONMENT === 'production') {

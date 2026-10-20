@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { createServer } from 'node:net';
 import { request as httpRequest } from 'node:http';
 import { randomBytes, createHmac } from 'node:crypto';
@@ -86,7 +86,13 @@ try {
   const alias = await requestHost('fivegen-integration.onrender.com', '/?connect=mcp');
   assert.equal(alias.status, 308);
   assert.equal(alias.location, base + '/?connect=mcp');
-  const signIn = await fetch(base + '/signin-with-chatgpt', { redirect: 'manual' });
+  const signInReturnTo = '/customer?order=local-auth-return-fixture';
+  const signInGateway = await fetch(base + '/signin-with-chatgpt?return_to=' + encodeURIComponent(signInReturnTo), { redirect: 'manual' });
+  assert.equal(signInGateway.status, 303);
+  assert.equal(signInGateway.headers.get('location'), '/signin?return_to=' + encodeURIComponent(signInReturnTo), 'Legacy sign-in links preserve the requested destination through the chooser');
+  assert.equal(signInGateway.headers.getSetCookie().length, 0, 'The chooser does not start Google OAuth');
+  const signIn = await fetch(base + '/signin-with-chatgpt?provider=google', { redirect: 'manual' });
+  assert.equal(signIn.status, 302);
   assert.equal(new URL(signIn.headers.get('location')).searchParams.get('redirect_uri'), base + '/callback');
   async function event(livemode, valid = true) {
     const body = JSON.stringify({ id: 'evt_local_' + livemode, type: 'integration.noop', livemode, data: { object: {} } });
@@ -205,5 +211,9 @@ try {
   assert.equal((await fetch(base + '/api/download/' + product.slug + '?token=unverified')).status, 403, 'A zero-price private product never becomes a legacy free download');
   console.log('Passed: actual Render production server, authentication and current terms, private creator-authored products, explicit growth publication/unpublication, scoped bundles/media, Stripe signature/mode checks, disabled Connect fail-closed behavior, retired routes, MCP discovery, and database/media/session persistence across restart. Isolated credentials; no provider requests, email sends, or payments.');
 } finally {
-  await stop(); storage?.close(); rmSync(root, { recursive: true, force: true });
+  await stop(); storage?.close();
+  const fixture = resolve(root);
+  assert.equal(dirname(fixture), resolve(tmpdir()));
+  assert.match(basename(fixture), /^fivegen-production-/);
+  rmSync(fixture, { recursive: true, force: true });
 }

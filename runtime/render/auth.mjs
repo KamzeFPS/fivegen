@@ -1,5 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import {createEmailAuth} from './email-auth.mjs';
 
 const GOOGLE_KEYS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 const authPaths = new Set(['/signin-with-chatgpt', '/signout-with-chatgpt', '/callback']);
@@ -8,9 +9,10 @@ export const digest = value => createHash('sha256').update(value).digest('base64
 const equal = (a, b) => typeof a === 'string' && typeof b === 'string' && timingSafeEqual(Buffer.from(digest(a)), Buffer.from(digest(b)));
 
 export function safeReturn(value) {
-  if (!value?.startsWith('/') || value.startsWith('//')) return '/';
+  if (typeof value!=='string'||!value.startsWith('/') || value.startsWith('//')||/[\\\u0000-\u001f\u007f]/.test(value)) return '/';
   const url = new URL(value, 'https://fivegen.invalid');
-  return url.origin === 'https://fivegen.invalid' && !authPaths.has(url.pathname)
+  let path;try{path=decodeURIComponent(url.pathname).replace(/\/+$/,'');}catch{return '/';}
+  return url.origin === 'https://fivegen.invalid' && !/[\\\u0000-\u001f\u007f]/.test(path)&&!authPaths.has(path)&&!['/signin','/signup','/forgot-password','/reset-password','/verify-email','/api/auth'].includes(path)&&!path.startsWith('/api/auth/')
     ? url.pathname + url.search + url.hash : '/';
 }
 
@@ -62,13 +64,14 @@ async function exchangeCode(code, verifier, config) {
   return data.id_token;
 }
 
-export function createAuth(config, storage, { exchange = exchangeCode, verify = verifyGoogleToken } = {}) {
+export function createAuth(config, storage, { exchange = exchangeCode, verify = verifyGoogleToken,sendEmail } = {}) {
   const db = storage.sqlite;
   const secure = new URL(config.origin).protocol === 'https:';
   const sessionName = secure ? '__Host-fivegen-session' : 'fivegen-local-session';
   const flowName = secure ? '__Host-fivegen-flow' : 'fivegen-local-flow';
   const sessionSeconds = 30 * 24 * 3600;
   const makeCookie = (name, value, seconds) => `${name}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${seconds}${secure ? '; Secure' : ''}`;
+  const emailAuth=createEmailAuth(config,storage,{safeReturn,sessionName,makeCookie,sessionSeconds,currentSession:req=>cookie(req,sessionName),sendEmail});
   let nextCleanup = 0;
   function cleanup() {
     const now = Date.now();
@@ -98,6 +101,7 @@ export function createAuth(config, storage, { exchange = exchangeCode, verify = 
   async function handle(req, res, url) {
     cleanup();
     attachIdentity(req);
+    if(await emailAuth.handle(req,res,url))return true;
     if (!authPaths.has(url.pathname)) return false;
     res.setHeader('Cache-Control', 'private, no-store');
     res.setHeader('Referrer-Policy', 'no-referrer');
@@ -124,6 +128,7 @@ export function createAuth(config, storage, { exchange = exchangeCode, verify = 
         res.setHeader('Set-Cookie', [makeCookie(sessionName, '', 0), makeCookie(flowName, '', 0)]);
         res.writeHead(303, { Location: safeReturn(url.searchParams.get('return_to')) }); res.end();
       } else if (url.pathname === '/signin-with-chatgpt') {
+        if(url.searchParams.get('provider')!=='google'){res.writeHead(303,{Location:'/signin?return_to='+encodeURIComponent(safeReturn(url.searchParams.get('return_to')))});res.end();return true;}
         // Bound pending state to one browser, and cap outstanding state growth.
         if (db.prepare('SELECT COUNT(*) n FROM render_auth_flows').get().n >= 10000) { fail(res, 429); return true; }
         const state = token(), browser = token(), verifier = token(), nonce = token();
@@ -154,6 +159,7 @@ export function createAuth(config, storage, { exchange = exchangeCode, verify = 
           .get(digest(state), digest(browser), Date.now());
         if (!consumed) throw new Error('Invalid or expired authorization');
         const current = cookie(req, sessionName), session = token();
+        db.prepare('INSERT INTO render_google_identities(user_id,subject,email,name,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET email=excluded.email,name=excluded.name,updated_at=excluded.updated_at').run(user.userId,user.userId.slice(7),user.email,user.name,Date.now());
         if (current) db.prepare('DELETE FROM render_sessions WHERE hash=?').run(digest(current));
         db.prepare('INSERT INTO render_sessions VALUES (?,?,?,?,?)')
           .run(digest(session), user.userId, user.email, user.name, Date.now() + sessionSeconds * 1000);

@@ -13,7 +13,7 @@ For an existing service, update that service and preserve its disk, `FIVEGEN_DAT
 For a new deployment:
 
 1. Put this checkout in a repository that the intended Render account can access. Keep `.dev.vars`, `.env*`, `.wrangler`, and `outputs` out of version control; `.env.example` contains names and defaults only.
-2. Create a Google **Web application** OAuth client and configure its consent screen. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Render sign-in uses Google. Register the exact redirect URI `https://www.fivegen.ai/callback`, or the corresponding callback on your canonical domain, and set `APP_ORIGIN` to that HTTPS origin. Publish the Google consent app for external users or add test users while it is in testing.
+2. Create a Google **Web application** OAuth client and configure its consent screen. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Render supports Google and verified email/password sign-in. Register the exact redirect URI `https://www.fivegen.ai/callback`, or the corresponding callback on your canonical domain, and set `APP_ORIGIN` to that HTTPS origin. Publish the Google consent app for external users or add test users while it is in testing.
 3. In Render, choose **New → Blueprint**, select the repository, and use the root `render.yaml`. Review the service and persistent-disk costs before creating resources. Render generates `CREDENTIAL_ENCRYPTION_KEY` for a new database; preserve it in secure disaster recovery.
 4. Deploy. Startup applies pending SQL migrations transactionally, checks existing migration checksums, and starts the server on `0.0.0.0:$PORT`. Migrations run at startup because service disks are unavailable during build and pre-deploy commands. `/healthz` checks database access and free disk space.
 
@@ -31,7 +31,7 @@ If the page returns 421 with `Unrecognized host` while `/healthz` returns 200, t
 
 ## AI configuration
 
-Sign in with a Google-verified email listed in `ADMIN_EMAILS` to use administration. Add the shared AI credentials there, or use server environment variables such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `FAL_KEY`. Ordinary creators do not supply API keys. Preserve existing provider settings when deploying this release.
+Sign in with a verified email listed in `ADMIN_EMAILS` to use administration. Add the shared AI credentials there, or use server environment variables such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `FAL_KEY`. Ordinary creators do not supply API keys. Preserve existing provider settings when deploying this release.
 
 Manual product creation does not consume AI credits. Paid AI actions use the existing credit controls and configured providers. Creator-authored lessons and recordings stay private; publishing a funnel exposes an explicit landing-page snapshot and selected VSL. Course checkout checks that the saved content is ready, including completed lesson recordings.
 
@@ -79,3 +79,14 @@ Use Node 24.13 or newer. Build with `npm run build:render`; then run the validat
 Never put credentials in `render.yaml` or version control. The default `npm run dev` and `npm run build` use the Cloudflare target. Both targets share `dist`, so rebuild for the intended target before starting it. The Render start command checks the build marker to reject Worker artifacts.
 
 References: [Render Blueprint fields](https://render.com/docs/blueprint-spec), [persistent disks](https://render.com/docs/disks), [Google OpenID Connect](https://developers.google.com/identity/openid-connect/openid-connect), [Stripe Accounts v2 configuration](https://docs.stripe.com/connect/accounts-v2/connected-account-configuration), [Connect webhooks](https://docs.stripe.com/connect/webhooks), [restricted API keys](https://docs.stripe.com/keys/restricted-api-keys).
+
+
+## Email and password sign-in
+
+`/signin` and `/signup` offer email/password alongside Google. Existing `/signin-with-chatgpt` links open this choice; `?provider=google` starts the unchanged Google OAuth flow. Keep the existing Google OAuth credentials and callback configuration.
+
+Email signup requires name, email, and a 15–128 character password. Verification links expire after 24 hours and require the chosen signup password. No unverified account receives a session or buyer access. `/forgot-password` can recover an account whose signup password is unknown; reset links expire after 30 minutes, are single-use, and require an explicit new password. Password reset signs out all of that account's browser sessions and revokes its connected-assistant credentials. Users then sign in again. Existing Google ownership IDs and orders remain unchanged. Google-only users continue with Google; adding a password to that workspace requires signing in with Google first and explicitly completing password signup/verification with that account's email.
+
+Passwords use unique salts and bounded asynchronous scrypt. Only token hashes are stored; raw verification/reset links are sent privately through the configured Resend sender. Used/expired token metadata is cleared after seven days; hashed rate-limit metadata after two days. Auth emails require the same encrypted Resend connection as purchase confirmations. No new Render secret is needed: the production process generates a private, process-only credential for its loopback delivery bridge. These emails are separate from marketing and do not opt anyone into campaigns.
+
+The append-only migration `0024_email_password_auth.sql` preserves existing sessions and Google owner IDs. Preserve the database, media disk, provider settings, and encryption key on deployment. After building, run `npm run test:auth`, `npm run test:render`, `npm run test:auth:integration`, and `npm run test:render:integration`. The integration checks use retained synthetic databases and no external emails or payments.
