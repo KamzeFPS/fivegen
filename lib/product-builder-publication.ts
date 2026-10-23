@@ -3,8 +3,12 @@ import {ApiError,database,ownedProduct} from './server';
 import {getBuilderWorkspace,builderReadiness} from './product-builder-server';
 import {builderPublicSnapshotSchema,builderDeliverySnapshotSchema} from './builder-publication-contract';
 import {builderPdfUpdateGrantStatement} from './builder-delivery-server';
-import {getCommerceOffer,saveCommerceOffer,publicCommerceOffer,commerceSlots} from './commerce-v2-server';
+import {getCommerceOffer,saveCommerceOffer,publicCommerceOffer,commerceSlots,commerceMode} from './commerce-v2-server';
 import {builderFamily} from './builder-contract';
+import {publicStudio,studioPricing} from './product-studio-contract';
+import {publicFreeStudioOffer} from './product-studio-commerce';
+import {curriculumOrder} from './product-curriculum';
+import {assertServiceIntegrationReady} from './service-integrations-server';
 
 export async function getBuilderPublication(productId:string,owner:string){
  await ownedProduct(productId,owner);
@@ -18,10 +22,15 @@ export async function publishBuilderProduct(productId:string,owner:string,input:
  const {draft,product}=workspace;
  const verified=await builderReadiness(productId,owner,draft,true);
  if(!verified.publishReady)throw new ApiError(verified.checks.find(check=>!check.ready)?.message||'A product file could not be verified. Upload it again before publishing.',409);
- const snapshot=builderPublicSnapshotSchema.parse({title:draft.title,description:draft.description,audience:draft.audience,format:product.format,benefits:product.content.benefits,outline:draft.sections.map(section=>section.title),priceCents:draft.priceCents,currency:draft.currency,hasCover:!!draft.coverUploadId});
+ const pricing=studioPricing(draft.studio);
+ if(pricing.bundleProductIds.includes(productId))throw new ApiError('A bundle cannot contain itself.');
+ for(const includedId of pricing.bundleProductIds){await ownedProduct(includedId,owner);const included=await database().prepare('SELECT product_id FROM product_builder_publications WHERE product_id=? AND owner=?').bind(includedId,owner).first();if(!included)throw new ApiError('Publish each included product before adding it to a bundle.');}
+ const orderedSections=draft.studio?.course?.modules?curriculumOrder(draft.sections,draft.studio.course.modules):draft.sections;
+ const displayPriceCents=draft.studio?.community?.tiers?.length?Math.min(...draft.studio.community.tiers.map(tier=>tier.priceCents)):draft.priceCents;
+ const snapshot=builderPublicSnapshotSchema.parse({title:draft.title,description:draft.description,audience:draft.audience,format:product.format,benefits:product.content.benefits,outline:orderedSections.map(section=>section.title),priceCents:displayPriceCents,currency:draft.currency,hasCover:!!draft.coverUploadId,studio:publicStudio(draft.studio),preview:draft.sections.filter(section=>section.id&&draft.studio?.sales?.previewSectionIds?.includes(section.id)).slice(0,5).map(section=>({title:section.title,body:section.body}))});
  const family=builderFamily(draft);
- const sections=family==='community'&&!draft.sections.length?[{title:'Welcome to the community',body:draft.fields.welcome||''},{title:'Our community guidelines',body:draft.fields.rules||''}]:draft.sections;
- const delivery=builderDeliverySnapshotSchema.parse({title:draft.title,format:product.format,sections,files:draft.files,uploadIds:draft.uploadIds,meetingUrl:draft.fields.meetingUrl||'',intakePrompt:draft.fields.intakePrompt||'What would you like help with?',deliveryFamily:family,communityUrl:draft.fields.communityUrl||'',serviceScope:draft.fields.serviceScope||'',preparation:draft.fields.preparation||'',builderType:draft.type,description:draft.description,coverUploadId:draft.coverUploadId,welcome:draft.fields.welcome||'',rules:draft.fields.rules||'',usageInstructions:draft.fields.usageInstructions||'',compatibleTools:draft.fields.compatibleTools||'',dailyTime:draft.fields.dailyTime||'',completionCriteria:draft.fields.completionCriteria||''});
+ const sections=family==='community'&&!draft.sections.length?[{title:'Welcome to the community',body:draft.fields.welcome||''},{title:'Our community guidelines',body:draft.fields.rules||''}]:orderedSections;
+ const delivery=builderDeliverySnapshotSchema.parse({studio:draft.studio,title:draft.title,format:product.format,sections,files:draft.files,uploadIds:draft.uploadIds,meetingUrl:draft.fields.meetingUrl||'',intakePrompt:draft.fields.intakePrompt||'What would you like help with?',deliveryFamily:family,communityUrl:draft.fields.communityUrl||'',serviceScope:draft.fields.serviceScope||'',preparation:draft.fields.preparation||'',builderType:draft.type,description:draft.description,coverUploadId:draft.coverUploadId,welcome:draft.fields.welcome||'',rules:draft.fields.rules||'',usageInstructions:draft.fields.usageInstructions||'',compatibleTools:draft.fields.compatibleTools||'',dailyTime:draft.fields.dailyTime||'',completionCriteria:draft.fields.completionCriteria||''});
  const now=Date.now(),db=database(),previous=await getBuilderPublication(productId,owner);
  if(previous?.version===expectedVersion)return getBuilderWorkspace(productId,owner);
  const results=await db.batch([
@@ -48,12 +57,23 @@ export async function setBuilderSelling(productId:string,owner:string,input:unkn
  const value={enabled:request.enabled,expectedUpdatedAt:currentOffer.updatedAt,amount:request.enabled?publication?.snapshot.priceCents||0:currentOffer.amount,currency:publication?.snapshot.currency??workspace.draft.currency,intakePrompt:delivery?.intakePrompt||'',meetingUrl:delivery?.meetingUrl||''};
  if(value.enabled){
   if(!publication)throw new ApiError('Publish your product page before starting sales.',409);
-  if(publication.snapshot.priceCents<50)throw new ApiError('Set a price of at least 0.50 in your selected currency, then publish the update before starting sales.',409);
+  const pricing=studioPricing(workspace.draft.studio);
+  if(pricing.model!=='free'&&!workspace.draft.studio?.community?.tiers?.some(tier=>tier.billing==='free')&&publication.snapshot.priceCents<50)throw new ApiError('Set a price of at least 0.50, or choose free access, then publish the update.',409);
   if(publication.version!==workspace.version)throw new ApiError('Publish your latest changes before starting sales.',409);
   if(value.amount!==publication.snapshot.priceCents||value.currency!==publication.snapshot.currency)throw new ApiError('Publish your updated price before starting sales.',409);
   const family=builderFamily(workspace.draft);
-  if(family==='community'&&!validPrivateUrl(workspace.draft.fields.communityUrl||''))throw new ApiError('Add an HTTPS community invitation URL before selling membership access. It will be delivered privately after payment.',409);
-  if(family==='service'&&!(await commerceSlots(productId,owner)).some(slot=>!slot.booked&&slot.startsAt>Date.now()))throw new ApiError('Add at least one available session time before selling this service.',409);
+  const custom=workspace.draft.studio?.custom,mixedSessions=(custom?.deliveryKinds as string[]|undefined)?.includes('sessions')||(custom?.blocks as {kind?:string}[]|undefined)?.some(block=>block.kind==='session'),mixedCommunity=(custom?.deliveryKinds as string[]|undefined)?.includes('community');
+  if((family==='community'||mixedCommunity)&&!workspace.draft.studio?.community?.enabled&&!validPrivateUrl(workspace.draft.fields.communityUrl||''))throw new ApiError('Set up your community space or add a private HTTPS invitation link.',409);
+  if(family==='service'||mixedSessions){await assertServiceIntegrationReady(owner,workspace.draft.studio?.service||{});if(!['jitsi','google-meet','zoom'].includes(workspace.draft.studio?.service?.meetingProvider||'manual')&&!validPrivateUrl(workspace.draft.studio?.service?.meetingUrl||workspace.draft.fields.meetingUrl||''))throw new ApiError('Add a private meeting link or choose automatic meeting links before enabling access.',409);if(!(await commerceSlots(productId,owner)).some(slot=>!slot.booked&&slot.startsAt>Date.now()))throw new ApiError('Add at least one available session time before selling this service.',409);}
+ }
+ if(studioPricing(workspace.draft.studio).model==='free'||workspace.draft.studio?.community?.tiers?.some(tier=>tier.billing==='free')){
+  if(request.enabled&&publication?.snapshot.priceCents!==0)throw new ApiError('Set the price to zero and publish before offering free access.',409);
+  const mode=commerceMode(),now=Math.max(Date.now(),currentOffer.updatedAt+1),guard='(?=0 OR EXISTS(SELECT 1 FROM product_builder_workspaces w JOIN product_builder_publications p ON p.product_id=w.product_id AND p.owner=w.owner WHERE w.product_id=? AND w.owner=? AND w.version=? AND p.version=w.version))',db=database();
+  const result=currentOffer.updatedAt===0?
+   await db.prepare(`INSERT OR IGNORE INTO commerce_offers(product_id,owner,enabled,enabled_mode,amount,currency,intake_prompt,meeting_url,updated_at) SELECT ?,?,?,?,0,?,?,?,? WHERE ${guard}`).bind(productId,owner,+request.enabled,mode,workspace.draft.currency,value.intakePrompt,value.meetingUrl,now,+request.enabled,productId,owner,request.expectedVersion).run():
+   await db.prepare(`UPDATE commerce_offers SET enabled=?,enabled_mode=?,amount=0,currency=?,intake_prompt=?,meeting_url=?,updated_at=? WHERE product_id=? AND owner=? AND updated_at=? AND ${guard}`).bind(+request.enabled,mode,workspace.draft.currency,value.intakePrompt,value.meetingUrl,now,productId,owner,currentOffer.updatedAt,+request.enabled,productId,owner,request.expectedVersion).run();
+  if(!result.meta.changes)throw new ApiError('The product or access settings changed. Reload before enabling access.',409);
+  return getBuilderWorkspace(productId,owner);
  }
  // The existing server path verifies explicit platform enablement, the current
  // Stripe mode, refreshed merchant capabilities, published content and delivery.
@@ -64,6 +84,6 @@ function validPrivateUrl(value:string){try{const url=new URL(value);return url.p
 export async function getPublicBuilderProduct(slug:string){
  const row=await database().prepare('SELECT product_id,owner,version,slug,public_snapshot,published_at FROM product_builder_publications WHERE slug=?').bind(slug).first();
  if(!row)throw new ApiError('This product page is unavailable.',404);
- const offer=await publicCommerceOffer(slug);
+ const offer=await publicFreeStudioOffer(slug)||await publicCommerceOffer(slug);
  return {snapshot:builderPublicSnapshotSchema.parse(JSON.parse(String(row.public_snapshot))),productId:String(row.product_id),owner:String(row.owner),version:Number(row.version),slug:String(row.slug),publishedAt:Number(row.published_at),selling:!!offer,offer};
 }

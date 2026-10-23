@@ -4,6 +4,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {resolve} from 'node:path';
 import ts from 'typescript';
 import {z} from 'zod';
+import {unzipSync} from 'fflate';
 import {createStorage} from '../runtime/render/storage.mjs';
 import {fileSalePdfFixture} from './file-sale-pdf-fixture.mjs';
 import React from 'react';
@@ -17,8 +18,8 @@ const owner='builder-qa-owner',outsider='builder-qa-outsider';
 let providerCalls=0;
 class ApiError extends Error{constructor(message,status=400){super(message);this.status=status;}}
 const deps={
- z,createHash,ApiError,env:{BUCKET:storage.BUCKET},database:()=>storage.DB,
- binding:()=>'',
+ z,createHash,unzipSync,ApiError,env:{BUCKET:storage.BUCKET},database:()=>storage.DB,
+ binding:name=>name==='STRIPE_MODE'?'test':'',
  identity:async()=>({userId:owner,email:'builder-fixture@example.test'}),
  sameOrigin:()=>{},
  failure:error=>Response.json({error:error.message},{status:error.status||400}),
@@ -34,7 +35,7 @@ async function load(path,selectedExports){
  const code=`const {${Object.keys(deps).join(',')}}=globalThis.${key};\n`+ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;
  const result=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));delete globalThis[key];return result;
 }
-for(const path of ['lib/commerce.ts','lib/experience.ts','lib/product.ts','lib/commerce-v2.ts','lib/creator-plans.ts','lib/creator-plan-server.ts','lib/builder-contract.ts','lib/builder-assistant-contract.ts','lib/builder-revision-contract.ts','lib/product-readiness.ts','lib/builder-publication-contract.ts','lib/upload-validation.ts','lib/builder-delivery-server.ts','lib/commerce-v2-server.ts'])Object.assign(deps,await load(path));
+for(const path of ['lib/commerce.ts','lib/experience.ts','lib/product-curriculum.ts','lib/product-decision-contract.ts','lib/product-community-tier-contract.ts','lib/product-community-tiers.ts','lib/product-studio-contract.ts','lib/product-document-archive.ts','lib/product.ts','lib/commerce-v2.ts','lib/creator-plans.ts','lib/creator-plan-server.ts','lib/builder-contract.ts','lib/builder-assistant-contract.ts','lib/builder-revision-contract.ts','lib/product-readiness.ts','lib/builder-publication-contract.ts','lib/upload-validation.ts','lib/builder-delivery-server.ts','lib/service-integrations-crypto.ts','lib/service-integrations-oauth.ts','lib/service-integrations-server.ts','lib/commerce-v2-server.ts','lib/product-service-fulfillment.ts','lib/product-studio-commerce.ts'])Object.assign(deps,await load(path));
 Object.assign(deps,await load('lib/server.ts',['productFromRow']));
 const builder=await load('lib/product-builder-server.ts');Object.assign(deps,builder);
 const publication=await load('lib/product-builder-publication.ts');Object.assign(deps,publication);
@@ -244,6 +245,40 @@ try{
  const legacyCode=ts.transpileModule(legacyCallbacks.join('\n'),{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText,openLegacyPayments=new Function(...Object.keys(legacyDeps),legacyCode+';return openAccountPayments;')(...Object.values(legacyDeps));
  await openLegacyPayments();assert.equal(legacyNavigation.at(-1),'/account/payments?return_to='+encodeURIComponent('/?project='+legacyProduct.id+'&area=commerce'));assert.equal(legacyRequests.length,1);assert.equal(legacyRequests[0].path,'/api/commerce/products/'+legacyProduct.id);assert.equal(legacyRequests[0].init.method,'PATCH');assert.deepEqual(JSON.parse(legacyRequests[0].init.body),{...legacyOffer,expectedUpdatedAt:10});assert.equal(legacyUpdates[0].updatedAt,11,'Legacy product pricing is saved before opening account payments');
  legacySaveFailure=true;await assert.rejects(()=>openLegacyPayments(),/Save failed/);assert.equal(legacyNavigation.length,1,'Legacy save failures also prevent navigation and loss of checkout settings');
+ // New studio settings remain saveable while a creator types, and the actual
+ // publication boundary validates completed delivery rather than UI promises.
+ let cloudKit=await builder.createBuilderWorkspace(owner,{type:'template-kit',source:'manual',requestId:randomUUID()});
+ cloudKit=await save(cloudKit,{...completeDraft(cloudKit),sections:[],files:[],studio:{templates:{items:[{id:randomUUID(),name:'Client project planner',duplicateUrl:'https://templates.example.test/duplicate/project-planner'}]}}});
+ publishedReady(cloudKit,'A usable cloud-only template with instructions');
+ assert.equal(deps.evaluateProductReadiness(cloudKit.draft).ready,true,'Cloud templates do not require a redundant uploaded file');
+ cloudKit=await publication.publishBuilderProduct(cloudKit.product.id,owner,{expectedVersion:cloudKit.version});assert.ok(cloudKit.publication);
+
+ let quizOnly=await builder.createBuilderWorkspace(owner,{type:'mini-course',source:'manual',requestId:randomUUID()});
+ quizOnly=await save(quizOnly,{...completeDraft(quizOnly),sections:[{id:randomUUID(),title:'Choose a concrete project goal',body:'',studio:{kind:'quiz',quiz:[{question:'Which goal can you verify?',options:['Send one finished project brief','Think about a project'],correctIndex:0,explanation:'A finished brief is a visible result.'}]}}]});
+ publishedReady(quizOnly,'Quiz-only learning section');assert.equal(deps.evaluateProductReadiness(quizOnly.draft).ready,true);
+ quizOnly=await publication.publishBuilderProduct(quizOnly.product.id,owner,{expectedVersion:quizOnly.version});assert.ok(quizOnly.publication);
+
+ let audioOnly=await builder.createBuilderWorkspace(owner,{type:'mini-course',source:'manual',requestId:randomUUID()});
+ const audioId=await upload(audioOnly.product.id,{mime:'audio/mpeg',name:'original-lesson.mp3',bytes:Buffer.from('ID3 synthetic retained audio fixture')});
+ audioOnly=await save(audioOnly,{...completeDraft(audioOnly),uploadIds:[audioId],sections:[{id:randomUUID(),title:'A guided project planning session',body:'',studio:{kind:'audio',audioId}}]});
+ publishedReady(audioOnly,'Audio-only section with an owned verified file');assert.equal(deps.evaluateProductReadiness(audioOnly.draft).ready,true);
+ audioOnly=await publication.publishBuilderProduct(audioOnly.product.id,owner,{expectedVersion:audioOnly.version});assert.ok(audioOnly.publication);
+ const missingAudio={...audioOnly.draft,sections:[{...audioOnly.draft.sections[0],studio:{kind:'audio',audioId:randomUUID()}}]};
+ assert.equal((await builder.builderReadiness(audioOnly.product.id,owner,missingAudio)).publishReady,false,'An arbitrary audio ID cannot pass readiness');
+
+ let incompleteSettings=await builder.createBuilderWorkspace(owner,{type:'guide',source:'manual',requestId:randomUUID()});
+ incompleteSettings=await save(incompleteSettings,{...completeDraft(incompleteSettings),studio:{pricing:{coupons:[{code:'',percentOff:0}]}}});
+ assert.equal(incompleteSettings.draft.studio.pricing.coupons[0].code,'','Partial settings are retained during autosave');assert.equal(incompleteSettings.readiness.publishReady,false);
+ await assert.rejects(()=>publication.publishBuilderProduct(incompleteSettings.product.id,owner,{expectedVersion:incompleteSettings.version}),error=>error.status===409,'Incomplete coupon rows cannot be published');
+ incompleteSettings=await save(incompleteSettings,{...incompleteSettings.draft,studio:{templates:{items:'still being edited'}}});
+ assert.equal(incompleteSettings.draft.studio.templates.items,'still being edited');assert.equal(incompleteSettings.readiness.publishReady,false,'Malformed bounded settings fail publication readiness without breaking draft save');
+
+ let circular=await builder.createBuilderWorkspace(owner,{type:'mini-course',source:'manual',requestId:randomUUID()});
+ const lessonA=randomUUID(),lessonB=randomUUID();
+ circular=await save(circular,{...completeDraft(circular),sections:[{...section('Plan your first brief'),id:lessonA,studio:{prerequisiteIds:[lessonB]}},{...section('Review your first brief'),id:lessonB,studio:{prerequisiteIds:[lessonA]}}]});
+ assert.equal(circular.readiness.checks.find(check=>check.key==='prerequisites').ready,false,'Indirect prerequisite cycles are rejected');
+ await assert.rejects(()=>publication.publishBuilderProduct(circular.product.id,owner,{expectedVersion:circular.version}),error=>error.status===409);
+ circular=await save(circular,{...circular.draft,sections:circular.draft.sections.map((item,index)=>({...item,studio:{prerequisiteIds:index?[lessonA]:[]}}))});publishedReady(circular,'An acyclic prerequisite chain');
  assert.equal(providerCalls,0,'Creating, saving and checking publication never contacts a payment provider');
  assert.equal(sql.prepare('PRAGMA foreign_key_check').all().length,0,'New and retained rows satisfy foreign keys');
  console.log(`Product builder tests passed: all ${deps.builderTypes.length} types, exact resume, original-file readiness, ownership, payment-independent publication, private snapshots and selling gates. Fixtures retained at ${root}`);

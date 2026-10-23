@@ -16,6 +16,7 @@ import CommercePanel from './commerce-panel';
 import {MarketingWorkspace,type MarketingTab} from './marketing-workspace';
 import {WorkspaceNavigation} from './workspace-navigation';
 import {WorkspaceProductLibrary} from './workspace-product-library';
+import {GenCompanion} from './gen-companion';
 import {productTypes,type Product} from '@/lib/product';
 import {studioFormats,type StudioConversation} from '@/lib/studio-plan';
 import type {CreditBalance} from '@/lib/credit-policy';
@@ -37,6 +38,8 @@ const tabs:[EditorTab,typeof FileText,string][]=[['content',BookOpen,'Content'],
 function editorArea(area:string|null):EditorTab{return marketingTabs.includes(area as EditorTab)?area as EditorTab:tabs.some(([key])=>key===area)?area as EditorTab:'content';}
 
 export default function GeneratorStudio({user}:{user:{name:string;email:string}|null}){
+  const [sidebarOpen,setSidebarOpen]=useState(true);
+  const [planning,setPlanning]=useState(false);
   const [workspace,setWorkspace]=useState<Workspace|null>(null),[loading,setLoading]=useState(!!user),[error,setError]=useState('');
   const [view,setView]=useState<View>('create'),[conversation,setConversation]=useState<StudioConversation|null>(null),[history,setHistory]=useState<HistoryItem[]>([]),[remaining,setRemaining]=useState(20);
   const [draftReady,setDraftReady]=useState(false),[message,setMessage]=useState(''),[busy,setBusy]=useState(''),[sent,setSent]=useState('');
@@ -70,6 +73,7 @@ export default function GeneratorStudio({user}:{user:{name:string;email:string}|
       if(plansResult.status==='fulfilled'&&plansResult.value){setHistory(plansResult.value.conversations);setRemaining(plansResult.value.remaining);}
       if(!initialRoute.current&&routeRevision.current===revision){
         initialRoute.current=true;
+        setPlanning(query.get('planning')==='1');
         setMessage(draft);
         if(conversationResult.status==='fulfilled'&&conversationResult.value){setConversation(conversationResult.value.conversation);setRemaining(conversationResult.value.remaining);}
         const p=data?.products.find(value=>value.id===query.get('project'));
@@ -110,6 +114,7 @@ export default function GeneratorStudio({user}:{user:{name:string;email:string}|
   });}
   function newIdea(){leaveWorkspace('/build/new');}
   function buildFromIdea(){try{sessionStorage.setItem('fivegen:builder-new-idea',message);}catch{}leaveWorkspace('/build/new?source=ai');}
+  function continueFromIdea(){if(message.trim().length<3||busyRef.current)return;if(planning)void send();else buildFromIdea();}
   function leaveWorkspace(path:string,clearDrafts=false){navigate(()=>{
     if(clearDrafts)clearWorkspaceDrafts();
     leavingWorkspace.current=true;
@@ -129,7 +134,7 @@ export default function GeneratorStudio({user}:{user:{name:string;email:string}|
   function openConversation(id:string){navigate(()=>{setDraftReady(false);setBusy('history');busyRef.current=true;void request<{conversation:StudioConversation;remaining:number}>('/api/studio/conversations?id='+encodeURIComponent(id)).then(data=>{setConversation(data.conversation);setMessage(readMessageDraft(data.conversation.id));setRemaining(data.remaining);setProduct(null);setView('create');setError('');window.history.replaceState(null,'','/?conversation='+encodeURIComponent(id));}).catch(e=>setError(e.message)).finally(()=>{setDraftReady(true);setBusy('');busyRef.current=false;});});}
   async function send(promptValue=message):Promise<boolean>{
     const prompt=promptValue.trim();if(busyRef.current||prompt.length<3||prompt.length>3000)return false;
-    if(!user){location.assign('/signin-with-chatgpt?return_to=%2F%3Fview%3Dcreate');return false;}
+    if(!user){location.assign('/signin-with-chatgpt?return_to='+encodeURIComponent(planning?'/?view=create&planning=1':'/?view=create'));return false;}
     const draft=message;routeRevision.current++;busyRef.current=true;setBusy('planning');setError('');setSent(prompt);setMessage('');
     try{const data=await request<{conversation:StudioConversation;remaining:number}>('/api/studio/conversations',{id:conversation?.id||crypto.randomUUID(),requestId:crypto.randomUUID(),message:prompt,expectedUpdatedAt:conversation?.updatedAt||0,maxCredits:remaining>0?0:workspace?.textCost||10});setConversation(data.conversation);window.history.replaceState(null,'','/?conversation='+encodeURIComponent(data.conversation.id));setRemaining(data.remaining);void load();return true;}
     catch(e){setError((e as Error).message);setMessage(draft);return false;}finally{setBusy('');setSent('');busyRef.current=false;}
@@ -147,11 +152,12 @@ export default function GeneratorStudio({user}:{user:{name:string;email:string}|
     catch(e){setError((e as Error).message);return false;}finally{setBusy('');busyRef.current=false;}
   },[product,dirty,receiveProduct]);
   const costs=workspace?.textCost||10,unlimited=!!workspace?.credits.unlimited;
-  const label=product?product.title:{create:'Create your product',overview:'Overview',library:'My products',crm:'Your CRM',credits:'AI credits',connections:'Connected assistants',admin:'Platform settings'}[view];
-  return <div className={`gen-app growth-app ${view==='create'&&!product&&(conversation||sent)?'gen-chat-active':''}`}>
+  const label=product?product.title:{create:'Create your product',overview:'Dashboard',library:'My products',crm:'Your CRM',credits:'AI credits',connections:'Connected assistants',admin:'Platform settings'}[view];
+  return <div className={`gen-app growth-app ${view==='create'&&!product&&(conversation||sent)?'gen-chat-active':''}`} data-sidebar-open={sidebarOpen}>
     <Toaster position="bottom-right" theme="dark" richColors/>
+    {user&&<GenCompanion mood={busy==='planning'||childBusy?'thinking':busy?'helping':error?'concerned':view==='create'&&message.trim()?'curious':'idle'} status={busy==='planning'?'Thinking through your next step…':busy==='create'?'Getting your workspace ready…':''} onOpen={()=>{const composer=view==='create'?document.querySelector<HTMLTextAreaElement>('.chat-composer textarea, #creation-idea'):null;if(composer){composer.focus();composer.scrollIntoView({behavior:'auto',block:'center'});}else leaveWorkspace('/?view=create&planning=1');}}/>}
     <div className="gen-main">
-      <WorkspaceNavigation user={user} view={view} label={label} admin={!!workspace?.admin} productCount={workspace?.products.length||0} creditsLabel={unlimited?'Unlimited':workspace?`${workspace.credits.total.toLocaleString()} credits`:'AI credits'} history={history} onCreate={newIdea} onHome={()=>leaveWorkspace('/')} onView={changeView} onConversation={openConversation} onVisit={path=>leaveWorkspace(path)} onSignOut={()=>leaveWorkspace('/signout-with-chatgpt',true)}/>
+      <WorkspaceNavigation sidebarOpen={sidebarOpen} onToggleSidebar={()=>setSidebarOpen(open=>!open)} user={user} view={view} label={label} admin={!!workspace?.admin} productCount={workspace?.products.length||0} creditsLabel={unlimited?'Unlimited':workspace?`${workspace.credits.total.toLocaleString()} credits`:'AI credits'} history={history} onCreate={newIdea} onHome={()=>leaveWorkspace('/')} onView={changeView} onConversation={openConversation} onVisit={path=>leaveWorkspace(path)} onSignOut={()=>leaveWorkspace('/signout-with-chatgpt',true)}/>
       <main className="workspace-content" id="workspace-content" tabIndex={-1}>
       {error&&<div className="gen-error" role="alert"><span>{error}</span><button aria-label="Dismiss error" onClick={()=>setError('')}><X size={16}/></button></div>}
       {loading||busy==='history'?<div className="gen-loading"><Loader2 size={28} className="spin"/><p>Opening your workspace…</p></div>:product?<div className={`gen-editor gen-enter ${marketingTabs.includes(editorTab)?'gen-marketing-editor':''}`}>
@@ -167,11 +173,11 @@ export default function GeneratorStudio({user}:{user:{name:string;email:string}|
           {editorTab==='media'&&<MediaStudio key={product.id} product={product} onSetup={()=>changeView('credits')}/>}
         </div></>}
       </div>:view==='create'&&(conversation||sent)?<StudioChat key={conversation?.id||'new-chat'} conversation={conversation} message={message} sent={sent} busy={busy} name={user?.name||'You'} remaining={remaining} cost={costs} unlimited={unlimited} credits={workspace?.credits.total} allowance={workspace?.credits.products.remaining??3} aiReady={!!workspace?.capabilities.ai} onMessage={editMessage} onSend={send} onGenerate={()=>void create()} onOpenProduct={()=>{const p=workspace?.products.find(p=>p.id===conversation?.productId);if(p)openProduct(p);else void load();}}/>:view==='create'?<div className="gen-create gen-enter workspace-create-entry">
-        <header className="creation-heading"><h1>Create a product</h1><p>Turn an idea into a book, course, resource, or service.</p></header>
-        <form className="creation-idea" onSubmit={event=>{event.preventDefault();buildFromIdea();}}>
-          <label htmlFor="creation-idea"><Sparkles size={17}/>Start with an idea</label>
-          <textarea id="creation-idea" ref={inputRef} aria-label="Your product idea" placeholder="What do you want to create, and who will it help?" value={message} maxLength={3000} disabled={!!busy} onChange={event=>editMessage(event.target.value)} onKeyDown={event=>{if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)&&!event.nativeEvent.isComposing){event.preventDefault();if(message.trim().length>=3&&!busy)buildFromIdea();}}}/>
-          <div className="creation-idea-footer"><p>Choose your product type next. Review the plan before you generate anything.</p><button type="submit" disabled={message.trim().length<3||!!busy}>Continue with AI<ArrowRight size={16}/></button></div>
+        <header className="creation-heading"><h1>{planning?'Not sure what to create?':'Create a product'}</h1><p>{planning?'We’ll help you find an idea and choose a product type.':'Turn an idea into a book, course, resource, or service.'}</p></header>
+        <form className="creation-idea" onSubmit={event=>{event.preventDefault();continueFromIdea();}}>
+          <label htmlFor="creation-idea"><Sparkles size={17}/>{planning?'What are you good at?':'Start with an idea'}</label>
+          <textarea id="creation-idea" ref={inputRef} aria-label="Your product idea" placeholder={planning?'Tell us about your skills, experience, or who you’d like to help.':'What do you want to create, and who will it help?'} value={message} maxLength={3000} disabled={!!busy} onChange={event=>editMessage(event.target.value)} onKeyDown={event=>{if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)&&!event.nativeEvent.isComposing){event.preventDefault();continueFromIdea();}}}/>
+          <div className="creation-idea-footer"><p>{planning?(unlimited?'Planning is included with your access.':remaining>0?`${remaining} free planning messages left this month.`:`${costs} AI credits per planning message.`):'Choose your product type next. Review the plan before you generate anything.'}</p><button type="submit" disabled={message.trim().length<3||!!busy}>{planning?'Help me choose':'Continue with AI'}<ArrowRight size={16}/></button></div>
         </form>
         <div className="creation-sources" aria-label="Other ways to create"><button type="button" disabled={!!busy} onClick={()=>leaveWorkspace('/build/new?source=upload')}><Upload size={19}/><span><strong>Upload existing content</strong><small>Bring your PDF, manuscript, lessons, or resources.</small></span><ArrowRight size={16}/></button><button type="button" disabled={!!busy} onClick={()=>leaveWorkspace('/build/new?source=manual')}><FileText size={19}/><span><strong>Start manually</strong><small>Choose a format and add your own content.</small></span><ArrowRight size={16}/></button></div>
         <p className="creation-private-note"><ShieldCheck size={14}/>Your work stays private until you publish.</p>

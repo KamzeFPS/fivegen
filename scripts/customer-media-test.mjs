@@ -5,6 +5,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import ts from 'typescript';
 import {z} from 'zod';
 import {createStorage} from '../runtime/render/storage.mjs';
+import {prepareStudioFixtureRuntime,moduleFixtureDependencies} from './product-studio-fixture-deps.mjs';
 
 // Retained synthetic data only. Exercise the actual paid-order authentication,
 // presentation schemas and private storage response without provider traffic.
@@ -20,15 +21,16 @@ const deps={
  failure:error=>Response.json({error:error instanceof ApiError?error.message:'Invalid request.'},{status:error instanceof ApiError?error.status:400}),
 };
 async function load(path,selected){
- const key='customerMediaQA'+randomUUID().replaceAll('-','');globalThis[key]={...deps};
+ const key='customerMediaQA'+randomUUID().replaceAll('-','');
  let source=readFileSync(path,'utf8');
  if(selected){const parsed=ts.createSourceFile(path,source,ts.ScriptTarget.Latest,true);source=parsed.statements.filter(statement=>ts.isFunctionDeclaration(statement)&&selected.includes(statement.name?.text)).map(statement=>statement.getText(parsed)).join('\n');}
  else source=source.replace(/^import[\s\S]*?;\r?\n/gm,'');
- const code=`const {${Object.keys(deps).join(',')}}=globalThis.${key};\n`+ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;
+ globalThis[key]=moduleFixtureDependencies(source,deps);
+ const code=`const {${Object.keys(globalThis[key]).join(',')}}=globalThis.${key};\n`+ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;
  const loaded=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));delete globalThis[key];return loaded;
 }
 for(const path of ['lib/commerce.ts','lib/experience.ts','lib/product.ts','lib/builder-contract.ts','lib/builder-publication-contract.ts','lib/upload-validation.ts','lib/builder-delivery-server.ts','lib/purchase-email.ts'])Object.assign(deps,await load(path));
-Object.assign(deps,await load('lib/commerce-v2-server.ts',['commerceMode','commerceHash','cookieValue','cookieOwns','customerOrder','safeDeliveryUrl','getCommerceOffer','customerProduct','customerCover']));
+const loadStudioRuntime=prepareStudioFixtureRuntime(deps);Object.assign(deps,await load('lib/commerce-v2-server.ts',['commerceMode','commerceHash','cookieValue','cookieOwns','customerOrder','safeDeliveryUrl','getCommerceOffer','customerProduct','customerCover']));await loadStudioRuntime(load);
 const coverRoute=await load('app/api/commerce/customer/[id]/cover/route.ts'),productRoute=await load('app/api/commerce/customer/[id]/route.ts');
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j7koAAAAASUVORK5CYII=','base64');
 const revisedPng=Buffer.concat([png,Buffer.from('retained revised promotional cover')]);

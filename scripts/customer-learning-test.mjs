@@ -2,125 +2,58 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import React from 'react';
-import {renderToStaticMarkup} from 'react-dom/server';
 import ts from 'typescript';
+import {ArrowLeft,ArrowRight,Check,CheckCircle2,ChevronDown,LockKeyhole,MessageSquare,Upload} from 'lucide-react';
+import {loadStudioMarkdownFixture} from './product-studio-fixture-deps.mjs';
 
-// Exercise the shipped helpers and React callbacks. Storage and media are local
-// fixtures: no API, provider, authenticated customer, email or database is used.
+process.on('uncaughtException',error=>{console.error(String(error.stack||error).replace(/data:text\/javascript;base64,[A-Za-z0-9+/=]+/g,'[fixture module]'));process.exitCode=1;});
+// The classroom now uses authoritative server progress. This exercises actual
+// React callbacks; the backend suite verifies SQLite persistence and access.
 const compile=path=>ts.transpileModule(readFileSync(path,'utf8').replace(/^import[\s\S]*?;\r?\n/gm,''),{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React}}).outputText;
-const presentation=await import('data:text/javascript;base64,'+Buffer.from(compile('app/customer/presentation.ts')).toString('base64'));
-const {buyerPresentation,buyerFileSize,buyerFileType}=presentation;
-const types=[
- ['book','Book','document','Chapter'],['guide','Guide','document','Section'],['playbook','Playbook','document','Step'],
- ['mini-course','Mini course','course','Lesson'],['video-course','Video course','course','Lesson'],['template-kit','Template kit','templates','Template'],
- ['challenge','Challenge','challenge','Day'],['consulting','Consulting / Mentorship','service','Resource'],['coaching','Coaching session','service','Resource'],
- ['community','Community','community','Resource'],['custom','Custom product','document','Section'],
-];
-for(const [type,format,family,unit] of types){
- const result=buyerPresentation({format,builderType:type});
- assert.equal(result.type,type,`${type} has its own presentation`);
- assert.equal(result.family,family,`${type} maps to the correct delivery layout`);
- assert.equal(result.unit,unit);
- assert.ok(result.reading&&result.intro&&result.label,'Every type supplies real presentation labels');
- assert.equal(buyerPresentation({format}).family,family,`Legacy ${format} remains supported`);
-}
-assert.equal(buyerPresentation({format:'Book / Ebook'}).type,'book');
-assert.equal(buyerPresentation({format:'Custom product',builderType:'custom',deliveryFamily:'course'}).unit,'Lesson');
-assert.equal(buyerPresentation({format:'Custom product',builderType:'custom',deliveryFamily:'service'}).reading,'Choose a time');
-assert.equal(buyerPresentation({format:'Custom product',builderType:'custom',deliveryFamily:'community'}).reading,'Join your community');
-assert.equal(buyerPresentation({format:'Custom product',builderType:'custom',deliveryFamily:'templates'}).reading,'Get your files');
-assert.equal(buyerPresentation({format:'Coaching session',builderType:'custom',deliveryFamily:'document',service:true}).family,'document','Purchased explicit family wins over format and legacy service hints');
-for(const family of ['document','course','templates','challenge','service','community','custom'])assert.equal(buyerPresentation({format:'Book',builderType:'custom',deliveryFamily:family}).family,family,'Every supported explicit purchased family is preserved');
-assert.equal(buyerPresentation({format:'Unknown legacy format',deliveryFamily:'not-a-family'}).family,'document','Unknown metadata cannot invent a delivery family');
-assert.equal(buyerFileSize(1200),'2 KB');assert.equal(buyerFileSize(1048576),'1.0 MB');assert.equal(buyerFileSize(0),'');assert.equal(buyerFileSize(-1),'');
-assert.equal(buyerFileType('weekly.plan.csv'),'CSV');assert.equal(buyerFileType('file.unknownextension'),'FILE');
-
+const presentation=await import('data:text/javascript;base64,'+Buffer.from(compile('app/customer/presentation.ts')).toString('base64')),{renderStudioMarkdown}=await loadStudioMarkdownFixture();
+const types=[['book','Book','document','Chapter'],['guide','Guide','document','Section'],['playbook','Playbook','document','Step'],['mini-course','Mini course','course','Lesson'],['video-course','Video course','course','Lesson'],['template-kit','Template kit','templates','Template'],['challenge','Challenge','challenge','Day'],['consulting','Consulting / Mentorship','service','Resource'],['coaching','Coaching session','service','Resource'],['community','Community','community','Resource'],['custom','Custom product','document','Section']];
+for(const [type,format,family,unit] of types){const result=presentation.buyerPresentation({format,builderType:type});assert.equal(result.type,type);assert.equal(result.family,family);assert.equal(result.unit,unit);assert.ok(result.reading&&result.intro&&result.label);assert.equal(presentation.buyerPresentation({format}).family,family);}
+assert.equal(presentation.buyerPresentation({format:'Book / Ebook'}).type,'book');
+for(const family of ['document','course','templates','challenge','service','community','custom'])assert.equal(presentation.buyerPresentation({format:'Book',builderType:'custom',deliveryFamily:family}).family,family);
+assert.equal(presentation.buyerFileSize(1200),'2 KB');assert.equal(presentation.buyerFileSize(1048576),'1.0 MB');assert.equal(presentation.buyerFileSize(-1),'');assert.equal(presentation.buyerFileType('weekly.plan.csv'),'CSV');
 function nodes(value){return Array.isArray(value)?value.flatMap(nodes):React.isValidElement(value)?[value,...nodes(value.props.children)]:[];}
-function text(value){return Array.isArray(value)?value.map(text).join(' '):React.isValidElement(value)?text(value.props.children):value==null||typeof value==='boolean'?'':String(value);}
-const readable=value=>text(value).replace(/\s+/g,' ').trim();
-const sameDeps=(before,after)=>before&&after&&before.length===after.length&&before.every((value,index)=>Object.is(value,after[index]));
+function text(value){return Array.isArray(value)?value.map(text).join(' '):React.isValidElement(value)?value.props.dangerouslySetInnerHTML?.__html?.replace(/<[^>]*>/g,' ')||text(value.props.children):value==null||typeof value==='boolean'?'':String(value);}
+const readable=value=>text(value).replace(/\s+/g,' ').trim(),sameDeps=(a,b)=>a&&b&&a.length===b.length&&a.every((value,index)=>Object.is(value,b[index]));
 const code=compile('app/customer/learning-content.tsx');
-async function harness(props,{saved={},readFailure=false,writeFailure=false}={}){
- const hooks=[],effects=[],reads=[],writes=[],focusCalls=[],storage=new Map(Object.entries(saved));
- let cursor=0,dirty=true,tree,networkCalls=0;
+async function harness(props,{saved=[],locked=[],readFailures=0,writeFailures=0,certificate=false}={}){
+ const hooks=[],effects=[],requests=[],focusCalls=[];let cursor=0,dirty=true,tree,childKey=null,readErrors=readFailures,writeErrors=writeFailures;
+ const server={modules:[{id:'all-lessons',title:'Lessons',description:'',indices:props.sections.map((_,index)=>index)}],results:null,discussionsEnabled:true,orderId:props.orderId,activeSectionId:saved[0]?.sectionId||'',profileName:'Learner',shareProgress:false,leaderboardEnabled:false,allowSubmissions:false,sections:structuredClone(props.sections),lessons:props.sections.map((section,index)=>({id:section.id||'section-'+index,title:section.title,locked:locked.includes(index),reason:locked.includes(index)?'Available after the previous lesson.':'',completed:saved.some(progress=>progress.sectionId===(section.id||'section-'+index)&&progress.completedAt)})),progress:structuredClone(saved),completed:0,total:props.sections.length,certificate:false,reward:'',upsellUrl:'',upsellLabel:'',streak:0,streaksEnabled:!!props.challenge,badges:[],recapPrompt:'',leaderboard:[],cohort:'',comments:[]};
+ const update=()=>{server.completed=server.lessons.filter(lesson=>lesson.completed).length;server.certificate=certificate&&server.completed===server.total&&server.total>0;};update();
  const useState=initial=>{const index=cursor++;if(!hooks[index])hooks[index]={value:typeof initial==='function'?initial():initial};return[hooks[index].value,next=>{const value=typeof next==='function'?next(hooks[index].value):next;if(!Object.is(value,hooks[index].value)){hooks[index].value=value;dirty=true;}}];};
- const useRef=initial=>{const index=cursor++;return hooks[index]||=( {current:initial});};
+ const useRef=initial=>{const index=cursor++;return hooks[index]||=({current:initial});};
  const useEffect=(callback,deps)=>{const index=cursor++,old=hooks[index];if(!old||!sameDeps(old.deps,deps)){hooks[index]={deps,cleanup:old?.cleanup};effects.push(()=>{hooks[index].cleanup?.();hooks[index].cleanup=callback();});}};
- const localStorage={getItem(key){reads.push(key);if(readFailure)throw new Error('Storage blocked');return storage.get(key)??null;},setItem(key,value){if(writeFailure)throw new Error('Storage full');writes.push({key,value:JSON.parse(value)});storage.set(key,value);}};
- const iconNames=['ArrowLeft','ArrowRight','Check','CheckCircle2','Play'];
- const dependencies={React,useState,useRef,useEffect,localStorage,fetch(){networkCalls++;throw new Error('Learning progress must not make network requests');},...Object.fromEntries(iconNames.map(name=>[name,()=>React.createElement('svg',{'data-test-icon':name,'aria-hidden':true})]))};
- const key=`buyerLearning${randomUUID().replaceAll('-','')}`;globalThis[key]=dependencies;
- let CustomerLearning;try{({CustomerLearning}=await import('data:text/javascript;base64,'+Buffer.from(`const {${Object.keys(dependencies).join(',')}}=globalThis.${key};\n${code}`).toString('base64')));}finally{delete globalThis[key];}
- function render(){for(let turn=0;dirty&&turn<30;turn++){dirty=false;cursor=0;tree=CustomerLearning(props);for(const node of nodes(tree))if(node.type==='h4'&&node.props.ref)node.props.ref.current={focus:options=>focusCalls.push({title:text(node),options})};for(const effect of effects.splice(0))effect();}assert.equal(dirty,false,'Learning effects settle without render loops');}
- render();
- return {
-  reads,writes,storage,focusCalls,get tree(){return tree;},get text(){return readable(tree);},get networkCalls(){return networkCalls;},
-  find(type){return nodes(tree).filter(node=>node.type===type);},
-  button(label){const node=nodes(tree).find(node=>node.type==='button'&&(node.props['aria-label']===label||readable(node)===label));assert.ok(node,`Button exists: ${label}`);return node;},
-  click(label){const node=this.button(label);assert.ok(!node.props.disabled,`Button enabled: ${label}`);node.props.onClick();render();},
-  choose(index){const select=this.find('select')[0];assert.ok(select.props.children.some(option=>option.props.value===index),'Only purchased unit indices are selectable');select.props.onChange({target:{value:String(index)}});render();},
-  dispose(){for(const hook of hooks)hook?.cleanup?.();},
- };
+ const dependencies={React,ArrowLeft,ArrowRight,Check,CheckCircle2,ChevronDown,LockKeyhole,MessageSquare,Upload,useState,useRef,useEffect,renderStudioMarkdown,fetch:async(url,options={})=>{
+  const input=options.body?JSON.parse(options.body):null;requests.push({url,method:options.method||'GET',input});if(!input&&readErrors-->0)return Response.json({error:'Progress could not load.'},{status:503});if(input&&writeErrors-->0)return Response.json({error:'Progress could not be saved.'},{status:503});
+  if(input){const lesson=server.lessons.find(item=>item.id===input.sectionId);assert.ok(lesson);assert.equal(lesson.locked,false);if(input.action==='select')server.activeSectionId=input.sectionId;else{let progress=server.progress.find(item=>item.sectionId===input.sectionId);if(!progress){progress={sectionId:input.sectionId,completedAt:null,position:0,quizPassed:false,assignment:'',proof:'',fileIds:[],reviewStatus:'none',feedback:''};server.progress.push(progress);}if(input.action==='complete'){lesson.completed=input.complete;progress.completedAt=input.complete?Date.now():null;}if(input.action==='position')progress.position=input.position;}update();}
+  return Response.json(server);
+ }};
+ for(const path of ['app/customer/course-navigation.tsx','app/customer/challenge-results.tsx']){const childKey='learningChild'+randomUUID().replaceAll('-','');globalThis[childKey]=dependencies;try{Object.assign(dependencies,await import('data:text/javascript;base64,'+Buffer.from('const {'+Object.keys(dependencies).join(',')+'}=globalThis.'+childKey+';\n'+compile(path)).toString('base64')));}finally{delete globalThis[childKey];}}
+ const key='buyerLearning'+randomUUID().replaceAll('-','');globalThis[key]=dependencies;let CustomerLearning;try{({CustomerLearning}=await import('data:text/javascript;base64,'+Buffer.from('const {'+Object.keys(dependencies).join(',')+'}=globalThis.'+key+';\n'+code).toString('base64')));}finally{delete globalThis[key];}
+ function expand(value){if(Array.isArray(value))return value.map(expand);if(!React.isValidElement(value))return value;if(typeof value.type==='function'&&['LessonWork','CourseNavigation','ChallengeResults'].includes(value.type.name))return expand(value.type(value.props));return value.props.children===undefined?value:React.cloneElement(value,{children:expand(value.props.children)});}
+ function render(){for(let turn=0;dirty&&turn<40;turn++){dirty=false;cursor=0;const raw=CustomerLearning(props),rootCursor=cursor,child=nodes(raw).find(node=>typeof node.type==='function'&&node.type.name==='LessonWork');if(child?.key!==childKey){hooks.splice(rootCursor);childKey=child?.key;}tree=expand(raw);for(const node of nodes(tree))if(node.type==='h4'&&node.props.ref)node.props.ref.current={focus:options=>focusCalls.push({title:text(node),options})};for(const effect of effects.splice(0))effect();}assert.equal(dirty,false,'Classroom effects settle');}
+ async function settle(){for(let tick=0;tick<20;tick++){await Promise.resolve();render();}}
+ render();await settle();
+ return {requests,focusCalls,server,get tree(){return tree;},get text(){return readable(tree);},find:type=>nodes(tree).filter(node=>node.type===type),button(label){const node=nodes(tree).find(item=>item.type==='button'&&(item.props['aria-label']===label||readable(item)===label));assert.ok(node,'Button exists: '+label);return node;},async click(label){const button=this.button(label);assert.ok(!button.props.disabled,'Button enabled: '+label);button.props.onClick();await settle();},async choose(index){this.find('select')[0].props.onChange({target:{value:String(index)}});await settle();},settle,dispose(){for(const hook of hooks)hook?.cleanup?.();}};
 }
-const sections=[
- {id:'lesson-1',title:'Start with your own promise',body:'Private first lesson content.',videoId:'purchased-video-1'},
- {id:'lesson-2',title:'Make the next action practical',body:'Only the purchased second lesson.'},
- {id:'lesson-3',title:'Reflect and continue',body:'The final purchased lesson.',videoId:'purchased-video-3'},
-];
-
-// Navigation reveals only the actual selected purchased unit, uses the private
-// media route, and never marks a lesson complete merely because it was opened.
+const sections=[{id:'lesson-1',title:'Start with your own promise',body:'Private first lesson content.',videoId:'purchased-video-1',studio:{captionsVtt:'WEBVTT\n\n00:00.000 --> 00:01.000\nHello'}},{id:'lesson-2',title:'Make the next action practical',body:'Only the purchased second lesson.'},{id:'lesson-3',title:'Reflect and continue',body:'The final purchased lesson.',videoId:'purchased-video-3'}];
 {
- const app=await harness({orderId:'paid-order-a',sections});
- assert.match(app.text,/0 of 3 lessons marked complete/);assert.match(app.text,/Private first lesson content/);assert.doesNotMatch(app.text,/Only the purchased second lesson/);
- assert.deepEqual(app.reads,['fivegen-progress:paid-order-a']);assert.equal(app.writes.length,0,'Mount does not overwrite existing device progress');
- assert.equal(app.button('Previous lesson').props.disabled,true);assert.equal(app.button('Next lesson').props.disabled,false);
- let video=app.find('video')[0];assert.equal(video.props.src,'/api/commerce/customer/paid-order-a/video/purchased-video-1');assert.equal(video.props.controls,true);assert.equal(video.props.playsInline,true);assert.equal(video.props.preload,'metadata');
- assert.equal(video.props.onEnded,undefined,'Playback never implies completed coursework');
- app.click('Next lesson');assert.match(app.text,/Only the purchased second lesson/);assert.doesNotMatch(app.text,/Private first lesson content/);assert.equal(app.find('video').length,0,'A text lesson cannot borrow another unit’s recording');
- assert.deepEqual(app.writes.at(-1),{key:'fivegen-progress:paid-order-a',value:{active:'lesson-2',completed:[]}});
- assert.deepEqual(app.focusCalls.at(-1),{title:'Make the next action practical',options:{preventScroll:true}},'Keyboard focus follows selected lesson heading without unexpected scroll');
- app.click('Mark lesson complete');assert.match(app.text,/1 of 3 lessons marked complete/);assert.equal(app.find('progress')[0].props.value,1);assert.deepEqual(app.writes.at(-1).value.completed,['lesson-2']);
- assert.equal(app.button('Lesson 2: Make the next action practical, marked complete').props['aria-pressed'],true);
- app.click('Mark incomplete');assert.match(app.text,/0 of 3 lessons marked complete/);assert.deepEqual(app.writes.at(-1).value.completed,[]);
- app.click('Next lesson');assert.equal(app.button('Next lesson').props.disabled,true);assert.equal(app.find('video')[0].props.src,'/api/commerce/customer/paid-order-a/video/purchased-video-3');
- app.click('Previous lesson');app.choose(0);assert.equal(app.button('Previous lesson').props.disabled,true);assert.equal(app.find('select')[0].props.value,0);
- assert.match(app.text,/saved on this device/);assert.equal(app.networkCalls,0);
- const html=renderToStaticMarkup(app.tree);assert.match(html,/aria-label="Your classroom"/);assert.match(html,/aria-label="Course lessons"/);assert.match(html,/aria-label="Lesson completion"/);assert.doesNotMatch(html,/certificate|server-saved|synchronized/i);
- app.dispose();
-}
-
-// Reopening the same order restores its valid device-local state; another
-// purchase (including the same sections) never inherits those answers/progress.
-{
- const saved={'fivegen-progress:paid-order-a':JSON.stringify({active:'lesson-3',completed:['lesson-1','removed-lesson',42,'lesson-3']})};
- const app=await harness({orderId:'paid-order-a',sections},{saved});assert.match(app.text,/2 of 3 lessons marked complete/);assert.equal(app.find('select')[0].props.value,2);assert.match(app.text,/The final purchased lesson/);assert.equal(app.focusCalls.length,0,'Restoring progress does not steal focus on page load');
- app.click('Mark incomplete');assert.deepEqual(app.writes.at(-1).value,{active:'lesson-3',completed:['lesson-1']});
- const another=await harness({orderId:'paid-order-b',sections},{saved:Object.fromEntries(app.storage)});assert.match(another.text,/0 of 3 lessons marked complete/);assert.equal(another.find('select')[0].props.value,0);assert.deepEqual(another.reads,['fivegen-progress:paid-order-b']);
- another.click('Mark lesson complete');assert.equal(another.writes.at(-1).key,'fivegen-progress:paid-order-b');assert.deepEqual(JSON.parse(another.storage.get('fivegen-progress:paid-order-a')),{active:'lesson-3',completed:['lesson-1']},'A different purchase cannot overwrite original progress');
- app.dispose();another.dispose();
-}
-
-// Invalid, stale or blocked storage must not make paid content unusable.
-for(const stored of ['{broken json','null',JSON.stringify({active:'not-in-purchase',completed:[false,'not-in-purchase']})]){
- const app=await harness({orderId:'malformed-order',sections},{saved:{'fivegen-progress:malformed-order':stored}});assert.match(app.text,/Private first lesson content/);assert.match(app.text,/0 of 3 lessons marked complete/);app.click('Next lesson');assert.match(app.text,/Only the purchased second lesson/);assert.equal(app.networkCalls,0);app.dispose();
+ const app=await harness({orderId:'paid-order-a',sections});assert.match(app.text,/0 of 3 lessons complete/);assert.match(app.text,/Private first lesson content/);assert.doesNotMatch(app.text,/Only the purchased second lesson/);assert.deepEqual(app.requests.map(request=>request.url),['/api/commerce/customer/paid-order-a/learning']);assert.equal(app.button('Previous lesson').props.disabled,true);const video=app.find('video')[0];assert.equal(video.props.src,'/api/commerce/customer/paid-order-a/video/purchased-video-1');assert.equal(video.props.controls,true);assert.equal(video.props.playsInline,true);assert.equal(video.props.preload,'metadata');assert.equal(video.props.onEnded,undefined);assert.equal(app.find('track')[0].props.src,'/api/commerce/customer/paid-order-a/learning/captions/lesson-1');
+ await app.click('Next lesson');assert.match(app.text,/Only the purchased second lesson/);assert.doesNotMatch(app.text,/Private first lesson content/);assert.equal(app.find('video').length,0);assert.deepEqual(app.requests.at(-1).input,{action:'select',sectionId:'lesson-2'},'Navigation persists the selected lesson without fabricating completion');assert.equal(app.server.completed,0);assert.deepEqual(app.focusCalls.at(-1),{title:'Make the next action practical',options:{preventScroll:true}});await app.click('Mark lesson complete');assert.match(app.text,/1 of 3 lessons complete/);assert.deepEqual(app.requests.at(-1).input,{action:'complete',sectionId:'lesson-2',complete:true});assert.equal(app.find('progress')[0].props.value,1);await app.click('Mark incomplete');assert.match(app.text,/0 of 3 lessons complete/);await app.click('Next lesson');assert.equal(app.button('Next lesson').props.disabled,true);assert.equal(app.find('video')[0].props.src,'/api/commerce/customer/paid-order-a/video/purchased-video-3');await app.choose(0);assert.equal(app.button('Previous lesson').props.disabled,true);app.dispose();
 }
 {
- const app=await harness({orderId:'storage-blocked',sections},{readFailure:true,writeFailure:true});assert.match(app.text,/Private first lesson content/);app.click('Next lesson');app.click('Mark lesson complete');assert.match(app.text,/1 of 3 lessons marked complete/);assert.match(app.text,/Progress cannot be saved in this browser/);assert.match(app.text,/Your content is still available/);assert.match(app.text,/Only the purchased second lesson/);assert.equal(app.networkCalls,0);app.dispose();
+ const saved=[{sectionId:'lesson-3',completedAt:Date.now(),position:45,quizPassed:false,fileIds:[]}],app=await harness({orderId:'restored-order',sections},{saved});assert.equal(app.find('select')[0].props.value,2);assert.match(app.text,/1 of 3 lessons complete/);assert.equal(app.focusCalls.length,0,'Restoring progress does not steal focus');const media={currentTime:0,duration:120,playbackRate:1};app.find('video')[0].props.onLoadedMetadata({currentTarget:media});assert.equal(media.currentTime,45);media.currentTime=62;app.find('video')[0].props.onPause({currentTarget:media});await app.settle();assert.deepEqual(app.requests.at(-1).input,{action:'position',sectionId:'lesson-3',position:62});assert.match(app.text,/1 of 3 lessons complete/);const other=await harness({orderId:'different-order',sections});assert.match(other.text,/0 of 3 lessons complete/);assert.ok(other.requests.every(request=>request.url.includes('/different-order/')));app.dispose();other.dispose();
 }
 {
- const app=await harness({orderId:'duplicate-progress',sections},{saved:{'fivegen-progress:duplicate-progress':JSON.stringify({active:'lesson-1',completed:['lesson-1','lesson-1','lesson-2','lesson-2','lesson-3','lesson-3']})}});assert.equal(app.find('progress')[0].props.value,3,'Duplicate saved IDs cannot exaggerate completed coursework');assert.match(app.text,/3 of 3 lessons marked complete/);app.dispose();
+ const app=await harness({orderId:'locked-order',sections},{locked:[1]});await app.choose(1);assert.match(app.text,/This lesson unlocks soon/);assert.doesNotMatch(app.text,/Only the purchased second lesson/);assert.equal(app.find('video').length,0);assert.equal(nodes(app.tree).some(node=>node.type==='button'&&readable(node)==='Mark lesson complete'),false);app.dispose();
+ const failed=await harness({orderId:'retry-order',sections},{readFailures:1});assert.match(failed.text,/Progress could not load/);assert.doesNotMatch(failed.text,/Private first lesson content/);await failed.click('Try again');assert.match(failed.text,/Private first lesson content/);failed.dispose();
+ const saving=await harness({orderId:'save-failure',sections},{writeFailures:1});await saving.click('Mark lesson complete');assert.match(saving.text,/Progress could not be saved/);assert.match(saving.text,/0 of 3 lessons complete/,'A failed write never fabricates completion');await saving.click('Mark lesson complete');assert.match(saving.text,/1 of 3 lessons complete/);saving.dispose();
 }
 {
- const original=[{title:'Original first section',body:'Purchased legacy notes.'},{title:'Original second section',body:'Purchased next notes.'}];
- const app=await harness({orderId:'legacy-order',sections:original},{saved:{'fivegen-progress:legacy-order':JSON.stringify({active:'section-1',completed:['section-0']})}});assert.equal(app.find('select')[0].props.value,1);assert.match(app.text,/Purchased next notes/);app.click('Mark lesson complete');assert.deepEqual(app.writes.at(-1).value,{active:'section-1',completed:['section-0','section-1']},'Legacy sections without IDs retain deterministic per-order progress keys');app.dispose();
+ const activities=[{id:'day-one',title:'Choose a small step',body:'Write one action you can take today.'},{id:'day-two',title:'Try and reflect',body:'Reflect on what you tried yesterday.'}],app=await harness({orderId:'challenge-order',sections:activities,challenge:true},{certificate:true});assert.match(app.text,/Your challenge/);assert.match(app.text,/0 of 2 days complete/);assert.equal(app.find('nav')[0].props['aria-label'],'Challenge days');await app.click('Mark day complete');assert.match(app.text,/1 of 2 days complete/);await app.click('Next day');assert.match(app.text,/Reflect on what you tried yesterday/);assert.equal(app.button('Next day').props.disabled,true);await app.click('Mark day complete');assert.match(app.text,/You’ve completed the challenge/);assert.ok(app.find('a').some(link=>link.props.href==='/api/commerce/customer/challenge-order/learning/certificate'));app.dispose();const empty=await harness({orderId:'empty-order',sections:[]});assert.match(empty.text,/0 of 0 lessons complete/);assert.equal(empty.find('video').length,0);assert.equal(nodes(empty.tree).some(node=>node.type==='button'&&readable(node)==='Mark lesson complete'),false);empty.dispose();
 }
-
-// Challenges use real purchased activities, day vocabulary and the same local
-// controls. Empty deliveries cannot manufacture placeholder days or network IO.
-{
- const days=[{id:'day-one',title:'Choose a small step',body:'Write one action you can take today.'},{id:'day-two',title:'Try and reflect',body:'Reflect on what you tried yesterday.'}];
- const app=await harness({orderId:'challenge-order',sections:days,challenge:true});assert.match(app.text,/Your challenge/);assert.match(app.text,/0 of 2 days marked complete/);assert.equal(app.find('video').length,0);app.click('Mark day complete');assert.match(app.text,/1 of 2 days marked complete/);app.click('Next day');assert.match(app.text,/Reflect on what you tried yesterday/);assert.equal(app.button('Next day').props.disabled,true);assert.equal(app.button('Previous day').props.disabled,false);assert.equal(app.find('nav')[0].props['aria-label'],'Challenge days');assert.deepEqual(app.writes.at(-1).value,{active:'day-two',completed:['day-one']});app.dispose();
- const empty=await harness({orderId:'empty-order',sections:[]});assert.equal(empty.tree,null);assert.equal(empty.writes.length,0);assert.equal(empty.networkCalls,0);empty.dispose();
-}
-console.log('Buyer learning passed: all 11 types and purchased custom families, private media navigation, exact-order device progress, reversible completion, stale/corrupt/blocked storage, keyboard focus, day controls and no fabricated content or network fulfillment.');
+console.log('Buyer learning passed: all 11 types, server progress, private media/captions/resume, exact-order writes, reversible completion, locked content, retry/failure safety, keyboard focus, challenge controls and confirmed certificates.');

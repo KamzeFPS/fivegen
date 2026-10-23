@@ -2,6 +2,8 @@ import {env} from 'cloudflare:workers';
 import {ApiError,database} from './server';
 import {builderDeliverySnapshotSchema,builderPublishedPresentation,type BuilderDeliverySnapshot} from './builder-publication-contract';
 import {verifyStoredUpload} from './upload-validation';
+import {assertCommunityTierEntitlement} from './product-community-tiers';
+import {communityTierDelivery,communityTierAllows} from './product-community-tier-contract';
 
 export async function builderPublishedDelivery(productId:string){
  const row=await database().prepare('SELECT * FROM product_builder_publications WHERE product_id=?').bind(productId).first();
@@ -21,6 +23,7 @@ export async function builderOrderDelivery(orderId:string){
  const purchased=JSON.parse(String(row.snapshot));
  return builderDeliverySnapshotSchema.parse({...recovered,...purchased});
 }
+export async function builderBuyerDelivery(orderId:string){const raw=await builderOrderDelivery(orderId);if(!raw)return null;await assertCommunityTierEntitlement(orderId,raw);return communityTierDelivery(raw);}
 export async function builderBuyerCover(order:Record<string,unknown>,snapshot:BuilderDeliverySnapshot|null){
  let coverId=snapshot?.coverUploadId;
  if(!coverId&&!snapshot?.builderType){
@@ -64,11 +67,12 @@ export async function builderPrivateCover(order:Record<string,unknown>){
  return new Response(body,{headers:{'Content-Type':mime,'Content-Length':String(upload.size),'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox",'Cross-Origin-Resource-Policy':'same-origin','Vary':'Cookie'}});
 }
 export async function verifyBuilderDelivery(product:{id:unknown;owner:unknown},snapshot:BuilderDeliverySnapshot,integrity=false){
- const ids=[...new Set([...snapshot.uploadIds,...snapshot.sections.map(section=>section.videoId).filter((id):id is string=>!!id)])];
+ const ids=[...new Set([...snapshot.uploadIds,...snapshot.sections.flatMap(section=>[section.videoId,section.studio?.audioId]).filter((id):id is string=>!!id)])];
  for(const id of ids){
   const upload=await database().prepare("SELECT * FROM uploads WHERE id=? AND product_id=? AND owner=? AND status='completed' AND object_key NOT LIKE 'voice/%' AND NOT EXISTS(SELECT 1 FROM creator_voice_sources WHERE upload_id=uploads.id)").bind(id,product.id,product.owner).first();
   if(!upload||!/^[a-f0-9]{64}$/.test(String(upload.sha256||'')))throw new ApiError('A product file is unavailable or unverified. Upload it again before publishing or selling.',409);
   if(snapshot.sections.some(section=>section.videoId===id)&&!['video/mp4','video/webm'].includes(String(upload.mime)))throw new ApiError('Choose a completed MP4 or WebM recording for every video lesson.',409);
+  if(snapshot.sections.some(section=>section.studio?.audioId===id)&&!String(upload.mime).startsWith('audio/'))throw new ApiError('Choose a completed audio file for every audio lesson.',409);
   const object=await (env as unknown as {BUCKET?:R2Bucket}).BUCKET?.get(String(upload.object_key));
   if(!object)throw new ApiError('A product file is unavailable. Upload it again before publishing or selling.',409);
   if(integrity){try{await verifyStoredUpload(object.body,Number(upload.size),String(upload.sha256));}catch{throw new ApiError('A product file failed its integrity check. Upload the original file again.',409);}}
@@ -76,18 +80,19 @@ export async function verifyBuilderDelivery(product:{id:unknown;owner:unknown},s
  }
 }
 export async function builderDownloadMetadata(orderId:string,productId:string,owner:string){
- const snapshot=await builderOrderDelivery(orderId);if(!snapshot)return [];
- const grants=await database().prepare('SELECT upload_id FROM product_builder_upload_grants WHERE order_id=?').bind(orderId).all(),ids=[...new Set([...snapshot.uploadIds,...grants.results.map(row=>String(row.upload_id))])];
+ const raw=await builderOrderDelivery(orderId),snapshot=await builderBuyerDelivery(orderId);if(!snapshot)return [];
+ const grants=await database().prepare('SELECT upload_id FROM product_builder_upload_grants WHERE order_id=?').bind(orderId).all(),ids=[...new Set([...snapshot.uploadIds,...grants.results.filter(row=>!raw||communityTierAllows(raw,'upload',String(row.upload_id))).map(row=>String(row.upload_id))])];
  if(!ids.length)return [];
  const result=await database().prepare(`SELECT id,name,mime,size FROM uploads WHERE id IN (${ids.map(()=>'?').join(',')}) AND product_id=? AND owner=? AND status='completed' AND object_key NOT LIKE 'voice/%' AND NOT EXISTS(SELECT 1 FROM creator_voice_sources WHERE upload_id=uploads.id) ORDER BY created_at,id`).bind(...ids,productId,owner).all();
  return result.results.map(row=>({id:String(row.id),name:String(row.name),mime:String(row.mime),size:Number(row.size)}));
 }
 export async function builderPrivateDownload(req:Request,order:Record<string,unknown>,uploadId:string){
- const snapshot=await builderOrderDelivery(String(order.id)),grant=await database().prepare('SELECT upload_id FROM product_builder_upload_grants WHERE order_id=? AND upload_id=?').bind(order.id,uploadId).first();if(!snapshot||!snapshot.uploadIds.includes(uploadId)&&!grant)throw new ApiError('File not found in this purchase.',404);
+ const raw=await builderOrderDelivery(String(order.id)),snapshot=await builderBuyerDelivery(String(order.id)),grant=await database().prepare('SELECT upload_id FROM product_builder_upload_grants WHERE order_id=? AND upload_id=?').bind(order.id,uploadId).first();if(!snapshot||raw&&!communityTierAllows(raw,'upload',uploadId)||!snapshot.uploadIds.includes(uploadId)&&!grant)throw new ApiError('File not found in this purchase.',404);
  const upload=await database().prepare("SELECT * FROM uploads WHERE id=? AND product_id=? AND owner=? AND status='completed' AND object_key NOT LIKE 'voice/%' AND NOT EXISTS(SELECT 1 FROM creator_voice_sources WHERE upload_id=uploads.id)").bind(uploadId,order.product_id,order.owner).first();
  if(!upload)throw new ApiError('File unavailable. Contact your creator.',404);
  const object=await (env as unknown as {BUCKET?:R2Bucket}).BUCKET?.get(String(upload.object_key));if(!object||object.size!==Number(upload.size))throw new ApiError('File unavailable. Contact your creator.',404);
- return new Response(object.body,{headers:{'Content-Type':'application/octet-stream','Content-Length':String(upload.size),'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(String(upload.name))}`,'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff'}});
+ const inline=new URL(req.url).searchParams.has('inline')&&['image/png','image/jpeg','image/webp'].includes(String(upload.mime));
+ return new Response(object.body,{headers:{'Content-Type':inline?String(upload.mime):'application/octet-stream','Content-Length':String(upload.size),...(!inline?{'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(String(upload.name))}`}:{'Content-Security-Policy':"default-src 'none'; sandbox"}),'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff'}});
 }
 // The publication batch executes this statement after saving the public
 // revision. Updates are additive, PDF-only, and require PDF access in the

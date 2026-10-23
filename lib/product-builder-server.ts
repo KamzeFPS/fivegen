@@ -1,3 +1,4 @@
+import {communityTierResourceIssues} from './product-community-tier-contract';
 import {env} from 'cloudflare:workers';
 import {z} from 'zod';
 import {ApiError,database,ownedProduct,productFromRow} from './server';
@@ -5,15 +6,18 @@ import {slugify,type ProductContent} from './product';
 import {builderDraftSchema,builderFamily,builderTypeDetails,builderTypeForFormat,builderTypes,defaultBuilderDraft,type BuilderDraft,type BuilderWorkspace,type BuilderCheck} from './builder-contract';
 import {commerceAccount,getCommerceOffer} from './commerce-v2-server';
 import {verifyStoredUpload} from './upload-validation';
-import {evaluateProductReadiness,isUnfinishedPlaceholder} from './product-readiness';
+import {evaluateProductReadiness,isUnfinishedPlaceholder,sectionHasContent} from './product-readiness';
 import {builderRevisionKinds,builderRevisionLabels,builderRevisionRestoreSchema,builderRevisionSnapshot,restoreBuilderEditorialRevision,type BuilderRevisionHistory,type BuilderRevisionKind} from './builder-revision-contract';
+import {validateCurriculum} from './product-curriculum';
+import {productStudioSchema,productStudioPublicationSchema,publishedSectionStudioSchema,safeStudioUrl} from './product-studio-contract';
 
 export const builderHeaders={'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer'};
-const fileTypes=['application/pdf','image/png','image/jpeg','image/webp','text/plain','text/csv'];
-async function verifiedAsset(owner:string,productId:string,id:string,kind:'resource'|'video'|'cover',integrity=false){
+const fileTypes=['application/pdf','image/png','image/jpeg','image/webp','text/plain','text/csv','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/epub+zip','application/zip','application/octet-stream','application/json','text/html','text/css','text/javascript','application/javascript','text/x-python','audio/mpeg','audio/mp4','audio/wav','audio/x-wav','audio/webm','audio/ogg','audio/flac'];
+async function verifiedAsset(owner:string,productId:string,id:string,kind:'resource'|'video'|'audio'|'cover',integrity=false){
+ if(typeof id!=='string')return false;
  const row=await database().prepare("SELECT * FROM uploads WHERE id=? AND owner=? AND product_id=? AND status='completed' AND sha256 IS NOT NULL AND object_key NOT LIKE 'voice/%' AND NOT EXISTS(SELECT 1 FROM creator_voice_sources WHERE upload_id=uploads.id)").bind(id,owner,productId).first();
  if(!row||!/^[a-f0-9]{64}$/.test(String(row.sha256)))return false;
- const mime=String(row.mime);if(kind==='resource'&&!fileTypes.includes(mime)||kind==='video'&&!['video/mp4','video/webm'].includes(mime)||kind==='cover'&&!['image/png','image/jpeg','image/webp'].includes(mime))return false;
+ const mime=String(row.mime);if(kind==='resource'&&!fileTypes.includes(mime)||kind==='video'&&!['video/mp4','video/webm'].includes(mime)||kind==='audio'&&!mime.startsWith('audio/')||kind==='cover'&&!['image/png','image/jpeg','image/webp'].includes(mime))return false;
  const bucket=(env as unknown as {BUCKET?:R2Bucket}).BUCKET;if(!bucket)return false;
  try{const object=await bucket.get(String(row.object_key));if(!object)return false;if(integrity){await verifyStoredUpload(object.body,Number(row.size),String(row.sha256));return true;}const valid=object.size===Number(row.size);await object.body.cancel().catch(()=>{});return valid;}catch{return false;}
 }
@@ -21,25 +25,37 @@ export async function builderReadiness(productId:string,owner:string,draft:Build
  const checks:BuilderCheck[]=[];
  const check=(key:string,ready:boolean,message:string)=>checks.push({key,ready,message});
  check('details',draft.title.trim().length>=3&&draft.description.trim().length>=12&&draft.audience.trim().length>=3,'Add a title, a description of at least 12 characters, and the intended audience.');
+ const config=productStudioPublicationSchema.safeParse(draft.studio||{});check('settings',config.success,config.success?'Product settings are ready.':`Finish your product settings: ${config.error.issues[0]?.path.join(' › ')} — ${config.error.issues[0]?.message}`);
+ if(!config.success)return {publishReady:false,checks};
+ const tierIssues=communityTierResourceIssues(draft);check('membership-resources',!tierIssues.length,tierIssues[0]?.message||'Membership resources are ready.');
+ const pricing=config.data.pricing;if(pricing?.model==='pwyw')check('pricing',Math.max(pricing.suggestedCents||draft.priceCents,0)>=pricing.minimumCents,'Set a suggested price at or above the minimum contribution.');
+ if(pricing?.model==='subscription')check('subscription-coupons',!pricing.coupons.some(coupon=>coupon.percentOff===100),'Recurring subscriptions need a paid price. Use discounts below 100%.');
+ const sectionIds=draft.sections.map((section,index)=>section.id||`section-${index}`),edges=new Map(draft.sections.map((section,index)=>[sectionIds[index],Array.isArray(section.studio?.prerequisiteIds)?section.studio.prerequisiteIds.filter(id=>typeof id==='string'):[]])),visited=new Set<string>(),active=new Set<string>();
+ const validPrerequisites=(id:string):boolean=>{if(active.has(id)||!edges.has(id))return false;if(visited.has(id))return true;active.add(id);if(!edges.get(id)!.every(validPrerequisites))return false;active.delete(id);visited.add(id);return true;};
+ check('prerequisites',sectionIds.every(validPrerequisites),'Choose existing prerequisite lessons and remove any circular dependencies.');
+ if(draft.studio?.course?.modules){const issue=validateCurriculum(draft.studio.course.modules,draft.sections);check('curriculum',!issue,issue||'Course modules are ready.');}
  const family=builderFamily(draft),written=draft.sections.length>0&&draft.sections.every(section=>!!section.title.trim()&&!!section.body.trim());
  const validFiles=await Promise.all(draft.uploadIds.map(id=>verifiedAsset(owner,productId,id,'resource',integrity)));
- if(draft.sections.length){const complete=await Promise.all(draft.sections.map(async section=>!!section.title.trim()&&(!!section.body.trim()||!!section.videoId)&&(!section.videoId||await verifiedAsset(owner,productId,section.videoId,'video',integrity))));check('sections',complete.every(Boolean),'Finish each added section or remove unused sections. Recordings must be available and validated.');}
+ if(draft.sections.length){const complete=await Promise.all(draft.sections.map(async section=>!!section.title.trim()&&sectionHasContent(section)&&(!section.videoId||await verifiedAsset(owner,productId,section.videoId,'video',integrity))&&(!section.studio?.audioId||await verifiedAsset(owner,productId,section.studio.audioId,'audio',integrity))&&(!section.studio||publishedSectionStudioSchema.safeParse(section.studio).success)));check('sections',complete.every(Boolean),'Finish each added section or remove unused sections. Recordings must be available and validated.');}
  const generated=draft.files.length>0&&draft.files.every(file=>!!file.content.trim());
  check('files',validFiles.every(Boolean)&&(!draft.files.length||generated),'Every attached file must be available and validated; generated files must contain usable content.');
- if(['document','custom'].includes(family))check('content',written||draft.uploadIds.length>0||generated,'Write finished sections, generate usable content, or attach your original finished file.');
+ const templates=Array.isArray(draft.studio?.templates?.items)?draft.studio.templates.items as {duplicateUrl?:string;blankUploadId?:string;exampleUploadId?:string}[]:[],cloudTemplates=templates.some(item=>safeStudioUrl(item.duplicateUrl||''));
+ const custom=Array.isArray(draft.studio?.custom?.blocks)?draft.studio.custom.blocks as {kind?:string;body?:string;url?:string}[]:[],customContent=draft.type==='custom'&&(custom.some(item=>item.body?.trim()||safeStudioUrl(item.url)||['session','physical'].includes(item.kind||''))||(draft.studio?.custom?.deliveryKinds as string[]|undefined)?.includes('community')===true);
+ check('template-files',templates.every(item=>[item.blankUploadId,item.exampleUploadId].every(id=>!id||draft.uploadIds.includes(id))),'Attach each selected template file to this product.');
+ if(['document','custom'].includes(family))check('content',written||draft.uploadIds.length>0||generated||customContent,'Write finished sections, generate usable content, or attach your original finished file.');
  if(family==='templates'){
-  check('templates',draft.uploadIds.length>0||generated,'Attach the actual reusable files or create editable templates. A description alone is not a template.');
+  check('templates',draft.uploadIds.length>0||generated||cloudTemplates,'Attach the actual reusable files or create editable templates. A description alone is not a template.');
   check('instructions',!!draft.fields.usageInstructions?.trim()||written,'Add instructions explaining how to use your templates.');
  }
  if(family==='course'||family==='challenge'){
-  const lessons=await Promise.all(draft.sections.map(async section=>!!section.title.trim()&&(!!section.body.trim()||!!section.videoId)&&(!section.videoId||await verifiedAsset(owner,productId,section.videoId,'video',integrity))));
+  const lessons=await Promise.all(draft.sections.map(async section=>!!section.title.trim()&&sectionHasContent(section)&&(!section.videoId||await verifiedAsset(owner,productId,section.videoId,'video',integrity))&&(!section.studio?.audioId||await verifiedAsset(owner,productId,section.studio.audioId,'audio',integrity))&&(!section.studio||publishedSectionStudioSchema.safeParse(section.studio).success)));
   check('lessons',lessons.length>0&&lessons.every(Boolean),family==='challenge'?'Finish each activity with usable instructions. Challenges are delivered at the learner’s own pace.':'Add finished lesson notes or attach validated recordings to every lesson.');
  }
  if(family==='service'){
   check('scope',!!draft.fields.serviceScope?.trim()&&!!draft.fields.outcome?.trim(),'Describe your service scope and the outcome of the session.');
   check('session',Number(draft.fields.durationMinutes)>=15&&Number(draft.fields.durationMinutes)<=180&&!!draft.fields.preparation?.trim(),'Set a session duration from 15 to 180 minutes and customer preparation instructions.');
  }
- if(family==='community')check('membership',!!draft.fields.memberPromise?.trim()&&!!draft.fields.welcome?.trim()&&!!draft.fields.rules?.trim(),'Add the member promise, welcome and community rules. Your external member-space link stays private.');
+ if(family==='community'||draft.type==='custom'&&(draft.studio?.custom?.deliveryKinds as string[]|undefined)?.includes('community'))check('membership',!!draft.fields.memberPromise?.trim()&&!!draft.fields.welcome?.trim()&&!!draft.fields.rules?.trim(),'Add the member promise, welcome and community rules. Your external member-space link stays private.');
  if(draft.coverUploadId)check('cover',await verifiedAsset(owner,productId,draft.coverUploadId,'cover',integrity),'Choose an available image or remove the cover.');
  const editorial=evaluateProductReadiness(draft),unfinished=editorial.checks.find(item=>item.status==='blocker'&&(
   /^(?:section-stub-|file-stub-)/.test(item.key)||item.key.startsWith('section-title-')||item.location.field&&isUnfinishedPlaceholder(item.location.field in draft?String(draft[item.location.field as keyof BuilderDraft]):draft.fields[item.location.field]||'')
@@ -70,19 +86,20 @@ export async function createBuilderWorkspace(owner:string,input:unknown){
  ]);
  return getBuilderWorkspace(id,owner);
 }
-export async function saveBuilderWorkspace(productId:string,owner:string,input:unknown){
+export async function saveBuilderWorkspace(productId:string,owner:string,input:unknown,allowTypeChange=false){
  const value=z.object({expectedVersion:z.number().int().min(1),draft:builderDraftSchema,revisionKind:z.enum(builderRevisionKinds).default('manual')}).parse(input);
+ if(value.draft.studio)productStudioSchema.parse(value.draft.studio);
  await ownedProduct(productId,owner);
  const current=await database().prepare('SELECT * FROM product_builder_workspaces WHERE product_id=? AND owner=?').bind(productId,owner).first();if(!current)throw new ApiError('Product workspace not found.',404);
  const old=builderDraftSchema.parse(JSON.parse(String(current.data))),encoded=JSON.stringify(value.draft);
  if(Number(current.version)!==value.expectedVersion){if(encoded===String(current.data))return getBuilderWorkspace(productId,owner);throw new ApiError('This product changed in another tab. Reload the saved version before continuing.',409);}
- if(value.draft.type!==old.type)throw new ApiError('A product keeps its original type. Create a new product to use a different builder.',409);
+ if(value.draft.type!==old.type&&!allowTypeChange)throw new ApiError('Use Change product type to review and convert this product.',409);
  const job=await database().prepare('SELECT status,lease FROM generation WHERE product_id=? AND owner=?').bind(productId,owner).first();
  if(job&&job.status!=='completed')throw new ApiError('Finish or stop AI generation before saving this draft.',409);
  // A completed generator writes products.content. Capture that result before a
  // subsequent manual save updates the working product; Apply remains explicit.
  if(job?.status==='completed')await captureGeneratedBuilderResult(productId,owner);
- const ids=[...value.draft.uploadIds,...value.draft.sections.flatMap(section=>section.videoId?[section.videoId]:[]),...(value.draft.coverUploadId?[value.draft.coverUploadId]:[])];
+ const ids=[...value.draft.uploadIds,...value.draft.sections.flatMap(section=>[...(section.videoId?[section.videoId]:[]),...(section.studio?.audioId?[section.studio.audioId]:[])]),...(value.draft.coverUploadId?[value.draft.coverUploadId]:[])];
  for(const id of new Set(ids)){const upload=await database().prepare("SELECT id FROM uploads WHERE id=? AND product_id=? AND owner=? AND status='completed' AND object_key NOT LIKE 'voice/%' AND NOT EXISTS(SELECT 1 FROM creator_voice_sources WHERE upload_id=uploads.id)").bind(id,productId,owner).first();if(!upload)throw new ApiError('Choose a completed upload belonging to this product. Private voice sources cannot be attached.',403);}
  if(encoded===String(current.data))return getBuilderWorkspace(productId,owner);
  const info=builderTypeDetails[value.draft.type],now=Math.max(Date.now(),Number(current.updated_at)+1),content:ProductContent={sections:value.draft.sections,files:value.draft.files,benefits:value.draft.fields.outcome?[value.draft.fields.outcome]:[],launch:''};
@@ -93,6 +110,15 @@ export async function saveBuilderWorkspace(productId:string,owner:string,input:u
   database().prepare('UPDATE products SET title=?,description=?,audience=?,format=?,price=?,content=?,updated_at=? WHERE id=? AND owner=? AND EXISTS(SELECT 1 FROM product_builder_workspaces WHERE product_id=? AND owner=? AND version=? AND updated_at=? AND data=?)').bind(value.draft.title||`Untitled ${info.name}`,value.draft.description,value.draft.audience,info.format,value.draft.priceCents,JSON.stringify(content),now,productId,owner,productId,owner,value.expectedVersion+1,now,encoded),
  ]);
  if(!results[0].meta.changes)throw new ApiError('This product changed while saving. Reload your saved draft.',409);
+ return getBuilderWorkspace(productId,owner);
+}
+export async function convertBuilderWorkspace(productId:string,owner:string,input:unknown){
+ const value=z.object({type:z.enum(builderTypes),expectedVersion:z.number().int().min(1)}).strict().parse(input),current=await getBuilderWorkspace(productId,owner);
+ if(current.version!==value.expectedVersion)throw new ApiError('Save and reload the latest product before changing its type.',409);
+ if(current.draft.type===value.type)return current;
+ const defaults=defaultBuilderDraft(value.type,current.draft.source),draft=builderDraftSchema.parse({...current.draft,type:value.type,fields:{...defaults.fields,...current.draft.fields}});
+ await saveBuilderWorkspace(productId,owner,{expectedVersion:value.expectedVersion,draft},true);
+ await database().prepare('UPDATE commerce_offers SET enabled=0,updated_at=MAX(updated_at+1,?) WHERE product_id=? AND owner=?').bind(Date.now(),productId,owner).run();
  return getBuilderWorkspace(productId,owner);
 }
 export async function getBuilderRevisionHistory(productId:string,owner:string,beforeVersion?:number):Promise<BuilderRevisionHistory>{

@@ -2,6 +2,7 @@
 
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {ArrowDown,ArrowRight,ArrowUp,Check,CheckCircle2,ChevronDown,Layers3,Loader2,Sparkles} from 'lucide-react';
+import {GenMascot} from './gen-mascot';
 import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
 import type {StudioConversation,StudioPlan} from '@/lib/studio-plan';
 
@@ -93,7 +94,7 @@ export function StudioChat(props:Props){
       <section className="chat-thread" aria-label="Growth planning conversation">
         <div className="chat-transcript" ref={scrollRef} onWheel={()=>{manualScrollRef.current=true;}} onTouchMove={()=>{manualScrollRef.current=true;}} onPointerDown={e=>{if(e.target===e.currentTarget)manualScrollRef.current=true;}} onKeyDown={e=>{if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End'].includes(e.key))manualScrollRef.current=true;}} onScroll={()=>{const pane=scrollRef.current;if(pane&&manualScrollRef.current)followRef.current=pane.scrollHeight-pane.scrollTop-pane.clientHeight<100;}} tabIndex={0} aria-label="Conversation history">
           {messages.map((m,index)=><article className={`chat-message ${m.role}`} key={m.id} ref={!sent&&index===messages.length-1?latestRef:undefined}>
-            <span className="chat-avatar">{m.role==='assistant'?<Sparkles size={17}/>:name[0]||'Y'}</span>
+            <span className={'chat-avatar'+(m.role==='assistant'?' is-gen-avatar':'')}>{m.role==='assistant'?<GenMascot mood={m.questions?.length?'curious':'helping'} size={38}/>:name[0]||'Y'}</span>
             <div className="chat-message-body"><strong>{m.role==='assistant'?'FiveGen':name||'You'}</strong><p>{m.content}</p>
               {!!m.questions?.length&&(index===messages.length-1&&!conversation?.productId?<div className="chat-clarifications" ref={questionsRef}>
                 <div className="chat-clarification-heading"><div><h2>A few details to make it yours</h2><p>Answer together below, or reply in your own words.</p></div><span>{answered}/{questions.length}</span></div>
@@ -104,7 +105,7 @@ export function StudioChat(props:Props){
               </div>:<details className="chat-past-questions"><summary>Questions from this step</summary><ul>{m.questions.map(q=><li key={q}>{q}</li>)}</ul></details>)}
             </div>
           </article>)}
-          {sent&&<><article className="chat-message user" ref={latestRef}><span className="chat-avatar">{name[0]||'Y'}</span><div className="chat-message-body"><strong>You</strong><p>{sent}</p></div></article><div className="chat-thinking" role="status"><Loader2 size={16} className="spin"/>Updating your plan with these details…</div></>}
+          {sent&&<><article className="chat-message user" ref={latestRef}><span className="chat-avatar">{name[0]||'Y'}</span><div className="chat-message-body"><strong>You</strong><p>{sent}</p></div></article><div className="chat-thinking" role="status"><GenMascot mood="thinking" size={30}/>Gen is thinking through your plan…</div></>}
         </div>
         <div className="chat-compose-dock">
           {showLatest&&<button className="chat-jump" onClick={()=>{followRef.current=true;reveal(latestRef.current);}}>Latest message<ArrowDown size={14}/></button>}

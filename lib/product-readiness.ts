@@ -1,4 +1,5 @@
 import {builderFamily,builderTypeDetails,type BuilderDraft,type BuilderCheck} from './builder-contract';
+import type {SectionStudio} from './product-studio-contract';
 import type {SaleUpload} from './file-sale-contract';
 
 export type ProductReadinessLocation={step:'details'|'content'|'review';field?:string;sectionIndex?:number;fileIndex?:number;uploadId?:string};
@@ -20,8 +21,9 @@ export function findRepeatedSectionBodies(sections:{body:string}[]){
  sections.forEach((section,index)=>{const body=normalized(section.body);if(body.length<80)return;const previous=first.get(body);if(previous===undefined)first.set(body,index);else duplicates.push({index,matchesIndex:previous});});
  return duplicates;
 }
-export function unfinishedSectionIndexes(sections:{title:string;body:string;videoId?:string}[]){
- return sections.flatMap((section,index)=>!section.title.trim()||isUnfinishedPlaceholder(section.title)||(!section.body.trim()&&!section.videoId)||isUnfinishedPlaceholder(section.body)?[index]:[]);
+export function sectionHasContent(section:{body:string;videoId?:string;studio?:SectionStudio}){const meta=section.studio;return !!(section.body.trim()||section.videoId||typeof meta?.audioId==='string'&&meta.audioId||Array.isArray(meta?.quiz)&&meta.quiz.length||typeof meta?.assignment?.prompt==='string'&&meta.assignment.prompt.trim());}
+export function unfinishedSectionIndexes(sections:{title:string;body:string;videoId?:string;studio?:SectionStudio}[]){
+ return sections.flatMap((section,index)=>!section.title.trim()||isUnfinishedPlaceholder(section.title)||!sectionHasContent(section)||isUnfinishedPlaceholder(section.body)?[index]:[]);
 }
 function hasPracticalTask(value:string){return /(?:\b(?:exercise|worksheet|checklist|practice|task|action|try this|your turn|reflection|write down|complete|apply|prompt|step\s*\d+)\b|\[[ xX]\])/i.test(value);}
 function validHttps(value:string){try{const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password;}catch{return false;}}
@@ -38,11 +40,13 @@ export function evaluateProductReadiness(draft:BuilderDraft,options:ReadinessOpt
  };
  essential('title',3,'Product name');essential('description',12,'Description');essential('audience',3,'Audience');
  const hasDownload=draft.uploadIds.length>0,hasEditable=draft.files.some(file=>!!file.content.trim()),hasSections=draft.sections.length>0;
+ const templateLinks=Array.isArray(draft.studio?.templates?.items)&&(draft.studio.templates.items as {duplicateUrl?:string}[]).some(item=>validHttps(item.duplicateUrl||''));
+ const customBlocks=draft.type==='custom'&&Array.isArray(draft.studio?.custom?.blocks)&&(draft.studio.custom.blocks as {kind?:string;body?:string;url?:string}[]).some(item=>item.body?.trim()||validHttps(item.url||'')||['session','physical'].includes(item.kind||''));
  const originalFileOnly=hasDownload&&!hasSections&&!draft.files.length;
- const bodyComplete=draft.sections.length>0&&draft.sections.every(section=>!!section.title.trim()&&(!!section.body.trim()||!!section.videoId));
- if(['document','custom'].includes(family)&&(!hasSections||bodyComplete||hasDownload||hasEditable))add('content-present',bodyComplete||hasDownload||hasEditable?'ready':'blocker','Product content',bodyComplete||hasDownload||hasEditable?(originalFileOnly?'Your original file is the finished product. Extra chapters are optional.':'Your product includes content or attached original files.'):'Write the content, create an editable resource, or attach your finished file.',{step:'content'},'Add content or upload a file');
+ const bodyComplete=draft.sections.length>0&&draft.sections.every(section=>!!section.title.trim()&&sectionHasContent(section));
+ if(['document','custom'].includes(family)&&(!hasSections||bodyComplete||hasDownload||hasEditable||customBlocks||draft.type==='custom'&&(draft.studio?.custom?.deliveryKinds as string[]|undefined)?.includes('community')))add('content-present',bodyComplete||hasDownload||hasEditable||customBlocks?'ready':'blocker','Product content',bodyComplete||hasDownload||hasEditable||customBlocks?(originalFileOnly?'Your original file is the finished product. Extra chapters are optional.':'Your product includes content or attached original files.'):'Write the content, create an editable resource, or attach your finished file.',{step:'content'},'Add content or upload a file');
  if(family==='templates'){
-  if(!draft.files.length||hasDownload||hasEditable)add('templates-present',hasDownload||hasEditable?'ready':'blocker','Reusable templates',hasDownload||hasEditable?'Your reusable files are included.':'Attach actual reusable files or fill in an editable template. A description alone is not a template.',{step:'content'},'Add template files');
+  if(!draft.files.length||hasDownload||hasEditable)add('templates-present',hasDownload||hasEditable||templateLinks?'ready':'blocker','Reusable templates',hasDownload||hasEditable||templateLinks?'Your reusable files are included.':'Attach actual reusable files or fill in an editable template. A description alone is not a template.',{step:'content'},'Add template files');
   const instructions=!!draft.fields.usageInstructions?.trim()&&!isUnfinishedPlaceholder(draft.fields.usageInstructions)||bodyComplete;
   if(instructions||!hasSections)add('template-instructions',instructions?'ready':'blocker','How to use the templates',instructions?'Usage instructions are included.':'Explain how to copy, customize, and use the templates.',{step:'details',field:'usageInstructions'},'Add usage instructions');
  }
@@ -57,7 +61,7 @@ export function evaluateProductReadiness(draft:BuilderDraft,options:ReadinessOpt
  const bodies=new Map<string,number>(),titles=new Map<string,number>();
  draft.sections.forEach((section,index)=>{
   const name=section.title.trim()||`${info.unit} ${index+1}`,location={step:'content' as const,sectionIndex:index};
-  const emptyContent=!section.body.trim()&&!section.videoId;
+  const emptyContent=!sectionHasContent(section);
   if((!section.title.trim()||isUnfinishedPlaceholder(section.title))&&!emptyContent)add(`section-title-${index}`,'blocker',`Finish ${info.unit.toLowerCase()} ${index+1}'s title`,'Replace the drafting label with the actual title.',location,'Edit title');
   if(emptyContent)add(`section-empty-${index}`,'blocker',`${name} needs content`,!section.title.trim()||isUnfinishedPlaceholder(section.title)?'Add a real title and usable content, or remove this unused item.':'Write usable content, attach a recording where supported, or remove this unused item.',location,'Add content');
   else if(section.body.trim()&&isUnfinishedPlaceholder(section.body))add(`section-stub-${index}`,'blocker',`${name} is still a draft`,'Replace the placeholder with the finished content. A title or drafting instruction is not the deliverable.',location,'Finish this item');
@@ -100,8 +104,8 @@ export function evaluateProductReadiness(draft:BuilderDraft,options:ReadinessOpt
  }
  const titleDayCount=/\b(\d{1,2})[\s-]*day\b/i.exec(draft.title),planned=titleDayCount?Number(titleDayCount[1]):Number(draft.fields.unitCount);
  if(!originalFileOnly&&hasSections&&Number.isInteger(planned)&&planned>draft.sections.length&&planned<=30)add('planned-items','advisory',`Check the promised ${planned} ${titleDayCount?'days':info.plural}`,`Your draft contains ${draft.sections.length} ${info.plural}. Finish the planned sequence or adjust the promise if the shorter version is intentional.`,{step:'content'},'Review the sequence');
- if(family==='service'&&!validHttps(draft.fields.meetingUrl||''))add('service-delivery','advisory','Confirm your meeting arrangement','Before selling, set a private meeting link and available session times in payment setup. Page publication can happen first.',{step:'review'},'Review delivery');
- if(family==='community'&&!validHttps(draft.fields.communityUrl||''))add('community-delivery','advisory','Connect the member space before selling','Add the private HTTPS community invitation link in payment setup. It is not needed to publish the public page.',{step:'review'},'Review member access');
+ if(family==='service'&&draft.studio?.service?.meetingProvider!=='jitsi'&&!validHttps(draft.fields.meetingUrl||''))add('service-delivery','advisory','Confirm your meeting arrangement','Before selling, set a private meeting link and available session times in payment setup. Page publication can happen first.',{step:'review'},'Review delivery');
+ if(family==='community'&&!draft.studio?.community?.enabled&&!validHttps(draft.fields.communityUrl||''))add('community-delivery','advisory','Connect the member space before selling','Add the private HTTPS community invitation link in payment setup. It is not needed to publish the public page.',{step:'review'},'Review member access');
  const sectionProblem=(item:ProductReadinessCheck)=>item.key.startsWith('section-')||item.key.startsWith('recording-');
  const fieldValue=(field:string)=>field in draft?String(draft[field as keyof BuilderDraft]):draft.fields[field]||'';
  const corresponds:Record<string,(item:ProductReadinessCheck)=>boolean>={details:item=>item.key.startsWith('essential-'),sections:sectionProblem,files:item=>item.key.startsWith('file-')||item.key.startsWith('upload-'),content:item=>item.key==='content-present'||sectionProblem(item)||item.key.startsWith('file-'),templates:item=>item.key==='templates-present'||item.key.startsWith('file-'),instructions:item=>item.key==='template-instructions'||sectionProblem(item),lessons:item=>item.key==='learning-content'||sectionProblem(item),scope:item=>item.key==='service-serviceScope'||item.key==='service-outcome',session:item=>item.key==='service-duration'||item.key==='service-preparation',membership:item=>item.key.startsWith('community-'),cover:item=>item.key==='cover-missing',quality:item=>item.key.startsWith('section-stub-')||item.key.startsWith('file-stub-')||item.key.startsWith('section-title-')||!!item.location.field&&isUnfinishedPlaceholder(fieldValue(item.location.field))};

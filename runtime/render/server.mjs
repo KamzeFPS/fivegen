@@ -44,6 +44,7 @@ export async function start() {
   process.env.MCP_ORIGIN = config.origin;
   process.env.VINEXT_TRUST_PROXY = '1';
   initializePurchaseEmailDispatchSecret();
+  if(!process.env.PRODUCT_REMINDER_DISPATCH_SECRET?.trim())process.env.PRODUCT_REMINDER_DISPATCH_SECRET=randomBytes(32).toString('base64url');
   if(!process.env.AUTH_EMAIL_DISPATCH_SECRET?.trim())process.env.AUTH_EMAIL_DISPATCH_SECRET=randomBytes(32).toString('base64url');
   const storage = getStorage();
   const auth = createAuth(config, storage,{sendEmail:async payload=>{
@@ -109,7 +110,7 @@ export async function start() {
       if (req.headers['oai-authenticated-user-id']) res.setHeader('Cache-Control', 'private, no-store');
       // Revoked landing pages and VSLs must disappear immediately, including for
       // anonymous visitors. Never cache a previously published snapshot.
-      if (/^\/(?:b|g|o|customer|unsubscribe)(?:\/|$)/.test(routePath) || /^\/api\/(?:builder|builder-cover|growth|commerce|automations|offer-lab)(?:\/|$)/.test(routePath)) {
+      if (/^\/(?:b|g|o|customer|unsubscribe)(?:\/|$)/.test(routePath) || /^\/api\/(?:builder|builder-cover|builder-preview|growth|commerce|automations|offer-lab)(?:\/|$)/.test(routePath)) {
         res.setHeader('Cache-Control', 'private, no-store');
         res.setHeader('Referrer-Policy', 'no-referrer');
       }
@@ -143,12 +144,16 @@ export async function start() {
   dispatchTimer.unref();
   // Transactional confirmations are independent of optional marketing queues.
   const purchaseEmailWorker=startPurchaseEmailWorker(config);
-  server.once('close',()=>purchaseEmailWorker.stop());
+  const productReminderWorker=startPurchaseEmailWorker(config,{source:{...process.env,PURCHASE_EMAILS_WORKER_ENABLED:process.env.PRODUCT_REMINDERS_WORKER_ENABLED,PURCHASE_EMAIL_DISPATCH_SECRET:process.env.PRODUCT_REMINDER_DISPATCH_SECRET},fetcher:(url,options)=>loopbackRequest(String(url).replace('/api/purchase-emails/dispatch','/api/product-reminders/dispatch'),options)});
+  const serviceIntegrationWorker=startPurchaseEmailWorker(config,{source:{...process.env,PURCHASE_EMAILS_WORKER_ENABLED:process.env.SERVICE_INTEGRATIONS_WORKER_ENABLED??process.env.PRODUCT_REMINDERS_WORKER_ENABLED,PURCHASE_EMAIL_DISPATCH_SECRET:process.env.PRODUCT_REMINDER_DISPATCH_SECRET},fetcher:(url,options)=>loopbackRequest(String(url).replace('/api/purchase-emails/dispatch','/api/service-integrations/dispatch'),options)});
+  server.once('close',()=>{purchaseEmailWorker.stop();productReminderWorker.stop();serviceIntegrationWorker.stop();});
   const shutdown = () => {
     if (stopping) return;
     stopping = true;
     clearInterval(dispatchTimer);
     purchaseEmailWorker.stop();
+    productReminderWorker.stop();
+    serviceIntegrationWorker.stop();
     server.close(() => { storage.close(); process.exit(0); });
     server.closeIdleConnections();
     // Exit before Render's default 30-second limit for disk-backed services.

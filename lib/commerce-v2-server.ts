@@ -1,3 +1,6 @@
+import {communityTierAllows} from './product-community-tier-contract';
+import type {BuilderDeliverySnapshot} from './builder-publication-contract';
+import {assertServiceIntegrationReady} from './service-integrations-server';
 import Stripe from 'stripe';
 import { z } from 'zod';
 import { env } from 'cloudflare:workers';
@@ -6,12 +9,16 @@ import { commerceOfferSchema, isConsulting } from './commerce-v2';
 import type { CommerceOffer } from './commerce-v2';
 import { contentSchema, publishContentError } from './product';
 import { enrollAutomationPurchase } from './automation-server';
-import {builderPublishedDelivery,builderOrderDelivery,verifyBuilderDelivery,builderDownloadMetadata,builderPrivateDownload,builderBuyerCover,builderPrivateCover} from './builder-delivery-server';
+import {builderPublishedDelivery,builderOrderDelivery,builderBuyerDelivery,verifyBuilderDelivery,builderDownloadMetadata,builderPrivateDownload,builderBuyerCover,builderPrivateCover} from './builder-delivery-server';
 import {builderDeliverySnapshotSchema,builderPublishedPresentation,builderBuyerPresentation} from './builder-publication-contract';
 import {commerceCommission,commerceFeeSnapshot} from './commerce-fees';
 import { creatorPlan } from './creator-plan-server';
 import { freeCreatorPlan } from './creator-plans';
 import {commercePurchaseEmailStatement,purchaseEmailState} from './purchase-email';
+import {fulfillStudioSession,studioSubscriptionEvent,assertStudioSubscriptionAccess,revokeStudioEntitlements} from './product-studio-commerce';
+import {teamSeatAllows,teamSeatOrderIds} from './product-team-server';
+import {sectionHasContent} from './product-readiness';
+import {learningDeliverySections,learnerSectionAccess} from './product-learning-server';
 
 export function commerceMode(): 'live'|'test' {
   const mode=binding('STRIPE_MODE');
@@ -90,19 +97,24 @@ export async function getCommerceOffer(productId:string,owner:string):Promise<Co
   const product=await ownedProduct(productId,owner),row=await database().prepare('SELECT * FROM commerce_offers WHERE product_id=? AND owner=?').bind(productId,owner).first();
   return row?{enabled:!!row.enabled&&row.enabled_mode===(binding('STRIPE_MODE')==='live'?'live':'test'),amount:Number(row.amount),currency:String(row.currency) as CommerceOffer['currency'],intakePrompt:String(row.intake_prompt),meetingUrl:String(row.meeting_url),updatedAt:Number(row.updated_at)}:{enabled:false,amount:Math.max(50,Number(product.price)),currency:'usd',intakePrompt:'What would you like help with during our session?',meetingUrl:'',updatedAt:0};
 }
-async function assertCommerceContent(product:Record<string,unknown>){
+export async function assertCommerceContent(product:Record<string,unknown>,selectedSnapshot?:BuilderDeliverySnapshot){
   const builder=await builderPublishedDelivery(String(product.id));
   if(builder){
-    const snapshot=builder.snapshot;
-    if(snapshot.deliveryFamily==='service'){
-      if(!snapshot.serviceScope.trim()||!snapshot.preparation.trim())throw new ApiError('Add clear service scope and customer preparation before selling this service.',409);
-      if(!safeDeliveryUrl(snapshot.meetingUrl))throw new ApiError('Add a private HTTPS meeting link before selling this service.',409);
-      const slot=await database().prepare("SELECT s.id FROM commerce_slots s WHERE s.product_id=? AND s.owner=? AND s.starts_at>? AND NOT EXISTS(SELECT 1 FROM commerce_bookings b WHERE b.slot_id=s.id AND b.status='confirmed' AND b.mode=?) LIMIT 1").bind(product.id,product.owner,Date.now(),commerceMode()).first();
+    const snapshot=selectedSnapshot||builder.snapshot;
+    const mixedSessions=(snapshot.studio?.custom?.deliveryKinds as string[]|undefined)?.includes('sessions')||(snapshot.studio?.custom?.blocks as {kind?:string}[]|undefined)?.some(block=>block.kind==='session');
+    const mixedCommunity=(snapshot.studio?.custom?.deliveryKinds as string[]|undefined)?.includes('community');
+    if(snapshot.deliveryFamily==='service'||mixedSessions){
+      if(snapshot.deliveryFamily==='service'&&(!snapshot.serviceScope.trim()||!snapshot.preparation.trim()))throw new ApiError('Add clear service scope and customer preparation before selling this service.',409);
+      await assertServiceIntegrationReady(String(product.owner),snapshot.studio?.service||{});
+      if(!['jitsi','google-meet','zoom'].includes(snapshot.studio?.service?.meetingProvider||'manual')&&!safeDeliveryUrl(snapshot.studio?.service?.meetingUrl||snapshot.meetingUrl))throw new ApiError('Add a private HTTPS meeting link or choose automatic meeting links.',409);
+      const slot=await database().prepare("SELECT s.id FROM commerce_slots s WHERE s.product_id=? AND s.owner=? AND s.starts_at>? AND NOT EXISTS(SELECT 1 FROM commerce_bookings b WHERE b.slot_id=s.id AND b.status='confirmed' AND b.mode=?) AND NOT EXISTS(SELECT 1 FROM product_service_sessions ps WHERE ps.slot_id=s.id AND ps.status='confirmed' AND ps.mode=?) LIMIT 1").bind(product.id,product.owner,Date.now(),commerceMode(),commerceMode()).first();
       if(!slot)throw new ApiError('This service needs an available session time before accepting a new purchase.',409);
-    }else if(snapshot.deliveryFamily==='community'){
-      if(!safeDeliveryUrl(snapshot.communityUrl))throw new ApiError('Add an HTTPS community invitation URL before selling membership access.',409);
-    }else if(!snapshot.uploadIds.length&&!snapshot.files.length&&!snapshot.sections.length)throw new ApiError('Add content or original files before selling this product.',409);
-    if(snapshot.sections.some(section=>!section.title.trim()||(!section.body.trim()&&!section.videoId))||snapshot.files.some(file=>!file.content.trim()))throw new ApiError('Finish every included section and resource before selling this product.',409);
+    }
+    if(snapshot.deliveryFamily==='community'||mixedCommunity){
+      if(!snapshot.studio?.community?.enabled&&!safeDeliveryUrl(snapshot.communityUrl))throw new ApiError('Set up your community or add a private HTTPS invitation link.',409);
+    }
+    if(!['service','community'].includes(snapshot.deliveryFamily)&&!mixedSessions&&!mixedCommunity&&!snapshot.uploadIds.length&&!snapshot.files.length&&!snapshot.sections.length&&!(snapshot.studio?.templates?.items as {duplicateUrl?:string}[]|undefined)?.some(item=>safeDeliveryUrl(item.duplicateUrl||''))&&!(snapshot.studio?.custom?.blocks as {kind?:string;body?:string;url?:string}[]|undefined)?.some(item=>item.body?.trim()||safeDeliveryUrl(item.url||'')||item.kind==='physical'))throw new ApiError('Add content or original files before selling this product.',409);
+    if(snapshot.sections.some(section=>!section.title.trim()||!sectionHasContent(section))||snapshot.files.some(file=>!file.content.trim()))throw new ApiError('Finish every included section and resource before selling this product.',409);
     await verifyBuilderDelivery({id:product.id,owner:product.owner},snapshot,true);return;
   }
   if(isConsulting(String(product.format)))return;
@@ -164,7 +176,7 @@ export async function createCommerceCheckout(req:Request,input:unknown) {
   return {url:session.url,orderId:value.requestId,cookie:token?commerceCookie(value.requestId,token,origin):null};
 }
 function objectId(value:string|{id:string}|null|undefined){return typeof value==='string'?value:value?.id||null;}
-async function recordCommerceEarnings(order:Record<string,unknown>,payment:Stripe.PaymentIntent,charge:Stripe.Charge){
+export async function recordCommerceEarnings(order:Record<string,unknown>,payment:Stripe.PaymentIntent,charge:Stripe.Charge){
   const fee=payment.application_fee_amount||0;
   if(fee!==Number(order.expected_fee_amount)||charge.application_fee_amount!=null&&charge.application_fee_amount!==fee)throw new ApiError('Payment commission does not match the checkout intent.',400);
   const value=commerceFeeSnapshot(charge,fee),db=database();
@@ -181,7 +193,8 @@ export async function refreshCommerceOrderEarnings(orderId:string,owner:string):
  const known=await db.prepare('SELECT key FROM commerce_accounts WHERE owner=? AND account_id=? AND mode=?').bind(owner,order.account_id,mode).first();
  if(!known)throw new ApiError('The sale does not belong to this connected account.',409);
  const payment=await commerceProvider('refresh sale earnings',()=>commerceStripe().paymentIntents.retrieve(String(order.payment_intent),{expand:['latest_charge.balance_transaction']},{stripeAccount:String(order.account_id),timeout:5000,maxNetworkRetries:0}));
- if(payment.id!==order.payment_intent||payment.status!=='succeeded'||payment.amount_received!==order.amount||payment.currency!==order.currency||payment.livemode!==(mode==='live')||payment.metadata?.fivegen_order!==orderId)throw new ApiError('The sale does not match the verified payment.',409);
+ const recurring=await db.prepare('SELECT invoice_id FROM product_subscription_renewals WHERE order_id=?').bind(orderId).first();
+ if(payment.id!==order.payment_intent||payment.status!=='succeeded'||payment.amount_received!==order.amount||payment.currency!==order.currency||payment.livemode!==(mode==='live')||!recurring&&payment.metadata?.fivegen_order!==orderId)throw new ApiError('The sale does not match the verified payment.',409);
  const charge=payment.latest_charge;
  if(!charge||typeof charge==='string'||objectId(charge.payment_intent)!==payment.id||charge.amount!==order.amount||charge.currency!==order.currency||charge.livemode!==(mode==='live'))throw new ApiError('Sale charge verification is incomplete.',502);
  if(charge.amount_refunded>0||charge.disputed)await revokeCommercePayment(String(order.account_id),mode,payment.id,charge.disputed?'disputed':'refunded');
@@ -193,8 +206,11 @@ export async function revokeCommercePayment(account:string,mode:string,paymentIn
     db.prepare("UPDATE commerce_orders SET status='revoked' WHERE account_id=? AND mode=? AND payment_intent=?").bind(account,mode,paymentIntent),
     db.prepare("UPDATE commerce_bookings SET status='cancelled' WHERE order_id IN (SELECT id FROM commerce_orders WHERE account_id=? AND mode=? AND payment_intent=?)").bind(account,mode,paymentIntent),
   ]);
+  const revoked=await db.prepare('SELECT id FROM commerce_orders WHERE account_id=? AND mode=? AND payment_intent=?').bind(account,mode,paymentIntent).all();for(const order of revoked.results)await revokeStudioEntitlements(String(order.id));
 }
 export async function fulfillCommerceSession(sessionId:string,account:string) {
+  const advanced=await database().prepare('SELECT i.order_id FROM product_commerce_intents i JOIN commerce_orders o ON o.id=i.order_id WHERE o.session_id=? AND o.account_id=?').bind(sessionId,account).first();
+  if(advanced){await fulfillStudioSession(sessionId,account);return;}
   const client=commerceStripe(),mode=commerceMode(),db=database(),session=await commerceProvider('verify the payment',()=>client.checkout.sessions.retrieve(sessionId,{expand:['payment_intent.latest_charge']},{stripeAccount:account}));
   const id=session.metadata?.fivegen_order;if(!id)return;
   const order=await db.prepare('SELECT * FROM commerce_orders WHERE id=? AND account_id=? AND mode=?').bind(id,account,mode).first();if(!order)throw new ApiError('Unknown checkout intent.',400);
@@ -229,17 +245,25 @@ export async function processCommerceEvent(event:Stripe.Event) {
   else if(event.type==='charge.refunded'){const charge=event.data.object as Stripe.Charge,pi=objectId(charge.payment_intent);if(pi&&charge.amount_refunded>0)await revokeCommercePayment(account,mode,pi,'refunded');}
   else if(event.type==='charge.dispute.created'||event.type==='charge.dispute.closed'){const dispute=event.data.object as Stripe.Dispute,pi=objectId(dispute.payment_intent);if(pi)await revokeCommercePayment(account,mode,pi,'disputed');}
   else if(event.type==='account.updated')await refreshCommerceAccount(account,mode);
+  else if(event.type.startsWith('customer.subscription.')||event.type==='invoice.paid'||event.type==='invoice.payment_failed')await studioSubscriptionEvent(event,account);
   await db.prepare('INSERT OR IGNORE INTO commerce_events (id,type,created_at) VALUES (?,?,?)').bind(event.id,event.type,Date.now()).run();
 }
 export async function verifyCommerceWebhook(req:Request) {
   const secret=binding('STRIPE_CONNECT_WEBHOOK_SECRET');if(!secret.startsWith('whsec_'))throw new ApiError('Creator payment webhooks are not configured.',503);
   const raw=await req.text();let event:Stripe.Event;try{event=await commerceStripe().webhooks.constructEventAsync(raw,req.headers.get('stripe-signature')||'',secret);}catch{throw new ApiError('Invalid Stripe signature.',400);}await processCommerceEvent(event);
 }
-export async function customerOrder(req:Request,id:string,paid=true) {
+export async function customerOrder(req:Request,id:string,paid=true,options:{purchaserOnly?:boolean}={}):Promise<Record<string,unknown>&{accessRole:'purchaser'|'team'}> {
   const order=await database().prepare('SELECT * FROM commerce_orders WHERE id=? AND mode=?').bind(id,commerceMode()).first();if(!order)throw new ApiError('Purchase not found.',404);
   const user=await identity({allowUnaccepted:true}).catch(()=>null);
-  if(!await cookieOwns(req,order)&&(!user?.email||user.email.toLowerCase()!==order.email))throw new ApiError('Open this page in the browser you purchased with, or sign in using your purchase email.',403);
-  if(paid&&order.status!=='paid')throw new ApiError(order.status==='revoked'?'Access was revoked after a refund or dispute.':'Payment has not been confirmed yet.',403);return order;
+  let allowed=await cookieOwns(req,order)||!!user?.email&&user.email.toLowerCase()===order.email;
+  let accessRole:'purchaser'|'team'='purchaser';
+  if(!allowed){const parent=await database().prepare('SELECT parent_order_id FROM product_bundle_entitlements WHERE order_id=? UNION SELECT parent_order_id FROM product_subscription_renewals WHERE order_id=? AND parent_order_id!=order_id LIMIT 1').bind(id,id).first();if(parent){const access=await customerOrder(req,String(parent.parent_order_id),paid,options).catch(()=>null);allowed=!!access;if(access)accessRole=access.accessRole;}}
+  if(!allowed&&!options.purchaserOnly&&user?.email&&await teamSeatAllows(order,user.email)){allowed=true;accessRole='team';}
+  if(!allowed)throw new ApiError('Open this page in the browser you purchased with, or sign in using your purchase email.',403);
+  if(paid&&order.status!=='paid')throw new ApiError(order.status==='revoked'?'Access was revoked after a refund or dispute.':'Payment has not been confirmed yet.',403);
+  if(paid&&await database().prepare('SELECT order_id FROM product_commerce_intents WHERE order_id=?').bind(id).first())await assertStudioSubscriptionAccess(id);
+  if(paid){const parent=await database().prepare('SELECT parent_order_id FROM product_bundle_entitlements WHERE order_id=? UNION SELECT parent_order_id FROM product_subscription_renewals WHERE order_id=? AND parent_order_id!=order_id LIMIT 1').bind(id,id).first();if(parent){const payment=await database().prepare('SELECT status FROM commerce_orders WHERE id=? AND mode=?').bind(parent.parent_order_id,commerceMode()).first();if(payment?.status!=='paid')throw new ApiError('The purchase that includes this product is no longer active.',403);await assertStudioSubscriptionAccess(String(parent.parent_order_id));}}
+  return {...order,accessRole};
 }
 export async function customerLibraryStatus(req:Request,id?:string) {
   let paymentStatusError:string|undefined;
@@ -257,38 +281,45 @@ export async function customerLibraryStatus(req:Request,id?:string) {
   }
   const mode=commerceMode(),user=await identity({allowUnaccepted:true}).catch(()=>null);
   const cookieIds=(req.headers.get('cookie')||'').split(';').map(c=>/^fivegen_purchase_([a-f0-9]{8})([a-f0-9]{4})([a-f0-9]{4})([a-f0-9]{4})([a-f0-9]{12})=/.exec(c.trim())).filter(Boolean).slice(0,20).map(m=>m!.slice(1).join('-'));
-  const ids=Array.from(new Set([id||'',...cookieIds]));
-  const rows=await database().prepare(`SELECT * FROM commerce_orders WHERE mode=? AND (email=? OR id IN (${ids.map(()=>'?').join(',')})) ORDER BY created_at DESC LIMIT 100`).bind(mode,user?.email?.toLowerCase()||'',...ids).all();
-  const orders=[];for(const order of rows.results){if(!await cookieOwns(req,order)&&(!user?.email||user.email.toLowerCase()!==order.email))continue;orders.push({id:order.id,title:order.title,status:order.status,amount:order.amount,currency:order.currency,mode:order.mode,createdAt:order.created_at});}return {orders,...(paymentStatusError?{paymentStatusError}:{})};
+  const teamIds=user?.email?await teamSeatOrderIds(user.email,mode):[];
+  const ids=Array.from(new Set([id||'',...cookieIds,...teamIds]));
+  const rows=await database().prepare(`SELECT o.*,EXISTS(SELECT 1 FROM product_commerce_intents i WHERE i.order_id=o.id AND i.pricing_model='subscription') subscription FROM commerce_orders o WHERE mode=? AND (email=? OR id IN (${ids.map(()=>'?').join(',')}) OR id IN(SELECT order_id FROM product_bundle_entitlements WHERE parent_order_id IN(${ids.map(()=>'?').join(',')}))) AND NOT EXISTS(SELECT 1 FROM product_subscription_renewals r WHERE r.order_id=o.id AND r.parent_order_id!=r.order_id) ORDER BY created_at DESC LIMIT 100`).bind(mode,user?.email?.toLowerCase()||'',...ids,...ids).all();
+  const orders=[];for(const order of rows.results){if(!await customerOrder(req,String(order.id),false).catch(()=>null))continue;orders.push({id:order.id,title:order.title,status:order.status,amount:order.amount,currency:order.currency,mode:order.mode,createdAt:order.created_at,subscription:!!order.subscription});}return {orders,...(paymentStatusError?{paymentStatusError}:{})};
 }
 export async function customerLibrary(req:Request,id?:string){return (await customerLibraryStatus(req,id)).orders;}
 export async function customerProduct(req:Request,id:string) {
   const order=await customerOrder(req,id),product=await database().prepare('SELECT * FROM products WHERE id=? AND owner=?').bind(order.product_id,order.owner).first();if(!product)throw new ApiError('Product unavailable. Contact your creator.',404);
-  const frozen=await builderOrderDelivery(id),content=frozen||contentSchema.parse(JSON.parse(String(product.content))),offer=frozen||await getCommerceOffer(String(order.product_id),String(order.owner));
+  const raw=await builderOrderDelivery(id),frozen=await builderBuyerDelivery(id),content=frozen||contentSchema.parse(JSON.parse(String(product.content))),offer=frozen||await getCommerceOffer(String(order.product_id),String(order.owner));
   const format=frozen?.format||String(product.format),presentation=builderBuyerPresentation(frozen,format);
-  const service=presentation.deliveryFamily==='service';
+  const custom=frozen?.studio?.custom;
+  const service=(!raw||communityTierAllows(raw,'service','sessions'))&&(presentation.deliveryFamily==='service'||!!((custom?.deliveryKinds as string[]|undefined)?.includes('sessions')||(custom?.blocks as {kind?:string}[]|undefined)?.some(block=>block.kind==='session')));
   const booking=await database().prepare("SELECT b.id,b.intake,b.status,s.starts_at,s.ends_at FROM commerce_bookings b JOIN commerce_slots s ON s.id=b.slot_id WHERE b.order_id=? AND b.status='confirmed'").bind(id).first();
-  const slots=service?(await database().prepare("SELECT s.id,s.starts_at,s.ends_at FROM commerce_slots s WHERE s.product_id=? AND s.starts_at>? AND NOT EXISTS(SELECT 1 FROM commerce_bookings b WHERE b.slot_id=s.id AND b.status='confirmed' AND b.mode=?) ORDER BY s.starts_at LIMIT 100").bind(order.product_id,Date.now(),order.mode).all()).results:[];
+  const slots=service?(await database().prepare("SELECT s.id,s.starts_at,s.ends_at FROM commerce_slots s WHERE s.product_id=? AND s.starts_at>? AND NOT EXISTS(SELECT 1 FROM commerce_bookings b WHERE b.slot_id=s.id AND b.status='confirmed' AND b.mode=?) AND NOT EXISTS(SELECT 1 FROM product_service_sessions ps WHERE ps.slot_id=s.id AND ps.status='confirmed' AND ps.mode=?) ORDER BY s.starts_at LIMIT 100").bind(order.product_id,Date.now(),order.mode,order.mode).all()).results:[];
   const cover=await builderBuyerCover(order,frozen);
-  return {id,title:frozen?.title||String(product.title),format,...presentation,coverUrl:cover?`/api/commerce/customer/${encodeURIComponent(id)}/cover`:null,deliveryEmail:await purchaseEmailState(id),sections:content.sections,files:(content.files||[]).map(f=>({name:f.name,description:f.description})),downloads:await builderDownloadMetadata(id,String(order.product_id),String(order.owner)),service,serviceScope:frozen?.serviceScope||'',preparation:frozen?.preparation||'',communityUrl:presentation.deliveryFamily==='community'&&safeDeliveryUrl(frozen?.communityUrl||'')?frozen!.communityUrl:'',intakePrompt:offer.intakePrompt,meetingUrl:booking?offer.meetingUrl:'',booking,slots};
+  const advancedLearning=['course','challenge'].includes(presentation.deliveryFamily)&&!!(frozen?.studio?.course||frozen?.studio?.challenge||content.sections.some(section=>section.studio));
+  const sections=advancedLearning?await learningDeliverySections(req,id):content.sections;
+  const studio=frozen?.studio?{...frozen.studio,pricing:frozen.studio.pricing?{model:frozen.studio.pricing.model,interval:frozen.studio.pricing.interval}:undefined}:undefined;
+  return {id,accessRole:order.accessRole,title:frozen?.title||String(product.title),format,...presentation,studio,coverUrl:cover?`/api/commerce/customer/${encodeURIComponent(id)}/cover`:null,deliveryEmail:await purchaseEmailState(id),sections,files:(content.files||[]).map(f=>({name:f.name,description:f.description})),downloads:await builderDownloadMetadata(id,String(order.product_id),String(order.owner)),service,serviceScope:frozen?.serviceScope||'',preparation:frozen?.preparation||'',communityUrl:(presentation.deliveryFamily==='community'||(custom?.deliveryKinds as string[]|undefined)?.includes('community'))&&safeDeliveryUrl(frozen?.communityUrl||'')?frozen!.communityUrl:'',intakePrompt:offer.intakePrompt,meetingUrl:booking?offer.meetingUrl:'',booking,slots};
 }
 export async function customerCover(req:Request,id:string){const order=await customerOrder(req,id);return builderPrivateCover(order);}
 export async function customerFile(req:Request,id:string,name:string) {
-  const order=await customerOrder(req,id),frozen=await builderOrderDelivery(id),product=frozen?null:await database().prepare('SELECT content FROM products WHERE id=? AND owner=?').bind(order.product_id,order.owner).first();if(!frozen&&!product)throw new ApiError('File not found.',404);const file=(frozen||contentSchema.parse(JSON.parse(String(product!.content)))).files?.find(f=>f.name===name);if(!file)throw new ApiError('File not found.',404);
+  const order=await customerOrder(req,id),frozen=await builderBuyerDelivery(id),product=frozen?null:await database().prepare('SELECT content FROM products WHERE id=? AND owner=?').bind(order.product_id,order.owner).first();if(!frozen&&!product)throw new ApiError('File not found.',404);const file=(frozen||contentSchema.parse(JSON.parse(String(product!.content)))).files?.find(f=>f.name===name);if(!file)throw new ApiError('File not found.',404);
   return new Response(file.content,{headers:{'Content-Type':'application/octet-stream','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(name)}`,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
 }
 export async function customerVideo(req:Request,id:string,uploadId:string) {
-  const order=await customerOrder(req,id),frozen=await builderOrderDelivery(id),product=frozen?null:await database().prepare('SELECT content FROM products WHERE id=? AND owner=?').bind(order.product_id,order.owner).first();if(!frozen&&!product||!(frozen||contentSchema.parse(JSON.parse(String(product!.content)))).sections.some(s=>s.videoId===uploadId))throw new ApiError('Recording not found.',404);
-  const file=await database().prepare("SELECT * FROM uploads WHERE id=? AND product_id=? AND owner=? AND status='completed' AND mime LIKE 'video/%'").bind(uploadId,order.product_id,order.owner).first();if(!file||String(file.object_key).startsWith('voice/')||await database().prepare('SELECT id FROM creator_voice_sources WHERE upload_id=? LIMIT 1').bind(uploadId).first())throw new ApiError('Recording not found.',404);
+  const order=await customerOrder(req,id),frozen=await builderBuyerDelivery(id),product=frozen?null:await database().prepare('SELECT content FROM products WHERE id=? AND owner=?').bind(order.product_id,order.owner).first();if(!frozen&&!product||!(frozen||contentSchema.parse(JSON.parse(String(product!.content)))).sections.some(s=>s.videoId===uploadId||s.studio?.audioId===uploadId))throw new ApiError('Recording not found.',404);
+  const section=(frozen||contentSchema.parse(JSON.parse(String(product!.content)))).sections.find(section=>section.videoId===uploadId||section.studio?.audioId===uploadId);
+  if(section&&['course','challenge'].includes(frozen?.deliveryFamily||'')&&(frozen?.studio?.course||frozen?.studio?.challenge||section.studio))await learnerSectionAccess(req,id,section.id||`section-${(frozen?.sections||[]).indexOf(section)}`);
+  const file=await database().prepare("SELECT * FROM uploads WHERE id=? AND product_id=? AND owner=? AND status='completed' AND (mime LIKE 'video/%' OR mime LIKE 'audio/%')").bind(uploadId,order.product_id,order.owner).first();if(!file||String(file.object_key).startsWith('voice/')||await database().prepare('SELECT id FROM creator_voice_sources WHERE upload_id=? LIMIT 1').bind(uploadId).first())throw new ApiError('Recording not found.',404);
   const size=Number(file.size);let range:{offset:number;length:number}|undefined;
   if(req.headers.has('range')){const match=/^bytes=(\d*)-(\d*)$/.exec(req.headers.get('range')!);if(!match||!match[1]&&!match[2])return new Response(null,{status:416,headers:{'Content-Range':`bytes */${size}`}});const start=match[1]?Number(match[1]):Math.max(0,size-Number(match[2])),end=match[1]?(match[2]?Number(match[2]):size-1):size-1;if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start>=size||end<start)return new Response(null,{status:416,headers:{'Content-Range':`bytes */${size}`}});range={offset:start,length:Math.min(end,size-1)-start+1};}
   const obj=await (env as unknown as {BUCKET:R2Bucket}).BUCKET.get(String(file.object_key),range?{range}:undefined);if(!obj)throw new ApiError('Recording unavailable.',404);
   return new Response(obj.body,{status:range?206:200,headers:{'Content-Type':String(file.mime),'Content-Length':String(range?.length||size),'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','Accept-Ranges':'bytes',...(range?{'Content-Range':`bytes ${range.offset}-${range.offset+range.length-1}/${size}`}:{})}});
 }
 export async function customerUpload(req:Request,id:string,uploadId:string){const order=await customerOrder(req,id);return builderPrivateDownload(req,order,uploadId);}
-export async function commerceSlots(productId:string,owner:string){await ownedProduct(productId,owner);const rows=await database().prepare("SELECT s.*,EXISTS(SELECT 1 FROM commerce_bookings b WHERE b.slot_id=s.id AND b.status='confirmed' AND b.mode=?) AS booked FROM commerce_slots s WHERE s.product_id=? AND s.owner=? AND s.starts_at>? ORDER BY s.starts_at LIMIT 100").bind(binding('STRIPE_MODE')==='live'?'live':'test',productId,owner,Date.now()-86400000).all();return rows.results.map(r=>({id:String(r.id),startsAt:Number(r.starts_at),endsAt:Number(r.ends_at),booked:!!r.booked}));}
+export async function commerceSlots(productId:string,owner:string){await ownedProduct(productId,owner);const rows=await database().prepare("SELECT s.*,EXISTS(SELECT 1 FROM commerce_bookings b WHERE b.slot_id=s.id AND b.status='confirmed' AND b.mode=?) OR EXISTS(SELECT 1 FROM product_service_sessions ps WHERE ps.slot_id=s.id AND ps.status='confirmed' AND ps.mode=?) AS booked FROM commerce_slots s WHERE s.product_id=? AND s.owner=? AND s.starts_at>? ORDER BY s.starts_at LIMIT 100").bind(commerceMode(),commerceMode(),productId,owner,Date.now()-86400000).all();return rows.results.map(r=>({id:String(r.id),startsAt:Number(r.starts_at),endsAt:Number(r.ends_at),booked:!!r.booked}));}
 export async function addCommerceSlot(productId:string,owner:string,input:unknown){await ownedProduct(productId,owner);const value=z.object({startsAt:z.number().int().min(Date.now()+60000).max(Date.now()+366*86400000),durationMinutes:z.number().int().min(15).max(240)}).parse(input),end=value.startsAt+value.durationMinutes*60000;const result=await database().prepare('INSERT INTO commerce_slots (id,owner,product_id,starts_at,ends_at) SELECT ?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM commerce_slots WHERE owner=? AND starts_at<? AND ends_at>?)').bind(crypto.randomUUID(),owner,productId,value.startsAt,end,owner,end,value.startsAt).run();if(!result.meta.changes)throw new ApiError('This time overlaps another session slot.',409);return commerceSlots(productId,owner);}
-export async function removeCommerceSlot(productId:string,owner:string,id:string){await ownedProduct(productId,owner);const result=await database().prepare("DELETE FROM commerce_slots WHERE id=? AND owner=? AND product_id=? AND NOT EXISTS(SELECT 1 FROM commerce_bookings WHERE slot_id=? AND status='confirmed')").bind(id,owner,productId,id).run();if(!result.meta.changes)throw new ApiError('Cancel confirmed bookings for this slot in both test and live mode before removing it.',409);return commerceSlots(productId,owner);}
-export async function bookCommerceSlot(req:Request,orderId:string,input:unknown){const order=await customerOrder(req,orderId),value=z.object({slotId:z.string().uuid(),intake:z.string().trim().min(5).max(5000)}).parse(input),frozen=await builderOrderDelivery(orderId),product=await database().prepare('SELECT format FROM products WHERE id=? AND owner=?').bind(order.product_id,order.owner).first();if(!product||!(frozen?frozen.deliveryFamily==='service':isConsulting(String(product.format))))throw new ApiError('This purchase does not include a session.',400);const id=crypto.randomUUID();try{const result=await database().prepare("INSERT INTO commerce_bookings (id,slot_id,order_id,owner,product_id,email,intake,mode,status,created_at) SELECT ?,s.id,?,?,?,?,?,?,'confirmed',? FROM commerce_slots s WHERE s.id=? AND s.product_id=? AND s.owner=? AND s.starts_at>? AND EXISTS(SELECT 1 FROM commerce_orders WHERE id=? AND status='paid')").bind(id,orderId,order.owner,order.product_id,order.email,value.intake,order.mode,Date.now(),value.slotId,order.product_id,order.owner,Date.now(),orderId).run();if(!result.meta.changes)throw new ApiError('That time is no longer available.',409);}catch(error){if(error instanceof ApiError)throw error;throw new ApiError('That slot or purchase already has a booking. Refresh the available times.',409);}return customerProduct(req,orderId);}
-export async function cancelCommerceBooking(req:Request,orderId:string){await customerOrder(req,orderId);await database().prepare("UPDATE commerce_bookings SET status='cancelled' WHERE order_id=? AND status='confirmed'").bind(orderId).run();return customerProduct(req,orderId);}
+export async function removeCommerceSlot(productId:string,owner:string,id:string){await ownedProduct(productId,owner);const result=await database().prepare("DELETE FROM commerce_slots WHERE id=? AND owner=? AND product_id=? AND NOT EXISTS(SELECT 1 FROM commerce_bookings WHERE slot_id=? AND status='confirmed') AND NOT EXISTS(SELECT 1 FROM product_service_sessions WHERE slot_id=? AND status='confirmed')").bind(id,owner,productId,id,id).run();if(!result.meta.changes)throw new ApiError('Cancel confirmed bookings for this slot in both test and live mode before removing it.',409);return commerceSlots(productId,owner);}
+export async function bookCommerceSlot(req:Request,orderId:string,input:unknown){const order=await customerOrder(req,orderId,true,{purchaserOnly:true}),value=z.object({slotId:z.string().uuid(),intake:z.string().trim().min(5).max(5000)}).parse(input),frozen=await builderBuyerDelivery(orderId),product=await database().prepare('SELECT format FROM products WHERE id=? AND owner=?').bind(order.product_id,order.owner).first();const raw=await builderOrderDelivery(orderId);if(raw&&!communityTierAllows(raw,'service','sessions'))throw new ApiError('Your membership plan does not include sessions.',403);if(frozen?.studio?.service)throw new ApiError('Use the booking form in your client space so preparation and session limits are checked.',409);if(!product||!(frozen?frozen.deliveryFamily==='service':isConsulting(String(product.format))))throw new ApiError('This purchase does not include a session.',400);const id=crypto.randomUUID();try{const result=await database().prepare("INSERT INTO commerce_bookings (id,slot_id,order_id,owner,product_id,email,intake,mode,status,created_at) SELECT ?,s.id,?,?,?,?,?,?,'confirmed',? FROM commerce_slots s WHERE s.id=? AND s.product_id=? AND s.owner=? AND s.starts_at>? AND NOT EXISTS(SELECT 1 FROM product_service_sessions ps WHERE ps.slot_id=s.id AND ps.status='confirmed' AND ps.mode=?) AND EXISTS(SELECT 1 FROM commerce_orders WHERE id=? AND status='paid')").bind(id,orderId,order.owner,order.product_id,order.email,value.intake,order.mode,Date.now(),value.slotId,order.product_id,order.owner,Date.now(),order.mode,orderId).run();if(!result.meta.changes)throw new ApiError('That time is no longer available.',409);}catch(error){if(error instanceof ApiError)throw error;throw new ApiError('That slot or purchase already has a booking. Refresh the available times.',409);}return customerProduct(req,orderId);}
+export async function cancelCommerceBooking(req:Request,orderId:string){await customerOrder(req,orderId,true,{purchaserOnly:true});await database().prepare("UPDATE commerce_bookings SET status='cancelled' WHERE order_id=? AND status='confirmed'").bind(orderId).run();return customerProduct(req,orderId);}
 export async function cancelCreatorBooking(owner:string,productId:string,bookingId:string){await ownedProduct(productId,owner);const result=await database().prepare("UPDATE commerce_bookings SET status='cancelled' WHERE id=? AND owner=? AND product_id=? AND status='confirmed'").bind(bookingId,owner,productId).run();if(!result.meta.changes)throw new ApiError('Active booking not found.',404);return {cancelled:true};}

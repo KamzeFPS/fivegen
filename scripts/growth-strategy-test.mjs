@@ -114,6 +114,30 @@ try{
     if(!published)assert.ok(scopedPublication.actions.some(action=>action.title==='Finish your product'),'An unpublished product remains a draft follow-up task');
     if(kind==='builder'&&!published){db.prepare("INSERT INTO file_sale_drafts(product_id,version,data,published_revision_id) VALUES (?,1,'{}',?)").run(fixtureId,randomUUID());assert.equal((await deps.growthDashboard(owner,30,fixtureId)).products[0].published,false,'A dedicated builder takes precedence over an earlier file-sale publication');}
   }
+  // Plot real sale/settlement aggregates, including older history. Pending fee
+  // data must never become guessed net income or mix buyer/settlement currency.
+  const oldTimestamp=now-800*86400000,recentTimestamp=now-2*86400000;
+  function graphOrder({account=owner,productId=bookId,paymentMode='test',timestamp=recentTimestamp,amount=1000,status='paid',net=700,complete=true}={}){
+    const orderId=randomUUID();
+    db.prepare("INSERT INTO commerce_orders(id,owner,product_id,account_id,mode,email,amount,currency,title,status,access_hash,created_at,paid_at) VALUES (?,?,?,'acct_graph',?,'graph@example.test',?,'usd','Graph fixture',?,'hash',?,?)").run(orderId,account,productId,paymentMode,amount,status,timestamp,timestamp);
+    db.prepare("INSERT INTO commerce_earnings(order_id,charge_id,charge_application_fee_amount,refunded_amount,disputed,balance_transaction_id,settlement_amount,settlement_currency,stripe_fee_amount,platform_fee_amount,creator_net_amount,availability,updated_at) VALUES (?,?,0,0,0,?,?,?,?,?,?,'pending',?)").run(orderId,'ch_'+orderId,complete?'txn_'+orderId:null,complete?net+100:null,complete?'eur':null,complete?100:null,complete?0:null,complete?net:null,now);
+  }
+  graphOrder({timestamp:oldTimestamp});graphOrder({amount:2000,net:1500});graphOrder({amount:3000,complete:false});graphOrder({amount:4000,status:'revoked',net:3300});
+  graphOrder({paymentMode:'live',timestamp:now-1500*86400000,amount:99900});
+  graphOrder({account:'creator-b',productId:other,timestamp:now-2000*86400000,amount:88800});
+  for(const [timestamp,event] of [[oldTimestamp,'visit'],[recentTimestamp,'vsl_play'],[recentTimestamp,'cta']])db.prepare('INSERT INTO growth_events(id,owner,product_id,visitor,event,campaign,day,created_at) VALUES (?,?,?,?,?,?,?,?)').run(randomUUID(),owner,bookId,randomUUID(),event,'graph_history',new Date(timestamp).toISOString().slice(0,10),timestamp);
+  const dailyGraph=await deps.growthDashboard(owner,30,bookId),allTimeGraph=await deps.growthDashboard(owner,0,bookId);
+  const plotted=(report,key,currency)=>report.trend.reduce((sum,point)=>sum+(point[key].find(item=>item.currency===currency)?.amount||0),0);
+  assert.equal(dailyGraph.trendInterval,'day');assert.equal(dailyGraph.trend.length,30);
+  assert.equal(dailyGraph.revenue[0].amount,6500);assert.equal(plotted(dailyGraph,'revenue','usd'),6500,'Daily gross chart matches every paid order, including fee-pending sales');
+  assert.equal(plotted(dailyGraph,'netEarnings','eur'),1500,'Daily net chart includes verified settlements only, in settlement currency');
+  assert.equal(allTimeGraph.days,0);assert.equal(allTimeGraph.trendInterval,'month');assert.ok(allTimeGraph.trend.length<30,'Long history is grouped into full months without discarding old sales');
+  assert.equal(allTimeGraph.trend[0].day,new Date(oldTimestamp).toISOString().slice(0,7)+'-01','Other owners and payment environments cannot extend the chart history');
+  assert.equal(allTimeGraph.purchases,4);assert.equal(allTimeGraph.revenue[0].amount,7500);assert.equal(allTimeGraph.earnings.sales[0].grossAmount,7500);
+  assert.equal(plotted(allTimeGraph,'revenue','usd'),7500);assert.equal(plotted(allTimeGraph,'netEarnings','eur'),2200);assert.equal(allTimeGraph.earnings.totals[0].creatorNetAmount,2200);
+  for(const key of ['visits','leads','purchases','plays','clicks','bookings'])assert.equal(allTimeGraph.trend.reduce((sum,point)=>sum+point[key],0),allTimeGraph[key],`${key} graph agrees with its all-time summary`);
+  assert.equal(allTimeGraph.trend.flatMap(point=>point.netEarnings).some(item=>item.currency==='usd'),false,'Charge currency is never substituted for settlement currency');
+  const allTimeResponse=await dashboardRoute.GET(new Request('https://fivegen.test/api/growth/dashboard?days=0&productId='+bookId));assert.equal(allTimeResponse.status,200);assert.equal((await allTimeResponse.json()).days,0);
   assert.equal((await dashboardRoute.GET(new Request('https://fivegen.test/api/growth/dashboard?days=999'))).status,400);owner='';assert.equal((await dashboardRoute.GET(new Request('https://fivegen.test/api/growth/dashboard'))).status,401);
   console.log('Passed: Offer Lab ownership, revisions, public snapshots, archived research rounds, exact counts and complete streamed CSV beyond1000 responses, survey dedupe/closure, no accidental marketing consent, safe VSL brief handoff, anonymous event dedupe, aligned UTC reporting windows, owner/mode/currency-isolated revenue, product-scoped dashboard auth and all metrics, builder publication without a funnel, opt-in-only marketing recommendations.');
   console.log('QA records retained: '+root);

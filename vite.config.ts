@@ -39,6 +39,11 @@ export default defineConfig(async () => {
   // own sign-in boundary. Never include the Sites local sign-in plugin there.
   if (process.env.FIVEGEN_RUNTIME === "render") {
     return {
+      ssr: { external: ['@napi-rs/canvas'] },
+      environments: {
+        rsc: { resolve: { external: ['@napi-rs/canvas'] } },
+        ssr: { resolve: { external: ['@napi-rs/canvas'] } },
+      },
       resolve: {
         alias: {
           "cloudflare:workers": fileURLToPath(new URL("./runtime/render/bindings.mjs", import.meta.url)),

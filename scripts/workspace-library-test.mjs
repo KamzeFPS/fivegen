@@ -45,7 +45,7 @@ assert.equal(helpers.workspaceProductDestination(products[0],[],[{productId:prod
 assert.equal(helpers.workspaceProductDestination(products[0]),null,'Legacy products keep their existing in-workspace editor');
 assert.equal(helpers.workspaceProductPublished(products[0],[],[{productId:products[0].id,pagePublished:true}]),true);
 
-const icon=()=>React.createElement('svg'),icons=Object.fromEntries(['ArrowRight','Banknote','BookOpen','CalendarDays','ChevronDown','ChevronRight','Coins','CreditCard','FileText','FolderOpen','GraduationCap','History','LayoutGrid','Layers3','Link2','List','LogOut','Menu','MessageSquare','Plus','Search','ShieldCheck','SlidersHorizontal','TrendingUp','Upload','Users','X'].map(key=>[key,icon]));
+const icon=()=>React.createElement('svg'),icons=Object.fromEntries(['ArrowRight','Banknote','BookOpen','CalendarDays','ChevronDown','ChevronRight','Coins','CreditCard','FileText','FolderOpen','GraduationCap','History','LayoutGrid','Layers3','Link2','List','LogOut','Menu','MessageSquare','PanelLeftClose','PanelLeftOpen','Plus','Search','ShieldCheck','SlidersHorizontal','TrendingUp','Upload','Users','X'].map(key=>[key,icon]));
 const passthrough=({children})=>React.createElement('div',null,children),menus=Object.fromEntries(['DropdownMenu','DropdownMenuContent','DropdownMenuItem','DropdownMenuLabel','DropdownMenuSeparator','DropdownMenuTrigger','Popover','PopoverContent','PopoverTrigger'].map(name=>[name,passthrough]));
 const ui=load('app/workspace-product-library.tsx',{React,useState:React.useState,...icons,...menus,...helpers,builderTypeDetails:builder.builderTypeDetails});
 const html=renderToStaticMarkup(React.createElement(ui.WorkspaceProductLibrary,{products,builders:summaries,onOpen:()=>{},onCreateFrom:()=>{}}));

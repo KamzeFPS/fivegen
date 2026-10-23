@@ -1,16 +1,20 @@
 import {z} from 'zod';
 import {sectionSchema,fileSchema} from './product';
 import {builderTypes,builderTypeForFormat,builderTypeDetails} from './builder-contract';
+import type {ProductStudioConfig} from './product-studio-contract';
 
 // This schema is the only data returned to unauthenticated visitors. Content
 // bodies, original files, lesson recordings and meeting URLs stay private.
 export const builderPublicSnapshotSchema=z.object({
+ studio:z.custom<ProductStudioConfig>().optional(),
+ preview:z.array(z.object({title:z.string().max(150),body:z.string().max(18000)})).max(5).optional(),
  title:z.string().min(3).max(100),description:z.string().min(12).max(12000),audience:z.string().max(300),format:z.string().max(100),
  benefits:z.array(z.string().max(500)).max(8),outline:z.array(z.string().max(150)).max(30),
  priceCents:z.number().int().min(0).max(999900),currency:z.enum(['usd','eur','gbp','cad','aud']),
  hasCover:z.boolean().default(false),
 });
 export const builderDeliverySnapshotSchema=z.object({
+ studio:z.custom<ProductStudioConfig>().optional(),
  title:z.string().max(100),format:z.string().max(100),sections:z.array(sectionSchema).max(30),files:z.array(fileSchema).max(20),
  uploadIds:z.array(z.string().uuid()).max(20),meetingUrl:z.string().max(1500),intakePrompt:z.string().max(1000),
  deliveryFamily:z.enum(['document','course','templates','challenge','service','community','custom']).default('document'),
@@ -36,14 +40,22 @@ export function builderPublishedPresentation(content:Record<string,unknown>,publ
   builderType:content.builderType??draft.type,
   description:content.description??publicSnapshot.description??draft.description??'',
   coverUploadId:content.coverUploadId??draft.coverUploadId,
+  studio:content.studio??draft.studio,
   ...Object.fromEntries(['welcome','rules','usageInstructions','compatibleTools','dailyTime','completionCriteria'].map(key=>[key,content[key]??fields[key]??''])),
  };
 }
 export function builderBuyerPresentation(snapshot:BuilderDeliverySnapshot|null,format:string){
  const normalizedFormat=format==='Book / Ebook'||format==='Book / eBook'?'Book':format;
- const builderType=snapshot?.builderType||builderTypeForFormat(normalizedFormat);
+ const originalType=snapshot?.builderType||builderTypeForFormat(normalizedFormat);
+ // Tier filtering can leave only community access in a service product. Honor
+ // that verified buyer scope in both the family and its labels/actions, while
+ // retaining the stable type correction for older course snapshots.
+ const communityMembership=snapshot?.studio?.community?.membership;
+ const communityOnly=snapshot?.deliveryFamily==='community'&&snapshot.studio?.community?.enabled===true&&!!communityMembership&&typeof communityMembership==='object'&&(originalType==='consulting'||originalType==='coaching');
+ const builderType=communityOnly?'community':originalType;
  return {
   builderType,
+  studio:snapshot?.studio,
   // Old snapshots defaulted to "document", even for video courses. The stable
   // product type corrects that old default; custom deliveries retain their
   // explicitly purchased family.

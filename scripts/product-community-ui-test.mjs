@@ -1,0 +1,41 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {randomUUID} from 'node:crypto';
+import ts from 'typescript';
+import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+import * as icons from 'lucide-react';
+
+const deps={React};
+async function fixture(path,values=[],extra={}){
+ let index=0;const updates=[],source=readFileSync(path,'utf8'),parsed=ts.createSourceFile(path,source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX),names=parsed.statements.filter(item=>ts.isImportDeclaration(item)&&item.moduleSpecifier.text==='lucide-react').flatMap(item=>item.importClause?.namedBindings?.elements?.map(binding=>binding.name.text)||[]);
+ const scope={...deps,...Object.fromEntries(names.map(name=>[name,icons[name]])),useId:()=>'community-field',useEffect(){},useState(initial){const slot=index++;return[slot<values.length?values[slot]:typeof initial==='function'?initial():initial,value=>updates.push({slot,value})];},...extra},key='communityUi'+randomUUID().replaceAll('-','');globalThis[key]=scope;
+ const code=`const {${Object.keys(scope).join(',')}}=globalThis.${key};\n`+ts.transpileModule(source.replace(/^import[\s\S]*?;\r?\n/gm,''),{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React}}).outputText;
+ try{return{exports:await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64')),updates};}finally{delete globalThis[key];}
+}
+const fields=await fixture('app/product-studio-fields.tsx');Object.assign(deps,fields.exports);
+const nodes=(tree,predicate)=>{const found=[];function visit(item){if(Array.isArray(item)){item.forEach(visit);return;}if(!item||typeof item!=='object')return;if(predicate(item))found.push(item);visit(item.props?.children);}visit(tree);return found;};
+const text=item=>typeof item==='string'||typeof item==='number'?String(item):Array.isArray(item)?item.map(text).join(''):item&&typeof item==='object'?text(item.props?.children):'';
+const control=(tree,label)=>{const found=nodes(tree,item=>item.props?.label===label)[0];assert.ok(found,label);return found.props;};
+const tierId=randomUUID(),sectionId=randomUUID(),uploadId=randomUUID(),stepId=randomUUID(),value={enabled:true,channels:['General','Studio'],tiers:[{id:tierId,name:'Studio membership',description:'Make useful things together',billing:'free',priceCents:0,channels:['General'],resourceIds:[],eventIds:[]}],bundleTierId:tierId,onboarding:{requireProfile:false,introPrompt:'What are you making?',steps:[{id:stepId,title:'Read the welcome guide',body:'Start with a useful example',url:'https://example.test/start'}]}};
+let next;const creator=(await fixture('app/product-studio-community.tsx')).exports,props={value,sections:[{id:sectionId,title:'A useful guide'}],uploads:[{id:uploadId,name:'Original workbook.pdf'}],files:[{name:'planner.csv'}],includeSessions:true,onChange:result=>next=result};
+let tree=creator.CommunityStudioSettings(props);control(tree,'Membership billing').onChange('month');assert.equal(next.tiers[0].billing,'month');assert.equal(next.tiers[0].priceCents,1900);assert.equal(next.tiers[0].channels[0],'General');
+const resource=nodes(tree,item=>item.type==='label'&&text(item)==='Original workbook.pdf')[0];nodes(resource,item=>item.type==='input')[0].props.onChange({target:{checked:true}});assert.deepEqual(next.tiers[0].resourceIds,[`upload:${uploadId}`]);
+const sessions=nodes(tree,item=>item.type==='label'&&text(item)==='Live sessions & client workspace')[0];nodes(sessions,item=>item.type==='input')[0].props.onChange({target:{checked:true}});assert.deepEqual(next.tiers[0].resourceIds,['service:sessions']);
+const channel=nodes(tree,item=>item.type==='label'&&text(item)==='Studio')[0];nodes(channel,item=>item.type==='input')[0].props.onChange({target:{checked:true}});assert.deepEqual(next.tiers[0].channels,['General','Studio']);
+control(tree,'Plan included when this community is bundled').onChange('');assert.equal(next.bundleTierId,undefined,'Creators can clear bundle selection without serializing undefined values');assert.equal(Object.hasOwn(next,'bundleTierId'),false);
+control(tree,'Introduction prompt').onChange('Share one goal');assert.equal(next.onboarding.introPrompt,'Share one goal');assert.equal(next.onboarding.steps[0].id,stepId);
+nodes(tree,item=>item.type==='button'&&text(item)==='Remove plan from future purchases')[0].props.onClick();assert.equal(next.tiers.length,0);assert.equal(next.bundleTierId,undefined);
+nodes(tree,item=>item.type==='button'&&text(item)==='Add a membership plan')[0].props.onClick();assert.equal(next.tiers.length,2);assert.equal(next.tiers[1].billing,'free');assert.match(next.tiers[1].id,/^[a-f0-9-]{36}$/);
+nodes(tree,item=>item.type==='button'&&text(item)==='Add a weekly prompt')[0].props.onClick();assert.equal(next.weeklyPrompts.length,1);assert.equal(typeof next.weeklyPrompts[0].weekday,'number');assert.ok(next.weeklyPrompts[0].timezone);
+tree=creator.CommunityStudioSettings({...props,value:{...value,weeklyPrompts:next.weeklyPrompts}});control(tree,'Day of the week').onChange('3');assert.equal(next.weeklyPrompts[0].weekday,3);control(tree,'Time').onChange('14');assert.equal(next.weeklyPrompts[0].hour,14);
+assert.match(renderToStaticMarkup(React.createElement(creator.CommunityStudioSettings,props)),/Membership plans/);
+
+const state={welcome:'Welcome makers',rules:'Respect privacy',requiresAgreement:true,agreed:true,channels:['General'],allowMemberPosts:true,moderator:false,profile:{name:'Ada',bio:'Making useful work'},posts:[{id:'scheduled',channel:'General',name:'Scheduled community prompt',body:'What did you make?',createdAt:Date.now(),mine:false,creator:true,scheduled:true,pinned:false,parentId:null,poll:[],reactions:[],votes:[]}],members:[],events:[],membership:{id:tierId,name:'Studio membership',billing:'month',priceCents:1900},planUrl:'/b/original-community',onboarding:{steps:[{id:stepId,title:'Read the guide',body:'Begin with an example',url:'https://example.test/guide',completed:false}],introPrompt:'Tell us your goal',introductionDone:false,requireProfile:true,profileComplete:true}};
+const values=(data=state)=>[data,'',false,'feed','General','',null,'','Ada','Making useful work','','',0,'I am making a useful planner.'],actions=[];
+let f=await fixture('app/customer/community-content.tsx',values(),{buyerJson:async(url,input)=>{actions.push({url,input});return state;}});tree=f.exports.CustomerCommunity({orderId:'purchase'});assert.match(text(tree),/does not automatically cancel/);assert.equal(nodes(tree,item=>item.type==='a'&&item.props.href==='/b/original-community').length,1);assert.match(text(tree),/Scheduled prompt/);
+const check=nodes(tree,item=>item.type==='input'&&item.props.type==='checkbox')[0];check.props.onChange({target:{checked:true}});await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(actions.at(-1).input,{action:'onboarding',stepId,completed:true});
+const intro=nodes(tree,item=>item.type==='form'&&item.props.className?.includes('community-intro-form'))[0];await intro.props.onSubmit({preventDefault(){}});assert.deepEqual(actions.at(-1).input,{action:'introduction',body:'I am making a useful planner.'});
+f=await fixture('app/customer/community-content.tsx',values({...state,onboarding:{...state.onboarding,profileComplete:false}}),{buyerJson:async()=>state});tree=f.exports.CustomerCommunity({orderId:'purchase'});assert.match(text(tree),/Save my profile & continue/);assert.equal(nodes(tree,item=>item.props?.className==='buyer-community-tabs').length,0,'Required profiles gate the actual conversation controls');
+f=await fixture('app/customer/community-content.tsx',values({...state,agreed:false}),{buyerJson:async()=>state});tree=f.exports.CustomerCommunity({orderId:'purchase'});assert.match(text(tree),/I agree to the community rules/);assert.equal(nodes(tree,item=>item.props?.className==='buyer-community-tabs').length,0);
+console.log('Community creator/buyer UI tests passed: saveable tier billing/scopes, explicit bundle plan, persisted onboarding actions, profile/rule gates, honest plan changes, and scheduled-post attribution. No external calls.');

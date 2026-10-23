@@ -15,7 +15,8 @@ const confirmed = `e.balance_transaction_id IS NOT NULL AND e.settlement_amount 
 const scope = ' AND (? IS NULL OR o.product_id=?)';
 
 export function commerceEarningsPeriod(days: number) {
-  if (![7, 30, 90].includes(days)) throw new ApiError('Choose a 7, 30, or 90 day period.');
+  if (![0, 7, 30, 90].includes(days)) throw new ApiError('Choose all time, 7, 30, or 90 days.');
+  if (days === 0) return 0;
   return Math.floor(Date.now() / 86400000) * 86400000 - (days - 1) * 86400000;
 }
 
@@ -50,7 +51,7 @@ function earningsOrder(row: Record<string, unknown>): CommerceEarningsOrder {
 export async function commerceEarnings(owner: string, days: number, productId?: string): Promise<CommerceEarningsReport> {
   const { from, mode, selected } = await earningsScope(owner, days, productId), db = database();
   const filters = ` FROM commerce_orders o LEFT JOIN commerce_earnings e ON e.order_id=o.id
-    WHERE o.owner=? AND o.mode=? AND o.status IN ('paid','revoked') AND o.paid_at>=?${scope}`;
+    WHERE o.owner=? AND o.mode=? AND o.status IN ('paid','revoked') AND o.amount>0 AND o.paid_at>=?${scope}`;
   const values = [owner, mode, from, selected, selected];
   const [sales, totals, coverage, orders, plan] = await Promise.all([
     db.prepare(`SELECT o.currency,COUNT(*) orders,SUM(o.amount) gross${filters} AND o.status='paid' GROUP BY o.currency ORDER BY o.currency`).bind(...values).all(),

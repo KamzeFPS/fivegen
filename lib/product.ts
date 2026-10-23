@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type {SectionStudio} from './product-studio-contract';
 import type { Commerce } from "./commerce";
 import type { Experience } from "./experience";
 export const formats = [
@@ -29,6 +30,7 @@ export const productTypes: {value: (typeof formats)[number]; description: string
 ];
 export const colors = ["orange", "violet", "blue", "green", "pink"] as const;
 export const sectionSchema = z.object({
+  studio: z.custom<SectionStudio>(value=>{try{return !!value&&typeof value==='object'&&!Array.isArray(value)&&JSON.stringify(value).length<=60000;}catch{return false;}},'Section settings exceed the supported size.').optional(),
   title: z.string().min(1).max(150),
   body: z.string().max(18000),
   objective: z.string().max(1500).optional(),

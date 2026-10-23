@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import type {ProductStudioConfig} from './product-studio-contract';
 import {sectionSchema,fileSchema,type Brief} from './product';
 import type {CommerceAccount} from './commerce-v2';
 import type {Product} from './product';
@@ -22,6 +23,7 @@ export const builderTypeDetails:Record<BuilderType,{name:string;format:Brief['fo
  custom:{name:'Custom product',format:'Custom product',family:'custom',unit:'Component',plural:'components',description:'Choose a supported delivery format and build around it.',prompt:'What exactly will customers receive and how will they use it?'},
 };
 export const builderDraftSchema=z.object({
+ studio:z.custom<ProductStudioConfig>(value=>{try{return !!value&&typeof value==='object'&&!Array.isArray(value)&&JSON.stringify(value).length<=350000;}catch{return false;}},'Product settings exceed the supported size.').optional(),
  type:z.enum(builderTypes),source:z.enum(['ai','upload','manual']),
  title:z.string().trim().max(100),description:z.string().trim().max(12000),audience:z.string().trim().max(300),language:z.string().trim().min(1).max(50),
  fields:z.record(z.string().max(6000)).refine(fields=>Object.keys(fields).length<=30&&Object.keys(fields).every(key=>/^[a-zA-Z][a-zA-Z0-9]{0,39}$/.test(key)),'Use supported product fields.'),

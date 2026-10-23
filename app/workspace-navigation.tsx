@@ -1,16 +1,18 @@
 'use client';
 
-import {ArrowRight,Banknote,ChevronDown,Coins,CreditCard,FolderOpen,History,Link2,LogOut,Menu,MessageSquare,Plus,ShieldCheck,TrendingUp,Users} from 'lucide-react';
+import {ArrowRight,Banknote,ChevronDown,Coins,CreditCard,FolderOpen,History,Link2,LogOut,Menu,MessageSquare,PanelLeftClose,PanelLeftOpen,Plus,ShieldCheck,TrendingUp,Users} from 'lucide-react';
 import {DropdownMenu,DropdownMenuContent,DropdownMenuItem,DropdownMenuLabel,DropdownMenuSeparator,DropdownMenuTrigger} from '@/components/ui/dropdown-menu';
 import {Brand} from './ui-brand';
 
 type NavigationView='overview'|'library'|'crm'|'credits'|'connections'|'admin';
 const navigation=[
-  {id:'overview' as const,label:'Overview',icon:TrendingUp},
+  {id:'overview' as const,label:'Dashboard',icon:TrendingUp},
   {id:'library' as const,label:'Products',icon:FolderOpen},
   {id:'crm' as const,label:'Customers',icon:Users},
 ];
 type Props={
+  sidebarOpen:boolean;
+  onToggleSidebar:()=>void;
   user:{name:string;email:string}|null;
   view:string;
   label:string;
@@ -26,11 +28,16 @@ type Props={
   onSignOut:()=>void;
 };
 
-export function WorkspaceNavigation({user,view,label,admin,creditsLabel,history,onCreate,onHome,onView,onConversation,onVisit,onSignOut}:Props){
+export function WorkspaceNavigation({sidebarOpen=true,onToggleSidebar,user,view,label,admin,creditsLabel,history,onCreate,onHome,onView,onConversation,onVisit,onSignOut}:Props){
   const currentLabel=navigation.find(item=>item.id===view)?.label||({create:'New product',credits:'AI credits',connections:'Assistants',admin:'Settings'} as Record<string,string>)[view]||label;
   return <>
     <a className="workspace-skip" href="#workspace-content">Skip to content</a>
-    <header className="workspace-header">
+    <div className="workspace-sidebar-controls" data-sidebar-open={sidebarOpen}>
+      <button type="button" className="workspace-sidebar-toggle" onClick={onToggleSidebar} aria-label={sidebarOpen?'Hide sidebar':'Open sidebar'} title={sidebarOpen?'Hide sidebar':'Open sidebar'} aria-expanded={sidebarOpen} aria-controls="workspace-navigation">
+        {sidebarOpen?<PanelLeftClose size={20}/>:<PanelLeftOpen size={20}/>}<span>{sidebarOpen?'Hide sidebar':'Open sidebar'}</span>
+      </button>
+    </div>
+    <header className="workspace-header" id="workspace-navigation" data-sidebar-open={sidebarOpen}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild><button type="button" className="workspace-mobile-menu" aria-label="Open workspace navigation"><Menu size={21}/></button></DropdownMenuTrigger>
         <DropdownMenuContent className="workspace-account-menu workspace-mobile-menu-content" align="start" sideOffset={10} collisionPadding={12}>
