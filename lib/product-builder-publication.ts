@@ -9,6 +9,7 @@ import {publicStudio,studioPricing} from './product-studio-contract';
 import {publicFreeStudioOffer} from './product-studio-commerce';
 import {curriculumOrder} from './product-curriculum';
 import {assertServiceIntegrationReady} from './service-integrations-server';
+import {editorialReviewPublicationGuard} from './product-editorial-review-server';
 
 export async function getBuilderPublication(productId:string,owner:string){
  await ownedProduct(productId,owner);
@@ -18,6 +19,8 @@ export async function getBuilderPublication(productId:string,owner:string){
 export async function publishBuilderProduct(productId:string,owner:string,input:unknown){
  const {expectedVersion}=z.object({expectedVersion:z.number().int().min(1)}).parse(input),workspace=await getBuilderWorkspace(productId,owner);
  if(workspace.version!==expectedVersion)throw new ApiError('This product changed. Reload and review it before publishing.',409);
+ const previous=await getBuilderPublication(productId,owner);
+ if(previous?.version===expectedVersion)return workspace;
  if(!workspace.readiness.publishReady)throw new ApiError(workspace.readiness.checks.find(check=>!check.ready)?.message||'Finish the product before publishing.',409);
  const {draft,product}=workspace;
  const verified=await builderReadiness(productId,owner,draft,true);
@@ -31,18 +34,20 @@ export async function publishBuilderProduct(productId:string,owner:string,input:
  const family=builderFamily(draft);
  const sections=family==='community'&&!draft.sections.length?[{title:'Welcome to the community',body:draft.fields.welcome||''},{title:'Our community guidelines',body:draft.fields.rules||''}]:orderedSections;
  const delivery=builderDeliverySnapshotSchema.parse({studio:draft.studio,title:draft.title,format:product.format,sections,files:draft.files,uploadIds:draft.uploadIds,meetingUrl:draft.fields.meetingUrl||'',intakePrompt:draft.fields.intakePrompt||'What would you like help with?',deliveryFamily:family,communityUrl:draft.fields.communityUrl||'',serviceScope:draft.fields.serviceScope||'',preparation:draft.fields.preparation||'',builderType:draft.type,description:draft.description,coverUploadId:draft.coverUploadId,welcome:draft.fields.welcome||'',rules:draft.fields.rules||'',usageInstructions:draft.fields.usageInstructions||'',compatibleTools:draft.fields.compatibleTools||'',dailyTime:draft.fields.dailyTime||'',completionCriteria:draft.fields.completionCriteria||''});
- const now=Date.now(),db=database(),previous=await getBuilderPublication(productId,owner);
- if(previous?.version===expectedVersion)return getBuilderWorkspace(productId,owner);
+ const reviewGuard=await editorialReviewPublicationGuard(productId,owner,expectedVersion,draft);
+ const now=Date.now(),commitToken=crypto.randomUUID(),db=database();
  const results=await db.batch([
-  db.prepare(`INSERT INTO product_builder_publications (product_id,owner,version,slug,public_snapshot,content_snapshot,upload_ids,published_at,updated_at)
-   SELECT ?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM product_builder_workspaces WHERE product_id=? AND owner=? AND version=?)
-   ON CONFLICT(product_id) DO UPDATE SET version=excluded.version,public_snapshot=excluded.public_snapshot,content_snapshot=excluded.content_snapshot,upload_ids=excluded.upload_ids,published_at=excluded.published_at,updated_at=excluded.updated_at WHERE product_builder_publications.owner=excluded.owner AND product_builder_publications.version<excluded.version`)
-   .bind(productId,owner,expectedVersion,product.slug,JSON.stringify(snapshot),JSON.stringify({...delivery,draft,product}),JSON.stringify(draft.uploadIds),now,now,productId,owner,expectedVersion),
+  db.prepare(`INSERT INTO product_builder_publications (product_id,owner,version,slug,public_snapshot,content_snapshot,upload_ids,published_at,updated_at,commit_token)
+   SELECT ?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM product_builder_workspaces WHERE product_id=? AND owner=? AND version=?) AND ${reviewGuard.sql}
+   ON CONFLICT(product_id) DO UPDATE SET version=excluded.version,public_snapshot=excluded.public_snapshot,content_snapshot=excluded.content_snapshot,upload_ids=excluded.upload_ids,published_at=excluded.published_at,updated_at=excluded.updated_at,commit_token=excluded.commit_token WHERE product_builder_publications.owner=excluded.owner AND product_builder_publications.version<excluded.version`)
+   .bind(productId,owner,expectedVersion,product.slug,JSON.stringify(snapshot),JSON.stringify({...delivery,draft,product}),JSON.stringify(draft.uploadIds),now,now,commitToken,productId,owner,expectedVersion,...reviewGuard.values),
   // Republishing never silently resumes selling, changes a live purchase price
   // or grants new modules to a previous buyer. A creator explicitly starts sales.
-  db.prepare('UPDATE commerce_offers SET enabled=0,updated_at=MAX(updated_at+1,?) WHERE product_id=? AND owner=? AND EXISTS(SELECT 1 FROM product_builder_publications WHERE product_id=? AND version=?)').bind(now,productId,owner,productId,expectedVersion),
-  db.prepare("UPDATE products SET status='published' WHERE id=? AND owner=? AND EXISTS(SELECT 1 FROM product_builder_publications WHERE product_id=? AND version=?)").bind(productId,owner,productId,expectedVersion),
-  builderPdfUpdateGrantStatement(productId,owner,expectedVersion,draft.uploadIds,family,now),
+  // A losing concurrent publish can observe the same version committed by
+  // another request. Only this request's successful write authorizes effects.
+  db.prepare('UPDATE commerce_offers SET enabled=0,updated_at=MAX(updated_at+1,?) WHERE product_id=? AND owner=? AND EXISTS(SELECT 1 FROM product_builder_publications WHERE product_id=? AND owner=? AND version=? AND commit_token=?)').bind(now,productId,owner,productId,owner,expectedVersion,commitToken),
+  db.prepare("UPDATE products SET status='published' WHERE id=? AND owner=? AND EXISTS(SELECT 1 FROM product_builder_publications WHERE product_id=? AND owner=? AND version=? AND commit_token=?)").bind(productId,owner,productId,owner,expectedVersion,commitToken),
+  builderPdfUpdateGrantStatement(productId,owner,expectedVersion,draft.uploadIds,family,now,commitToken),
  ]);
  if(!results[0].meta.changes)throw new ApiError('The draft changed while publishing. Review the latest version and try again.',409);
  return getBuilderWorkspace(productId,owner);

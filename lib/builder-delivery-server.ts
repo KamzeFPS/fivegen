@@ -99,7 +99,7 @@ export async function builderPrivateDownload(req:Request,order:Record<string,unk
 // original purchased snapshot. New lesson modules and delivery families are
 // never silently granted. Only paid customers at publication receive updates;
 // a pending checkout keeps the exact offer originally reviewed by its buyer.
-export function builderPdfUpdateGrantStatement(productId:string,owner:string,version:number,uploadIds:string[],family:string,createdAt:number){
+export function builderPdfUpdateGrantStatement(productId:string,owner:string,version:number,uploadIds:string[],family:string,createdAt:number,commitToken?:string){
  return database().prepare(`INSERT OR IGNORE INTO product_builder_upload_grants (order_id,upload_id,publication_version,created_at)
  SELECT s.order_id,u.id,?,? FROM product_builder_order_snapshots s JOIN commerce_orders o ON o.id=s.order_id
  JOIN uploads u ON u.product_id=s.product_id AND u.owner=o.owner
@@ -107,5 +107,5 @@ export function builderPdfUpdateGrantStatement(productId:string,owner:string,ver
  AND u.id IN (SELECT value FROM json_each(?)) AND u.mime='application/pdf' AND u.status='completed' AND u.sha256 IS NOT NULL AND u.object_key NOT LIKE 'voice/%'
  AND NOT EXISTS(SELECT 1 FROM creator_voice_sources WHERE upload_id=u.id)
  AND EXISTS(SELECT 1 FROM json_each(s.snapshot,'$.uploadIds') original JOIN uploads original_file ON original_file.id=original.value WHERE original_file.product_id=s.product_id AND original_file.owner=o.owner AND original_file.mime='application/pdf' AND original_file.object_key NOT LIKE 'voice/%' AND NOT EXISTS(SELECT 1 FROM creator_voice_sources WHERE upload_id=original_file.id))
- AND EXISTS(SELECT 1 FROM product_builder_publications p WHERE p.product_id=s.product_id AND p.owner=o.owner AND p.version=? AND json_extract(p.content_snapshot,'$.deliveryFamily')=? AND u.id IN(SELECT value FROM json_each(p.upload_ids)))`).bind(version,createdAt,productId,owner,family,JSON.stringify(uploadIds),version,family);
+ AND EXISTS(SELECT 1 FROM product_builder_publications p WHERE p.product_id=s.product_id AND p.owner=o.owner AND p.version=? AND json_extract(p.content_snapshot,'$.deliveryFamily')=? AND u.id IN(SELECT value FROM json_each(p.upload_ids))${commitToken===undefined?'':' AND p.commit_token=?'})`).bind(version,createdAt,productId,owner,family,JSON.stringify(uploadIds),version,family,...(commitToken===undefined?[]:[commitToken]));
 }

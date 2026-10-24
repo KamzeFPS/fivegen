@@ -1,0 +1,60 @@
+import type {BuilderDraft} from './builder-contract';
+
+export const editorialReviewEngineVersion=1;
+export type EditorialLocation={path:string;label:string;field?:string;sectionId?:string;sectionIndex?:number;start?:number;end?:number};
+export type EditorialFinding={id:string;kind:'repetition'|'promise'|'verification'|'example'|'action'|'attribution';title:string;message:string;excerpt:string;suggestedAction:string;location:EditorialLocation;relatedLocations?:EditorialLocation[]};
+export type EditorialRecord={status:'confirmed'|'revised';note:string;evidence:string;reviewedAt:number};
+export type EditorialReviewState={version:number;fingerprint:string;engineVersion:number;mode:string;approved:boolean;approvedAt:number|null;updatedAt:number;finalNote:string;findings:EditorialFinding[];records:Record<string,EditorialRecord>;summary:{total:number;reviewed:number;remaining:number};limitations:string[]};
+type TextUnit={text:string;location:EditorialLocation;role:'copy'|'body'|'quote'|'link'};
+const label=(key:string)=>key.replace(/([a-z])([A-Z])/g,'$1 $2').replace(/[_-]/g,' ').replace(/^./,letter=>letter.toUpperCase());
+const words=(value:string)=>value.toLocaleLowerCase('en').match(/[\p{L}\p{N}]+/gu)||[];
+const normalized=(value:string)=>words(value).join(' ');
+function findingIdentity(value:string){let hash=2166136261;for(let i=0;i<value.length;i++){hash^=value.charCodeAt(i);hash=Math.imul(hash,16777619);}return (hash>>>0).toString(36);}
+function excerpt(text:string,start=0,end=start+240){const from=Math.max(0,start-65),to=Math.min(text.length,Math.max(end,start+100)+65);return (from?'…':'')+text.slice(from,to).replace(/\s+/g,' ').slice(0,360)+(to<text.length?'…':'');}
+function collect(draft:BuilderDraft){
+ const units:TextUnit[]=[];
+ const add=(text:unknown,location:EditorialLocation,role:TextUnit['role']='copy')=>{if(typeof text==='string'&&text.trim())units.push({text,location,role});};
+ for(const field of ['title','description','audience'] as const)add(draft[field],{path:field,label:label(field),field});
+ const buyerFields=new Set(['outcome','subtitle','bookPremise','readerLevel','startingPoint','runningExample','trigger','requiredInputs','definitionOfDone','serviceScope','preparation','intakePrompt','welcome','rules','memberPromise','usageInstructions','compatibleTools','dailyTime','completionCriteria','prerequisites']);
+ for(const [field,text] of Object.entries(draft.fields))if(buyerFields.has(field))add(text,{path:`fields.${field}`,label:label(field),field});
+ const editorialKey=/^(?:subtitle|shortDescription|problem|prerequisites|question|answer|quote|name|role|description|title|body|prompt|explanation|takeaway|actionStep|why|mistakes|transcript|reflection|quickStart|checklist|faq|phases|kpis|licenseTerms|agreement|completionReward|recapPrompt|copyright|dedication|aboutAuthor|acknowledgments|releaseNotes|rules|welcome|introPrompt|intakeQuestions|caption|imageUrl|url|duplicateUrl|walkthroughUrl|upsellUrl)$/;
+ const walk=(value:unknown,path:string,location:EditorialLocation,key='')=>{if(typeof value==='string'){if(editorialKey.test(key)&&!/^studio\.community\.events\.\d+\.url$/.test(path))add(value,{...location,path,label:`${location.label} · ${label(key)}`},key==='quote'?'quote':/url/i.test(key)?'link':'copy');return;}if(Array.isArray(value)){value.forEach((item,index)=>{if(typeof item==='string'&&editorialKey.test(key))add(item,{...location,path:`${path}.${index}`,label:`${location.label} · ${label(key)} ${index+1}`});else walk(item,`${path}.${index}`,location,key);});return;}if(value&&typeof value==='object')for(const [child,item] of Object.entries(value))walk(item,`${path}.${child}`,location,child);};
+ walk(draft.studio,'studio',{path:'studio',label:'Product settings',field:'studio'});
+ draft.sections.forEach((section,index)=>{const location={path:`sections.${index}.body`,label:section.title||`Section ${index+1}`,sectionId:section.id,sectionIndex:index};add(section.title,{...location,path:`sections.${index}.title`});add(section.body,location,'body');walk(section.studio,`sections.${index}.studio`,location);});
+ draft.files.forEach((file,index)=>{if(/\.(?:md|txt|html?)$/i.test(file.name))add(file.content,{path:`files.${index}.content`,label:file.name,field:'files'},'body');});
+ return units;
+}
+function canonical(value:unknown):string{if(Array.isArray(value))return '['+value.map(canonical).join(',')+']';if(value&&typeof value==='object')return '{'+Object.entries(value).filter(([,item])=>item!==undefined).sort(([a],[b])=>a.localeCompare(b,'en')).map(([key,item])=>JSON.stringify(key)+':'+canonical(item)).join(',')+'}';return JSON.stringify(value)??'null';}
+export async function editorialContentFingerprint(draft:BuilderDraft){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(canonical({engineVersion:editorialReviewEngineVersion,draft})));return Array.from(new Uint8Array(bytes),byte=>byte.toString(16).padStart(2,'0')).join('');}
+
+/** Pattern-based review aids. Findings are prompts for a human editor; no
+ * source is fetched and no statement is automatically declared true or false. */
+export function reviewEditorialDraft(draft:BuilderDraft){
+ const units=collect(draft),findings:EditorialFinding[]=[],seen=new Set<string>();
+ const add=(kind:EditorialFinding['kind'],unit:TextUnit,title:string,message:string,suggestedAction:string,start=0,end=start+180,relatedLocations?:EditorialLocation[])=>{const key=`${kind}:${unit.location.path}`;if(seen.has(key))return;seen.add(key);findings.push({id:`${kind}-${findingIdentity(key+'\n'+unit.text)}`,kind,title,message,excerpt:excerpt(unit.text,start,end),suggestedAction,location:{...unit.location,start,end:Math.min(end,unit.text.length)},...(relatedLocations?{relatedLocations}:{})});};
+ const paragraphs=new Map<string,{unit:TextUnit;start:number}>();
+ const bodies=units.filter(unit=>unit.role==='body');
+ for(const unit of bodies){for(const match of unit.text.matchAll(/[^\n]+(?:\n(?!\s*\n)[^\n]+)*/g)){const text=normalized(match[0]);if(text.length<140||words(text).length<25)continue;const prior=paragraphs.get(text);if(prior)add('repetition',unit,'Repeated passage','This substantial passage also appears elsewhere in the saved content. Repetition may be intentional, but it can reduce the value of a lesson or section.','Keep a deliberate recap, or replace the duplicate with a distinct example, explanation, or action.',match.index,match.index+match[0].length,[{...prior.unit.location,start:prior.start,end:prior.start+match[0].length}]);else paragraphs.set(text,{unit,start:match.index});}}
+ const shingles=(text:string)=>{const tokens=words(text);return new Set(tokens.slice(0,-3).map((_,index)=>tokens.slice(index,index+4).join(' ')));};
+ const comparisons=bodies.map(unit=>({unit,tokens:words(unit.text).length,shingles:shingles(unit.text)}));
+ for(let i=0;i<comparisons.length;i++){const current=comparisons[i];if(current.tokens<60)continue;for(let j=0;j<i;j++){const prior=comparisons[j];if(prior.tokens<60||Math.min(current.tokens,prior.tokens)/Math.max(current.tokens,prior.tokens)<.65)continue;let common=0;for(const item of current.shingles)if(prior.shingles.has(item))common++;if(2*common/(current.shingles.size+prior.shingles.size)>=.82){add('repetition',current.unit,'Sections are very similar','These saved sections share most of their wording. This is a text comparison, not a plagiarism check.','Give each section a distinct purpose, or explain why the repeated wording is useful.',0,180,[prior.unit.location]);break;}}}
+ const promise=/\b(?:guaranteed?|risk[- ]free|never fail|always works?|100\s*%\s*(?:success|effective|safe|proven)|(?:double|triple)\s+(?:your\s+)?(?:income|revenue|sales)|(?:instant|effortless)\s+(?:results?|success|income)|cures?\s+(?:all|every|cancer|diabetes)|clinically proven|scientifically proven|no\s+(?:risk|effort)\s+(?:required|needed))\b|баталгаатай|эрсдэлгүй|гарантирован\p{L}*|без\s+риска/iu;
+ const number=/\b\d[\d,.]*(?:\s*%|\b)|[$€£]\s*\d|\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d/iu;
+ const quotation=/[“«][^”»\n]{15,}[”»]|"[^"\n]{20,}"/u;
+ const urls=/https?:\/\/[^\s<>"')\]]+/giu;
+ for(const unit of units){
+  if(unit.role!=='link'){
+   const claim=promise.exec(unit.text);if(claim)add('promise',unit,'Review a strong promise','This wording could imply a guaranteed result or unusually strong evidence. The check has not established whether the promise is supported.','Add specific, relevant evidence and qualifications, or revise the promise to describe an outcome you can support.',claim.index,claim.index+claim[0].length);
+   const withoutLinks=unit.text.replace(urls,match=>' '.repeat(match.length)),stat=number.exec(withoutLinks),quote=quotation.exec(withoutLinks),verify=stat||quote;
+   const ordinalHeading=/\.title$/.test(unit.location.path)&&/^(?:chapter|section|lesson|step|day|phase|part)\s+\d+(?:\W|$)/i.test(unit.text.trim());
+   if((verify&&!ordinalHeading)||unit.role==='quote')add('verification',unit,unit.role==='quote'||quote?'Verify this quotation or testimonial':'Verify numbers, dates, or measurements','A human editor should check the original source, context, currency, and permission where relevant. This tool has not fact-checked this passage.','Record the source and what you checked, or explain why this is an illustrative example rather than a factual claim.',verify?.index||0,(verify?.index||0)+(verify?.[0].length||150));
+  }
+  for(const link of unit.text.matchAll(urls)){const around=unit.text.slice(Math.max(0,link.index-100),Math.min(unit.text.length,link.index+link[0].length+100));if(/\b(?:source|credit|license|courtesy|attribution)\s*[:—-]|©|эх\s+сурвалж|источник\s*:/iu.test(around))continue;add('attribution',unit,'Check an external resource and its credit','This saved text links to an external resource without an obvious nearby source or credit. A link alone does not establish ownership, permission, or accuracy.','Confirm the destination and usage rights yourself. Add a useful source/credit where needed, or record why attribution is not applicable.',link.index,link.index+link[0].length);break;}
+ }
+ const practical=['book','guide','playbook','mini-course','video-course','challenge'].includes(draft.type)||draft.fields.customDelivery==='course';
+ if(practical)for(const unit of bodies){if(unit.location.sectionIndex===undefined||words(unit.text).length<110||/\b(?:intro(?:duction)?|conclusion|copyright|dedication|acknowledgments|references|resources|about the author)\b/iu.test(unit.location.label))continue;const meta=draft.sections[unit.location.sectionIndex]?.studio;
+  if(!/\b(?:for example|e\.g\.|worked example|case study|suppose|imagine|sample|scenario)\b|жишээ|например/iu.test(unit.text))add('example',unit,'Consider a concrete example','This substantial section has no obvious example marker. An example may help readers apply an abstract explanation; it is not mandatory in every section.','Add a worked example relevant to your audience, or note why an example would not improve this section.');
+  if(!meta?.actionStep&&!meta?.assignment?.prompt&&!meta?.quiz?.length&&!/(?:^|[.!?\n]\s*)(?:[-*]\s*)?(?:try|write|choose|create|calculate|check|list|practice|compare|complete|record|identify|draft|open|ask|test|review|select|set|make|build)\b|\b(?:your turn|action step|exercise|checklist|practice task)\b|дасгал|хийж\s+үз|упражнени/imu.test(unit.text))add('action',unit,'Make the next action clear','This substantial instructional section has no obvious practice task or action step. Narrative and reference sections may not need one.','Add one specific action, exercise, quiz, or assignment, or explain why this section is intended only as context.');
+ }
+ return {findings,limitations:['These checks flag common patterns. They do not verify facts or assign a quality score.','Only saved text and link patterns are inspected. Read original files and review recordings, images, permissions, and examples yourself.','No external URL is opened, verified, or fetched by this review.']};
+}

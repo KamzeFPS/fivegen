@@ -14,7 +14,7 @@ export type BuilderAgentFocus={id:string;message:string;detailsGroup:BuilderAgen
 type Props = {
   productId: string;
   context: BuilderAgentContext;
-  onApply: (suggestion: BuilderAgentSuggestion,target?:BuilderAgentTarget,refinement?:BuilderAgentRefinement) => void | boolean | Promise<void | boolean>;
+  onApply: (suggestion: BuilderAgentSuggestion,target?:BuilderAgentTarget,refinement?:BuilderAgentRefinement,messageId?:string) => void | boolean | Promise<void | boolean>;
   onBeforeSend?:()=>Promise<void>;
   onMinimizedChange?: (minimized: boolean) => void;
   focus?:BuilderAgentFocus|null;
@@ -105,7 +105,7 @@ export function BuilderAgent({ productId, context, onApply,onBeforeSend, onMinim
 
   async function apply(id: string, suggestion: BuilderAgentSuggestion) {
     setApplying(id); setError('');
-    try { const original=messages.find(item=>item.id===id);if (await onApply(suggestion,original?.target,original?.refinement) !== false) setApplied(current => [...current, id]); }
+    try { const original=messages.find(item=>item.id===id);if (await onApply(suggestion,original?.target,original?.refinement,id) !== false) setApplied(current => [...current, id]); }
     catch (cause) { setError(cause instanceof Error ? cause.message : 'The suggestion could not be applied.'); }
     finally { setApplying(''); }
   }

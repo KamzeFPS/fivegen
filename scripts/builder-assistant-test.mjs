@@ -25,6 +25,7 @@ const dependencies = {
     calls++; lastInput = JSON.parse(input); lastSchema = outputSchema?.schema; if (held) await held;
     if (customResponse) return structuredClone(customResponse);
     if (failureMode === 'provider') throw new ApiError('Fixture provider unavailable.', 502);
+    if (failureMode === 'lease-race') sql.prepare('UPDATE studio_conversations SET lease=lease+1 WHERE product_id=? AND owner=?').run(productId,owner);
     if (failureMode === 'nullable') return { answer: 'Keep the existing title and outline. This description focuses the promise for illustrators.', questions: null, suggestion: { summary: 'Clarify the intended audience in the description.', title: null, description: 'A practical handoff process for independent illustrators.', audience: null, sections: null } };
     if (failureMode === 'discussion') return { answer: 'Your existing structure already supports that goal. We can discuss the intended outcome before proposing edits.', questions: [], suggestion: { summary: 'No changes proposed.', title: null, description: '', audience: null, sections: [] } };
     if (failureMode === 'malformed') return { answer: 'This answer does not make the invalid proposed edit safe.', questions: [], suggestion: { summary: 'Invalid fixture edit.', title: 100 } };
@@ -38,7 +39,7 @@ async function load(path) {
   const code = `const {${Object.keys(dependencies).join(',')}}=globalThis.${key};\n` + ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 } }).outputText;
   const result = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64')); delete globalThis[key]; return result;
 }
-for (const path of ['lib/generation-access.ts', 'lib/product-allowance.ts', 'lib/subscription-credits.ts', 'lib/credits.ts', 'lib/builder-assistant-contract.ts', 'lib/builder-assistant.ts']) Object.assign(dependencies, await load(path));
+for (const path of ['lib/generation-access.ts', 'lib/product-allowance.ts', 'lib/subscription-credits.ts', 'lib/credits.ts', 'lib/creator-voice.ts', 'lib/creator-voice-server.ts', 'lib/creator-context-contract.ts', 'lib/creator-context-server.ts', 'lib/builder-assistant-contract.ts', 'lib/builder-assistant.ts']) Object.assign(dependencies, await load(path));
 const { parseBuilderAgentResponse, builderAgentResponseSchema, builderAgentResponseWireSchema, builderAgentRequestSchema, resolveBuilderAgentScope, scopeBuilderAgentResponse, builderAgentFieldKeysForContext, makeBuilderAgentResponseWireSchema } = dependencies;
 const wireFixture = { answer: 'Here is a clearer product title for your audience.', questions: null, suggestion: { summary: 'Make the target audience explicit.', title: 'The Illustrator Handoff Playbook', description: null, audience: null, sections: null } };
 assert.equal(builderAgentResponseSchema.safeParse(wireFixture).success, false, 'The raw nullable provider shape reproduces the previously rejected valid suggestion');
@@ -159,6 +160,7 @@ try {
   const active = post({ ...paid, requestId: randomUUID(), expectedUpdatedAt: state.conversation.updatedAt, maxCredits: 10 });
   await new Promise(done => setTimeout(done, 25)); await ok(await post({ ...paid, requestId: randomUUID(), expectedUpdatedAt: state.conversation.updatedAt, maxCredits: 10 }), 409); release(); state = await ok(await active); held = null;
   assert.equal((await dependencies.creditBalance(owner)).purchased, 80, 'Only completed requests spend credits');
+  failureMode='lease-race';const lostLeaseRequest={...paid,requestId:randomUUID(),expectedUpdatedAt:state.conversation.updatedAt,maxCredits:10};await ok(await post(lostLeaseRequest),409);assert.equal((await dependencies.creditBalance(owner)).purchased,80,'A lost conversation lease refunds the actual reserved credit ledger');assert.equal(sql.prepare('SELECT state FROM credit_usage WHERE id=?').get(lostLeaseRequest.requestId).state,'refunded');assert.equal(sql.prepare('SELECT state FROM studio_plan_turns WHERE id=?').get(lostLeaseRequest.requestId).state,'failed');assert.equal(sql.prepare('SELECT COUNT(*) n FROM creator_context_proposals WHERE message_id=?').get(lostLeaseRequest.requestId+'-answer').n,0);sql.prepare('UPDATE studio_conversations SET lease=0 WHERE product_id=? AND owner=?').run(productId,owner);failureMode='';
   const restored = await ok(await read()); assert.deepEqual(restored.conversation, state.conversation, 'Chat and suggestions survive reload');
   assert.equal(sql.prepare('SELECT COUNT(*) n FROM ai_product_runs WHERE owner=?').get(owner).n, 0, 'Planning does not create complete-product runs');
   customResponse = { answer: 'An unsolicited manuscript outline must not be applied.', questions: [], suggestion: { summary: 'An outline instead of requested fields.', sections: [{ title: 'UNREQUESTED_CHAPTER', body: 'This is outside the requested field scope.' }] } };

@@ -7,6 +7,7 @@ import {z} from 'zod';
 import {unzipSync} from 'fflate';
 import {createStorage} from '../runtime/render/storage.mjs';
 import {fileSalePdfFixture} from './file-sale-pdf-fixture.mjs';
+import {approveCurrentEditorialForFixture} from './product-editorial-fixture.mjs';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 
@@ -37,8 +38,11 @@ async function load(path,selectedExports){
 }
 for(const path of ['lib/commerce.ts','lib/experience.ts','lib/product-curriculum.ts','lib/product-decision-contract.ts','lib/product-community-tier-contract.ts','lib/product-community-tiers.ts','lib/product-studio-contract.ts','lib/product-document-archive.ts','lib/product.ts','lib/commerce-v2.ts','lib/creator-plans.ts','lib/creator-plan-server.ts','lib/builder-contract.ts','lib/builder-assistant-contract.ts','lib/builder-revision-contract.ts','lib/product-readiness.ts','lib/builder-publication-contract.ts','lib/upload-validation.ts','lib/builder-delivery-server.ts','lib/service-integrations-crypto.ts','lib/service-integrations-oauth.ts','lib/service-integrations-server.ts','lib/commerce-v2-server.ts','lib/product-service-fulfillment.ts','lib/product-studio-commerce.ts'])Object.assign(deps,await load(path));
 Object.assign(deps,await load('lib/server.ts',['productFromRow']));
+for(const path of ['lib/product-editorial-review.ts','lib/product-editorial-review-server.ts'])Object.assign(deps,await load(path));
+for(const path of ['lib/creator-voice.ts','lib/creator-voice-server.ts','lib/creator-context-contract.ts','lib/creator-context-server.ts'])Object.assign(deps,await load(path));
 const builder=await load('lib/product-builder-server.ts');Object.assign(deps,builder);
 const publication=await load('lib/product-builder-publication.ts');Object.assign(deps,publication);
+async function reviewedPublish(id,who,input){await approveCurrentEditorialForFixture(deps,id,who);return publication.publishBuilderProduct(id,who,input);}
 const legacyDownload=await load('app/api/download/[slug]/route.ts'),legacyOffers=await load('lib/offers-server.ts'),uploadRoute=await load('app/api/uploads/[id]/route.ts');
 const coverRoute=await load('app/api/builder-cover/[slug]/route.ts');
 
@@ -85,7 +89,8 @@ try{
   let workspace=await builder.createBuilderWorkspace(owner,{type,source:'upload',requestId:randomUUID()});const original=await upload(workspace.product.id);
   const draft=completeDraft(workspace);Object.assign(draft,{sections:[],files:[],uploadIds:[original]});workspace=await save(workspace,draft);
   assert.equal(workspace.draft.sections.length,0);publishedReady(workspace,`${type} original upload`);
-  workspace=await publication.publishBuilderProduct(workspace.product.id,owner,{expectedVersion:workspace.version});
+  if(type==='book')await assert.rejects(()=>publication.publishBuilderProduct(workspace.product.id,owner,{expectedVersion:workspace.version}),error=>error.status===409&&/editorial review/i.test(error.message),'A complete product still needs a deliberate version-bound editorial review');
+  workspace=await reviewedPublish(workspace.product.id,owner,{expectedVersion:workspace.version});
   const purchasedPresentation=(await deps.builderPublishedDelivery(workspace.product.id)).snapshot;
   assert.equal(purchasedPresentation.builderType,type,'Published delivery freezes the dedicated builder type');
   assert.equal(purchasedPresentation.description,workspace.draft.description,'Published delivery includes the reviewed product description');
@@ -97,7 +102,7 @@ try{
   let workspace=await builder.createBuilderWorkspace(owner,{type,source:'upload',requestId:randomUUID()});
   const recording=await upload(workspace.product.id,{mime:'video/mp4',name:'lesson.mp4',bytes:Buffer.from('synthetic completed private recording')});
   const draft=completeDraft(workspace);draft.sections=[{id:randomUUID(),title:'A recorded practical lesson',body:'',videoId:recording}];workspace=await save(workspace,draft);publishedReady(workspace,`${type}: a completed recording needs no placeholder lesson text`);
-  workspace=await publication.publishBuilderProduct(workspace.product.id,owner,{expectedVersion:workspace.version});assert.equal(JSON.stringify(await publication.getPublicBuilderProduct(workspace.product.slug)).includes(recording),false,'Private lesson recording IDs never appear publicly');
+  workspace=await reviewedPublish(workspace.product.id,owner,{expectedVersion:workspace.version});assert.equal(JSON.stringify(await publication.getPublicBuilderProduct(workspace.product.slug)).includes(recording),false,'Private lesson recording IDs never appear publicly');
   const unfinished=await save(workspace,{...workspace.draft,sections:[{...workspace.draft.sections[0],videoId:undefined}]});assert.equal(unfinished.readiness.publishReady,false,'A lesson without a recording or text blocks publication');
  }
  // Structural upload completion is not enough: missing hashes and corrupted
@@ -137,7 +142,7 @@ try{
  ai=await builder.syncGeneratedBuilderContent(ai.product.id,owner,ai.version);assert.deepEqual(ai.draft.sections,generatedSections);assert.deepEqual(ai.draft.files,generatedFiles);assert.deepEqual(ai.draft.uploadIds,[existingOriginal]);assert.equal(ai.draft.title,'The creator’s revised book title','Applying generated content keeps the creator’s metadata');
  for(let index=0;index<workspaces.length;index++){
   let workspace=workspaces[index],type=workspace.draft.type;
-  workspace=await publication.publishBuilderProduct(workspace.product.id,owner,{expectedVersion:workspace.version});
+  workspace=await reviewedPublish(workspace.product.id,owner,{expectedVersion:workspace.version});
   assert.equal(workspace.product.status,'published',`${type}: the page publishes without connected payments`);
   assert.equal(workspace.selling,false,`${type}: publishing never enables selling`);
   assert.equal(workspace.publication.version,workspace.version);
@@ -145,6 +150,7 @@ try{
   assert.equal(publicPage.selling,false);assert.equal(publicPage.snapshot.title,workspace.draft.title);
   assert.equal(json.includes('PRIVATE CONTENT'),false,`${type}: public pages never contain lesson/chapter bodies`);
   assert.equal(Object.hasOwn(publicPage.snapshot,'sections'),false);assert.equal(Object.hasOwn(publicPage.snapshot,'uploadIds'),false);assert.equal(Object.hasOwn(publicPage.snapshot,'meetingUrl'),false);
+  sql.prepare('UPDATE product_editorial_reviews SET approved_at=NULL WHERE product_id=?').run(workspace.product.id);
   const again=await publication.publishBuilderProduct(workspace.product.id,owner,{expectedVersion:workspace.version});assert.equal(again.publication.version,workspace.version,`${type}: retrying publication is idempotent`);
   await assert.rejects(()=>publication.publishBuilderProduct(workspace.product.id,outsider,{expectedVersion:workspace.version}),e=>e.status===404,`${type}: another user cannot publish the page`);
   await assert.rejects(()=>publication.setBuilderSelling(workspace.product.id,owner,{enabled:true,expectedVersion:workspace.version}),e=>[409,503].includes(e.status),`${type}: selling stays blocked without payments`);
@@ -158,10 +164,10 @@ try{
  assert.equal((await publication.getPublicBuilderProduct(revised.product.slug)).snapshot.title,oldTitle);
  await assert.rejects(()=>publication.publishBuilderProduct(revised.product.id,owner,{expectedVersion:oldVersion}),e=>e.status===409,'A stale review cannot publish a newer draft');
  await assert.rejects(()=>publication.setBuilderSelling(revised.product.id,owner,{enabled:true,expectedVersion:revised.version}),e=>e.status===409,'Unpublished edits cannot start selling');
- revised=await publication.publishBuilderProduct(revised.product.id,owner,{expectedVersion:revised.version});assert.equal((await publication.getPublicBuilderProduct(revised.product.slug)).snapshot.title,revised.draft.title);
+ revised=await reviewedPublish(revised.product.id,owner,{expectedVersion:revised.version});assert.equal((await publication.getPublicBuilderProduct(revised.product.slug)).snapshot.title,revised.draft.title);
  // Publishing a complete free-to-preview page is independent of entering an
  // offer price. It never turns this page into free access to private content.
- let noPrice=await builder.createBuilderWorkspace(owner,{type:'guide',source:'manual',requestId:randomUUID()});noPrice=await save(noPrice,{...completeDraft(noPrice),priceCents:0});noPrice=await publication.publishBuilderProduct(noPrice.product.id,owner,{expectedVersion:noPrice.version});assert.equal(noPrice.selling,false);assert.equal((await publication.getPublicBuilderProduct(noPrice.product.slug)).snapshot.priceCents,0);
+ let noPrice=await builder.createBuilderWorkspace(owner,{type:'guide',source:'manual',requestId:randomUUID()});noPrice=await save(noPrice,{...completeDraft(noPrice),priceCents:0});noPrice=await reviewedPublish(noPrice.product.id,owner,{expectedVersion:noPrice.version});assert.equal(noPrice.selling,false);assert.equal((await publication.getPublicBuilderProduct(noPrice.product.slug)).snapshot.priceCents,0);
  await assert.rejects(()=>publication.setBuilderSelling(noPrice.product.id,owner,{enabled:true,expectedVersion:noPrice.version}),undefined,'A page without an offer price cannot start selling');
  assert.equal(sql.prepare('SELECT COUNT(*) count FROM commerce_offers WHERE product_id=? AND enabled=1').get(noPrice.product.id).count,0);
  const legacyResponse=await legacyDownload.GET(new Request(`http://localhost/api/download/${noPrice.product.slug}`),{params:Promise.resolve({slug:noPrice.product.slug})});assert.equal(legacyResponse.status,403,'A published zero-price builder cannot expose private content through the historical free download route');
@@ -184,7 +190,7 @@ try{
  // Publish an actual PDF replacement for a synthetic prior buyer. The original
  // purchase stays immutable; only later PDF updates receive additive grants.
  let updated=await builder.createBuilderWorkspace(owner,{type:'guide',source:'upload',requestId:randomUUID()});
- const originalPdf=await upload(updated.product.id);updated=await save(updated,{...completeDraft(updated),sections:[],files:[],uploadIds:[originalPdf]});updated=await publication.publishBuilderProduct(updated.product.id,owner,{expectedVersion:updated.version});
+ const originalPdf=await upload(updated.product.id);updated=await save(updated,{...completeDraft(updated),sections:[],files:[],uploadIds:[originalPdf]});updated=await reviewedPublish(updated.product.id,owner,{expectedVersion:updated.version});
  const originalDelivery=sql.prepare('SELECT content_snapshot FROM product_builder_publications WHERE product_id=?').get(updated.product.id).content_snapshot,priorOrder=randomUUID();
  sql.prepare("INSERT INTO commerce_orders (id,owner,product_id,account_id,mode,email,amount,currency,title,status,access_hash,created_at) VALUES (?,?,?,'acct_fixture','test','pdf-buyer@example.test',1900,'usd','Original PDF purchase','paid',?,?)").run(priorOrder,owner,updated.product.id,randomUUID(),Date.now());
  sql.prepare('INSERT INTO product_builder_order_snapshots (order_id,product_id,publication_version,snapshot,created_at) VALUES (?,?,?,?,?)').run(priorOrder,updated.product.id,updated.version,originalDelivery,Date.now());
@@ -192,7 +198,7 @@ try{
  const replacement=await upload(updated.product.id,{bytes:fileSalePdfFixture('A deliberate PDF update')}),newCsv=await upload(updated.product.id,{mime:'text/csv',name:'new-template.csv',bytes:Buffer.from('New,Resource\nPrivate,Template\n')});
  updated=await save(updated,{...updated.draft,uploadIds:[replacement,newCsv],sections:[section('New written module that was not originally purchased')]});
  assert.equal(sql.prepare('SELECT COUNT(*) count FROM product_builder_upload_grants WHERE order_id=?').get(priorOrder).count,0,'Private drafts do not grant updates');
- updated=await publication.publishBuilderProduct(updated.product.id,owner,{expectedVersion:updated.version});
+ updated=await reviewedPublish(updated.product.id,owner,{expectedVersion:updated.version});
  const granted=sql.prepare('SELECT upload_id FROM product_builder_upload_grants WHERE order_id=?').all(priorOrder).map(row=>row.upload_id);assert.deepEqual(granted,[replacement],'Publishing grants only the replacement PDF');
  assert.equal(sql.prepare('SELECT COUNT(*) count FROM product_builder_upload_grants WHERE order_id=?').get(pendingPdfOrder).count,0,'Actual publication grants paid existing buyers, while pending checkout keeps its approved original offer');
  assert.equal(sql.prepare('SELECT snapshot FROM product_builder_order_snapshots WHERE order_id=?').get(priorOrder).snapshot,originalDelivery,'The purchased snapshot remains unchanged');
@@ -205,7 +211,7 @@ try{
  const coverA=await upload(covered.product.id,{mime:'image/png',name:'published-cover.png',bytes:pngA}),coverB=await upload(covered.product.id,{mime:'image/png',name:'private-cover.png',bytes:pngB});
  const cover=slug=>coverRoute.GET(new Request(`https://fivegen.test/api/builder-cover/${slug}`),{params:Promise.resolve({slug})});
  covered=await save(covered,{...completeDraft(covered),coverUploadId:coverA});assert.equal((await cover(covered.product.slug)).status,404,'Unpublished cover is private');
- covered=await publication.publishBuilderProduct(covered.product.id,owner,{expectedVersion:covered.version});let coverResponse=await cover(covered.product.slug);assert.equal(coverResponse.status,200);assert.deepEqual(Buffer.from(await coverResponse.arrayBuffer()),pngA);assert.equal(coverResponse.headers.get('Content-Type'),'image/png');assert.match(coverResponse.headers.get('Cache-Control'),/no-store/);
+ covered=await reviewedPublish(covered.product.id,owner,{expectedVersion:covered.version});let coverResponse=await cover(covered.product.slug);assert.equal(coverResponse.status,200);assert.deepEqual(Buffer.from(await coverResponse.arrayBuffer()),pngA);assert.equal(coverResponse.headers.get('Content-Type'),'image/png');assert.match(coverResponse.headers.get('Cache-Control'),/no-store/);
  const coveredPublic=await publication.getPublicBuilderProduct(covered.product.slug);assert.equal(coveredPublic.snapshot.hasCover,true);assert.ok(!JSON.stringify(coveredPublic.snapshot).includes(coverA),'Public metadata exposes only a cover boolean');
  covered=await save(covered,{...covered.draft,coverUploadId:coverB});assert.deepEqual(Buffer.from(await (await cover(covered.product.slug)).arrayBuffer()),pngA,'Private cover changes do not replace the published image');assert.equal((await cover(coverB)).status,404,'An upload identifier is not a public-image URL');
  const coverRow=sql.prepare('SELECT * FROM uploads WHERE id=?').get(coverA);
@@ -251,18 +257,18 @@ try{
  cloudKit=await save(cloudKit,{...completeDraft(cloudKit),sections:[],files:[],studio:{templates:{items:[{id:randomUUID(),name:'Client project planner',duplicateUrl:'https://templates.example.test/duplicate/project-planner'}]}}});
  publishedReady(cloudKit,'A usable cloud-only template with instructions');
  assert.equal(deps.evaluateProductReadiness(cloudKit.draft).ready,true,'Cloud templates do not require a redundant uploaded file');
- cloudKit=await publication.publishBuilderProduct(cloudKit.product.id,owner,{expectedVersion:cloudKit.version});assert.ok(cloudKit.publication);
+ cloudKit=await reviewedPublish(cloudKit.product.id,owner,{expectedVersion:cloudKit.version});assert.ok(cloudKit.publication);
 
  let quizOnly=await builder.createBuilderWorkspace(owner,{type:'mini-course',source:'manual',requestId:randomUUID()});
  quizOnly=await save(quizOnly,{...completeDraft(quizOnly),sections:[{id:randomUUID(),title:'Choose a concrete project goal',body:'',studio:{kind:'quiz',quiz:[{question:'Which goal can you verify?',options:['Send one finished project brief','Think about a project'],correctIndex:0,explanation:'A finished brief is a visible result.'}]}}]});
  publishedReady(quizOnly,'Quiz-only learning section');assert.equal(deps.evaluateProductReadiness(quizOnly.draft).ready,true);
- quizOnly=await publication.publishBuilderProduct(quizOnly.product.id,owner,{expectedVersion:quizOnly.version});assert.ok(quizOnly.publication);
+ quizOnly=await reviewedPublish(quizOnly.product.id,owner,{expectedVersion:quizOnly.version});assert.ok(quizOnly.publication);
 
  let audioOnly=await builder.createBuilderWorkspace(owner,{type:'mini-course',source:'manual',requestId:randomUUID()});
  const audioId=await upload(audioOnly.product.id,{mime:'audio/mpeg',name:'original-lesson.mp3',bytes:Buffer.from('ID3 synthetic retained audio fixture')});
  audioOnly=await save(audioOnly,{...completeDraft(audioOnly),uploadIds:[audioId],sections:[{id:randomUUID(),title:'A guided project planning session',body:'',studio:{kind:'audio',audioId}}]});
  publishedReady(audioOnly,'Audio-only section with an owned verified file');assert.equal(deps.evaluateProductReadiness(audioOnly.draft).ready,true);
- audioOnly=await publication.publishBuilderProduct(audioOnly.product.id,owner,{expectedVersion:audioOnly.version});assert.ok(audioOnly.publication);
+ audioOnly=await reviewedPublish(audioOnly.product.id,owner,{expectedVersion:audioOnly.version});assert.ok(audioOnly.publication);
  const missingAudio={...audioOnly.draft,sections:[{...audioOnly.draft.sections[0],studio:{kind:'audio',audioId:randomUUID()}}]};
  assert.equal((await builder.builderReadiness(audioOnly.product.id,owner,missingAudio)).publishReady,false,'An arbitrary audio ID cannot pass readiness');
 

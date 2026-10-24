@@ -6,6 +6,7 @@ export * from './growth-strategy-schema';
 export * from './commerce-v2-schema';
 export * from './automation-schema';
 export * from './creator-voice-schema';
+export * from './creator-trust-schema';
 export * from './product-builder-schema';
 export * from './marketing-plugin-schema';
 

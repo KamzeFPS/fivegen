@@ -209,6 +209,20 @@ try {
   assert.equal((await fetch(base + '/g/' + funnel.slug)).status, 404, 'Unpublish revokes the public snapshot');
   await json('/api/checkout', 'POST', { slug: product.slug, email: 'buyer@example.test' }, false, 410);
   assert.equal((await fetch(base + '/api/download/' + product.slug + '?token=unverified')).status, 403, 'A zero-price private product never becomes a legacy free download');
+  // Exercise the new publication gate through the real production HTTP
+  // handlers, independently of the legacy private-product/growth flows above.
+  let builder = await json('/api/builder','POST',{type:'guide',source:'manual',requestId:crypto.randomUUID()},true,201);
+  const builderPath='/api/builder/'+builder.product.id,editorialEvidence='PRIVATE EDITORIAL SOURCE MEMO '+randomBytes(8).toString('hex');
+  builder=await json(builderPath,'PATCH',{expectedVersion:builder.version,draft:{...builder.draft,title:'A reviewed original project guide',description:'A complete practical guide to planning a small original project.',audience:'Independent makers',fields:{...builder.draft.fields,outcome:'Prepare a clear brief and a useful first draft.'},sections:[{id:crypto.randomUUID(),title:'Plan a useful first draft',body:'For example, this illustrative practice log recorded 42 tasks in 2025. Write a one-page brief that names the audience, the intended outcome, and the first useful deliverable. Compare your draft against these requirements and identify one concrete improvement before sharing it.'}]}});
+  await json(builderPath+'/publish','POST',{expectedVersion:builder.version},true,409);
+  await json(builderPath+'/review','GET',undefined,false,401);
+  let editorial=await json(builderPath+'/review');assert.equal(editorial.approved,false);assert.ok(editorial.findings.length>0);
+  const editorialStamp=()=>({expectedVersion:editorial.version,fingerprint:editorial.fingerprint,expectedUpdatedAt:editorial.updatedAt});
+  editorial=await json(builderPath+'/review','POST',{...editorialStamp(),action:'record',findingId:editorial.findings[0].id,status:'confirmed',note:'This is a clearly labeled illustrative practice log, checked in its full context.',evidence:editorialEvidence});
+  if(editorial.summary.remaining)editorial=await json(builderPath+'/review','POST',{...editorialStamp(),action:'acknowledge-all',note:'Read each remaining prompt and checked this synthetic original test manuscript.',attested:true});
+  editorial=await json(builderPath+'/review','POST',{...editorialStamp(),action:'approve',note:'Read the complete saved guide and checked all factual and illustrative passages.',attested:true});assert.equal(editorial.approved,true);
+  builder=await json(builderPath+'/publish','POST',{expectedVersion:builder.version});const publishedTitle=builder.draft.title,builderPage=await fetch(base+'/b/'+builder.product.slug),builderHtml=await builderPage.text();assert.equal(builderPage.status,200);assert.ok(builderHtml.includes(publishedTitle));assert.ok(!builderHtml.includes(editorialEvidence),'Private review evidence never reaches the public sales page');
+  builder=await json(builderPath,'PATCH',{expectedVersion:builder.version,draft:{...builder.draft,title:'A new saved title awaiting another review'}});assert.equal((await json(builderPath+'/review')).approved,false);await json(builderPath+'/publish','POST',{expectedVersion:builder.version},true,409);assert.ok((await (await fetch(base+'/b/'+builder.product.slug)).text()).includes(publishedTitle),'An unreviewed revision preserves the already-published offer');
   console.log('Passed: actual Render production server, authentication and current terms, private creator-authored products, explicit growth publication/unpublication, scoped bundles/media, Stripe signature/mode checks, disabled Connect fail-closed behavior, retired routes, MCP discovery, and database/media/session persistence across restart. Isolated credentials; no provider requests, email sends, or payments.');
 } finally {
   await stop(); storage?.close();

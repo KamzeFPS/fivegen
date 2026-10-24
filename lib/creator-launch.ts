@@ -1,0 +1,20 @@
+export type CreatorLaunchNavigation='details'|'content'|'review'|'payments'|'preview'|'publish';
+export type CreatorLaunchAction={kind:'navigate';navigate:CreatorLaunchNavigation;label:string}|{kind:'feedback'|'share'|'refresh';label:string};
+export type CreatorLaunchFeedback={id:string;source:'conversation'|'email'|'survey'|'other';audience:'potential-buyer'|'customer';summary:string;recordedAt:number;provenance:'creator-entered'};
+export type CreatorLaunchStep={id:string;title:string;status:'complete'|'current'|'upcoming';detail:string;action?:CreatorLaunchAction};
+export type CreatorLaunchState={
+ productId:string;updatedAt:number;draftVersion:number;path:'paid'|'free'|'mixed';phase:'first-sale'|'free-access'|'improve';
+ steps:CreatorLaunchStep[];nextAction:CreatorLaunchAction;nextTitle:string;nextDetail:string;
+ feedback:CreatorLaunchFeedback[];
+ sharing:{publicationVersion:number;sharedAt:number|null;channel:string;publicUrl:string|null;current:boolean}|null;
+ sales:{livePaidCount:number;firstLivePaidAt:number|null;testPaidCount:number;freeAccessCount:number};
+ testPurchase:{complete:boolean;detail:string;action:CreatorLaunchAction};
+};
+
+/** Use the configured application origin, never an incoming Host or a draft URL. */
+export function creatorLaunchPublicUrl(origin:string,slug:string){
+ try{const url=new URL(origin);if(url.pathname!=='/'||url.search||url.hash||url.username||url.password||!(/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug))||slug.length>120)return null;
+  if(url.protocol!=='https:'&&!(url.protocol==='http:'&&['localhost','127.0.0.1'].includes(url.hostname)))return null;
+  return url.origin+'/b/'+encodeURIComponent(slug);
+ }catch{return null;}
+}

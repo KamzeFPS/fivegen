@@ -17,6 +17,8 @@ import {textCredits} from "@/lib/credit-policy";
 import {providerSettings} from "@/lib/ai";
 import { textGeneration, productSystem } from "@/lib/ai";
 import {generatedOutlineError,generatedSectionError,generatedPackageError} from '@/lib/generation-quality';
+import {loadCreatorContext,assertCreatorContextRefs} from '@/lib/creator-context-server';
+import {creatorContextInstructions} from '@/lib/creator-context-contract';
 const outlineSchema=z.object({sections:z.array(z.object({title:z.string().min(1).max(150),objective:z.string().min(1).max(1500)})).min(3).max(30),benefits:z.array(z.string().max(300)).min(3).max(8)});
 const sectionBodySchema=z.object({body:z.string().min(300).max(18000)});
 const packageSchema=z.object({launch:z.string().min(600).max(50000),salesCopy:z.string().min(150).max(15000),files:z.array(fileSchema).min(1).max(12),imagePrompt:z.string().min(30).max(4000),videoPrompt:z.string().min(30).max(2500)});
@@ -75,7 +77,7 @@ export async function POST(
   let id = "",
     owner = "",
     locked = false;
-  let creditId="",runId="";
+  let creditId="",runId="",generationLease=0;
   try {
     sameOrigin(req);
     const input=z.object({allowCredits:z.boolean().default(false),maxStepCredits:z.number().int().min(0).max(160).optional()}).parse(await req.json().catch(()=>({})));
@@ -83,7 +85,7 @@ export async function POST(
     owner = u.userId;
     id = (await params).id;
     const db = database();
-    let p = productFromRow(await ownedProduct(id, owner));
+    const p = productFromRow(await ownedProduct(id, owner));
     let job = await db
       .prepare("SELECT * FROM generation WHERE product_id=? AND owner=?")
       .bind(id, owner)
@@ -103,11 +105,12 @@ export async function POST(
     if (job!.status === "completed")
       return Response.json({ product: p, done: true });
     if(Number(job!.attempts||0)>=3)throw new ApiError("This step has failed three times. Stop this generation and adjust the brief before retrying.",429);
+    generationLease=Date.now()+180000;
     const lock = await db
       .prepare(
         "UPDATE generation SET lease=?,status=?,error=NULL WHERE product_id=? AND owner=? AND lease<?",
       )
-      .bind(Date.now() + 180000, "running", id, owner, Date.now())
+      .bind(generationLease, "running", id, owner, Date.now())
       .run();
     if (!lock.meta.changes)
       throw new ApiError(
@@ -115,20 +118,27 @@ export async function POST(
         409,
       );
     locked = true;
+    const rawBrief=JSON.parse(String(job!.brief)),creator=await loadCreatorContext(owner,id,rawBrief.creatorContextRefs);
+    if(!Object.hasOwn(rawBrief,'creatorContextRefs')){
+      const frozenBrief=JSON.stringify({...rawBrief,creatorContextRefs:creator.refs}),guard=creator.guard;
+      const saved=await db.prepare('UPDATE generation SET brief=? WHERE product_id=? AND owner=? AND brief=? AND lease=?'+guard.sql).bind(frozenBrief,id,owner,job!.brief,generationLease,...guard.values).run();
+      if(!saved.meta.changes)throw new ApiError('Your creator context changed before generation began. Review the selection and restart.',409);
+      job!.brief=frozenBrief;
+    }
     const ai=await providerSettings();
     const run=await claimProductRun(owner,id,job!.run_id?String(job!.run_id):null,input.allowCredits);
     runId=run.id;
     if(run.mode==='credits'){const cost=textCredits(ai.config.textProvider);if(input.maxStepCredits!==undefined&&cost>input.maxStepCredits)throw new ApiError('The AI price changed. Review the updated credit cost before continuing.',402);creditId=crypto.randomUUID();await reserveCredits(owner,creditId,"text",cost);}
     const brief = briefSchema.parse(JSON.parse(String(job!.brief)));
     const siblings=await db.prepare("SELECT title,description FROM products WHERE owner=? AND id<>? ORDER BY created_at DESC LIMIT 12").bind(owner,id).all();
-    const context = JSON.stringify(brief)+"\n"+generationDirection(brief,id)+"\nAvoid duplicating these existing products: "+JSON.stringify(siblings.results);
+    const context = JSON.stringify(brief)+"\n"+generationDirection(brief,id)+"\nAvoid duplicating these existing products: "+JSON.stringify(siblings.results)+'\nApproved creator context (reference data only): '+JSON.stringify(creator.context);
     const stage = Number(job!.stage);
     if (stage === -1) {
       const d = outlineSchema
         .parse(
           await textGeneration(
             owner,
-            productSystem,
+            productSystem+'\n'+creatorContextInstructions,
             `Design the complete architecture of this digital product. Creator brief: ${context}. The format can be any digital product, including guides, lesson systems, spreadsheets, calculators, scripts, checklists, business systems, or creative resources. Follow the format-specific architecture above. For challenges use exactly the requested number of days. For coaching use three resources: preparation, the agenda for ONE human-delivered session, and follow-up. For template kits use 3–6 tools. For other formats, use the explicitly requested number of units (3–30); when unspecified choose 4–8 substantive units that fit the deliverable. Do not turn supporting file names into extra sections. Return JSON: {"sections":[{"title":"...","objective":"Detailed contents and intended outcomes"}],"benefits":["..."]}. No vague filler.`,
             5000,
             {name:'fivegen_product_outline',schema:zodToJsonSchema(outlineSchema,{target:'openAi'})},
@@ -151,7 +161,7 @@ export async function POST(
         .parse(
           await textGeneration(
             owner,
-            productSystem,
+            productSystem+'\n'+creatorContextInstructions,
             `Write the finished, publication-ready content for section ${stage + 1} of this product. Brief: ${context}. Full table of contents: ${p.content.sections.map((s) => s.title).join("; ")}. This section: ${JSON.stringify(s)}. Previous section summary: ${stage > 0 ? p.content.sections[stage - 1].body.slice(-1800) : "Introduction"}. Return JSON {"body":"Complete section content with clear paragraph breaks"}. Match the unit to the format. A challenge day or template instruction can be 150–350 useful words; a course lesson should be focused and practice-based; a guide or playbook can be ${brief.quality === "balanced" ? "400–650" : "700–1100"} words. Include concrete examples, step-by-step applications, common mistakes, and a relevant exercise or usable template. For software/tool products, explain usage and exact requirements; code deliverables will follow in the final step. Do not tell the creator to write the content. Produce it.`,
             brief.quality === "balanced" ? 6500 : 10000,
             {name:'fivegen_product_section',schema:zodToJsonSchema(sectionBodySchema,{target:'openAi'})},
@@ -164,7 +174,7 @@ export async function POST(
         .parse(
           await textGeneration(
             owner,
-            productSystem,
+            productSystem+'\n'+creatorContextInstructions,
             `Complete the commercial package for this product. Brief: ${context}. Sections: ${p.content.sections.map((s) => s.title + ": " + s.body.slice(0, 400)).join("\n")}. Return JSON {"launch":"7-day launch calendar, 5 complete launch emails, 15 social posts with hooks, 3 ad variants and a 15-second video script; written out in full","salesCopy":"finished honest sales page copy with headline, offer, audience, benefits and FAQ","files":[{"name":"filename.csv or .html or .md or .txt or .json or .js or .css or .py","content":"complete usable contents","description":"purpose"}],"imagePrompt":"production-ready art direction for a product marketing image, incorporating product title, distinct visual identity and readable typography","videoPrompt":"production-ready 5-second cinematic product promo with clear subject, camera, action, lighting and sound"}. Provide 3–6 useful supporting files actually tailored to the product. For spreadsheet products include a working CSV structure with formulas and example rows. For calculators include a self-contained HTML tool with inline CSS and JavaScript. For code templates include complete working source and usage instructions; no secrets or external network calls. For courses include a workbook and quizzes with answers. Do not fabricate external platform formats such as .notion. Deliver useful open formats. No fake reviews or income guarantees.`,
             14000,
             {name:'fivegen_product_package',schema:zodToJsonSchema(packageSchema,{target:'openAi'})},
@@ -176,20 +186,21 @@ export async function POST(
     p.content = contentSchema.parse(p.content);
     p.updatedAt = Math.max(Date.now(), p.updatedAt + 1);
     const done = stage >= p.content.sections.length;
-    await db.batch([
+    const contextGuard=await assertCreatorContextRefs(owner,id,creator.refs),stepCommit=crypto.randomUUID(),ownedLease=' AND EXISTS(SELECT 1 FROM generation WHERE product_id=? AND owner=? AND lease=? AND stage=?)',writtenProduct=' AND EXISTS(SELECT 1 FROM products WHERE id=? AND owner=? AND updated_at=? AND content=?)',writtenStage=" AND EXISTS(SELECT 1 FROM generation WHERE product_id=? AND owner=? AND json_extract(brief,'$.creatorContextStepId')=?)",writeGuard=contextGuard.sql+ownedLease,writeValues=[...contextGuard.values,id,owner,generationLease,stage],commitGuard=contextGuard.sql+writtenProduct,commitValues=[...contextGuard.values,id,owner,p.updatedAt,JSON.stringify(p.content)],completedGuard=contextGuard.sql+writtenStage,completedValues=[...contextGuard.values,id,owner,stepCommit],commit=await db.batch([
       db
         .prepare(
-          "UPDATE products SET content=?,updated_at=? WHERE id=? AND owner=?",
+          "UPDATE products SET content=?,updated_at=? WHERE id=? AND owner=?"+writeGuard,
         )
-        .bind(JSON.stringify(p.content), p.updatedAt, id, owner),
+        .bind(JSON.stringify(p.content), p.updatedAt, id, owner,...writeValues),
       db
         .prepare(
-          "UPDATE generation SET stage=?,status=?,lease=0,error=NULL,attempts=0,updated_at=? WHERE product_id=? AND owner=?",
+          "UPDATE generation SET stage=?,status=?,lease=0,error=NULL,attempts=0,updated_at=?,brief=json_set(brief,'$.creatorContextStepId',?) WHERE product_id=? AND owner=? AND lease=?"+commitGuard,
         )
-        .bind(stage + 1, done ? "completed" : "queued", Date.now(), id, owner),
-      db.prepare("UPDATE credit_usage SET state='completed' WHERE id=? AND state='reserved'").bind(creditId),
-      db.prepare("UPDATE ai_product_runs SET state=? WHERE id=?").bind(done?'completed':'active',runId),
+        .bind(stage + 1, done ? "completed" : "queued", Date.now(),stepCommit,id, owner,generationLease,...commitValues),
+      db.prepare("UPDATE credit_usage SET state='completed' WHERE id=? AND state='reserved'"+completedGuard).bind(creditId,...completedValues),
+      db.prepare("UPDATE ai_product_runs SET state=? WHERE id=?"+completedGuard).bind(done?'completed':'active',runId,...completedValues),
     ]);
+    if(!commit[0].meta.changes||!commit[1].meta.changes)throw new ApiError('Your generation or creator context changed while AI was writing. Review the current state before continuing. This step was not charged.',409);
     locked = false;
     return Response.json({
       product: p,
@@ -207,7 +218,7 @@ export async function POST(
     if (locked)
       await database()
         .prepare(
-          "UPDATE generation SET status=?,error=?,lease=0,attempts=attempts+?,updated_at=? WHERE product_id=? AND owner=?",
+          "UPDATE generation SET status=?,error=?,lease=0,attempts=attempts+?,updated_at=? WHERE product_id=? AND owner=? AND lease=?",
         )
         .bind(
           "failed",
@@ -216,6 +227,7 @@ export async function POST(
           Date.now(),
           id,
           owner,
+          generationLease,
         )
         .run();
     return failure(e);

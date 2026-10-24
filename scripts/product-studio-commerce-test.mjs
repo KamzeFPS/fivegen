@@ -5,6 +5,7 @@ import {resolve} from 'node:path';
 import ts from 'typescript';
 import {z} from 'zod';
 import {createStorage} from '../runtime/render/storage.mjs';
+import {approveCurrentEditorialForFixture} from './product-editorial-fixture.mjs';
 
 // The shipped pricing/access services and additive production migrations run
 // against isolated SQLite. Every provider response is synthetic and local.
@@ -32,6 +33,7 @@ const deps={z,createHash,ApiError,env:{BUCKET:storage.BUCKET},database:()=>stora
 async function load(path){const key='studioQa'+randomUUID().replaceAll('-','');globalThis[key]={...deps};const source=readFileSync(path,'utf8').replace(/^import[\s\S]*?;\r?\n/gm,'');const ast=ts.createSourceFile(path,source,ts.ScriptTarget.Latest,true),declared=new Set(ast.statements.flatMap(node=>ts.isVariableStatement(node)?node.declarationList.declarations.filter(d=>ts.isIdentifier(d.name)).map(d=>d.name.text):node.name&&ts.isIdentifier(node.name)?[node.name.text]:[]));const code='const {'+Object.keys(deps).filter(name=>!declared.has(name)).join(',')+'}=globalThis.'+key+';\n'+ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;const result=await import('data:text/javascript;base64,'+Buffer.from(code+'\n//# sourceURL='+path).toString('base64'));delete globalThis[key];return result;}
 for(const path of ['lib/product-curriculum.ts','lib/product-decision-contract.ts','lib/product-community-tier-contract.ts','lib/product-community-tiers.ts','lib/product-studio-contract.ts','lib/product-document-archive.ts','lib/upload-validation.ts','lib/product.ts','lib/commerce-v2.ts','lib/commerce-fees.ts','lib/creator-plans.ts','lib/creator-plan-server.ts','lib/builder-contract.ts','lib/product-readiness.ts','lib/builder-publication-contract.ts','lib/builder-delivery-server.ts','lib/purchase-email.ts','lib/service-integrations-crypto.ts','lib/service-integrations-oauth.ts','lib/service-integrations-server.ts','lib/commerce-v2-server.ts','lib/product-service-fulfillment.ts'])Object.assign(deps,await load(path));
 advanced=await load('lib/product-studio-commerce.ts');Object.assign(deps,advanced);
+for(const path of ['lib/product-editorial-review.ts','lib/product-editorial-review-server.ts'])Object.assign(deps,await load(path));
 const origin='https://fivegen.test',owner='studio-owner',email='buyer@example.test';
 const req=(cookie='')=>new Request(origin+'/customer',{headers:{cookie}});
 const cookie=result=>result.cookie?.split(';')[0]||'';
@@ -106,6 +108,10 @@ try{
  ];
  const tiered=product({type:'community',family:'community',sections:[openSection,privateSection],files:[{name:'welcome.txt',description:'Your welcome note.',content:'OPEN_MEMBER_FILE'},{name:'members.txt',description:'Members only.',content:'PRIVATE_MEMBER_FILE'}],pricing:{model:'one-time',coupons:[{code:'ALLFREE',percentOff:100},{code:'TOOSMALL',percentOff:95},{code:'MEMBER20',percentOff:20}]},studio:{community:{enabled:true,channels:['General','Members'],tiers,purchasedTierId:monthTierId,bundleTierId:monthTierId,events:[{id:'member-event',title:'Members workshop',startsAt:Date.now()+86400000,durationMinutes:60,url:'https://private.example.test/member-event',description:'Private members workshop.'}],onboarding:{requireProfile:true,introPrompt:'PRIVATE_ONBOARDING_INSTRUCTIONS',steps:[]},weeklyPrompts:[{id:randomUUID(),body:'PRIVATE_SCHEDULED_PROMPT',channel:'Members',weekday:1,hour:9,timezone:'UTC',enabled:true}]}}});
  const privateUpload=await upload(tiered,'members-original.txt','PRIVATE_ORIGINAL_UPLOAD');for(const tier of tiers.filter(tier=>[monthTierId,yearTierId].includes(tier.id)))tier.resourceIds.push(`upload:${privateUpload}`);refreshPublication(tiered);
+ const tieredDraft={...deps.defaultBuilderDraft('community'),title:tiered.snapshot.title,description:tiered.snapshot.description,audience:'Independent creators',sections:tiered.snapshot.sections,files:tiered.snapshot.files,uploadIds:tiered.snapshot.uploadIds,studio:tiered.snapshot.studio};db.prepare('INSERT INTO product_builder_workspaces(product_id,owner,version,data,updated_at) VALUES(?,?,1,?,?)').run(tiered.id,owner,JSON.stringify(tieredDraft),Date.now());await approveCurrentEditorialForFixture(deps,tiered.id,owner);await deps.assertEditorialReview(tiered.id,owner,1);
+ // Older published fixtures above deliberately have no new review row. The
+ // publication gate must not retroactively disable selling or paid delivery.
+ assert.equal(db.prepare('SELECT COUNT(*) n FROM product_editorial_reviews WHERE product_id=?').get(free.id).n,0);
  const published=JSON.parse(db.prepare('SELECT public_snapshot FROM product_builder_publications WHERE product_id=?').get(tiered.id).public_snapshot),publishedText=JSON.stringify(published);
  assert.equal(published.studio.community.tiers.length,4);assert.deepEqual(Object.keys(published.studio.community.tiers[0]).sort(),['billing','description','id','name','priceCents']);
  for(const secret of ['resourceIds','eventIds','purchasedTierId','bundleTierId','PRIVATE_MEMBER','PRIVATE_ONBOARDING','PRIVATE_SCHEDULED','private.example.test',privateUpload])assert.ok(!publishedText.includes(secret),`Public plan cards never include ${secret}`);

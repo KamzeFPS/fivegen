@@ -10,6 +10,7 @@ import {evaluateProductReadiness,isUnfinishedPlaceholder,sectionHasContent} from
 import {builderRevisionKinds,builderRevisionLabels,builderRevisionRestoreSchema,builderRevisionSnapshot,restoreBuilderEditorialRevision,type BuilderRevisionHistory,type BuilderRevisionKind} from './builder-revision-contract';
 import {validateCurriculum} from './product-curriculum';
 import {productStudioSchema,productStudioPublicationSchema,publishedSectionStudioSchema,safeStudioUrl} from './product-studio-contract';
+import {assertCreatorContextRefs,creatorContextGuard} from './creator-context-server';
 
 export const builderHeaders={'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer'};
 const fileTypes=['application/pdf','image/png','image/jpeg','image/webp','text/plain','text/csv','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/epub+zip','application/zip','application/octet-stream','application/json','text/html','text/css','text/javascript','application/javascript','text/x-python','audio/mpeg','audio/mp4','audio/wav','audio/x-wav','audio/webm','audio/ogg','audio/flac'];
@@ -86,8 +87,9 @@ export async function createBuilderWorkspace(owner:string,input:unknown){
  ]);
  return getBuilderWorkspace(id,owner);
 }
-export async function saveBuilderWorkspace(productId:string,owner:string,input:unknown,allowTypeChange=false){
+export async function saveBuilderWorkspace(productId:string,owner:string,input:unknown,allowTypeChange=false,guard?:{sql:string;values:(string|number)[]}){
  const value=z.object({expectedVersion:z.number().int().min(1),draft:builderDraftSchema,revisionKind:z.enum(builderRevisionKinds).default('manual')}).parse(input);
+ if(value.revisionKind.startsWith('ai-')&&!guard)throw new ApiError('Apply Gen’s saved proposal or generated result through its review action.',409);
  if(value.draft.studio)productStudioSchema.parse(value.draft.studio);
  await ownedProduct(productId,owner);
  const current=await database().prepare('SELECT * FROM product_builder_workspaces WHERE product_id=? AND owner=?').bind(productId,owner).first();if(!current)throw new ApiError('Product workspace not found.',404);
@@ -104,7 +106,7 @@ export async function saveBuilderWorkspace(productId:string,owner:string,input:u
  if(encoded===String(current.data))return getBuilderWorkspace(productId,owner);
  const info=builderTypeDetails[value.draft.type],now=Math.max(Date.now(),Number(current.updated_at)+1),content:ProductContent={sections:value.draft.sections,files:value.draft.files,benefits:value.draft.fields.outcome?[value.draft.fields.outcome]:[],launch:''};
  const results=await database().batch([
-  database().prepare('UPDATE product_builder_workspaces SET version=version+1,data=?,updated_at=? WHERE product_id=? AND owner=? AND version=?').bind(encoded,now,productId,owner,value.expectedVersion),
+  database().prepare('UPDATE product_builder_workspaces SET version=version+1,data=?,updated_at=? WHERE product_id=? AND owner=? AND version=?'+(guard?.sql||'')).bind(encoded,now,productId,owner,value.expectedVersion,...(guard?.values||[])),
   database().prepare(`INSERT OR IGNORE INTO product_builder_revisions (product_id,owner,version,kind,label,data,created_at) SELECT ?,?,?,'manual',?,?,? WHERE EXISTS(SELECT 1 FROM product_builder_workspaces WHERE product_id=? AND owner=? AND version=? AND updated_at=? AND data=?)`).bind(productId,owner,value.expectedVersion,builderRevisionLabels.manual,JSON.stringify(builderRevisionSnapshot(old)),Number(current.updated_at),productId,owner,value.expectedVersion+1,now,encoded),
   database().prepare(`INSERT OR IGNORE INTO product_builder_revisions (product_id,owner,version,kind,label,data,created_at) SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM product_builder_workspaces WHERE product_id=? AND owner=? AND version=? AND updated_at=? AND data=?)`).bind(productId,owner,value.expectedVersion+1,value.revisionKind,builderRevisionLabels[value.revisionKind],JSON.stringify(builderRevisionSnapshot(value.draft)),now,productId,owner,value.expectedVersion+1,now,encoded),
   database().prepare('UPDATE products SET title=?,description=?,audience=?,format=?,price=?,content=?,updated_at=? WHERE id=? AND owner=? AND EXISTS(SELECT 1 FROM product_builder_workspaces WHERE product_id=? AND owner=? AND version=? AND updated_at=? AND data=?)').bind(value.draft.title||`Untitled ${info.name}`,value.draft.description,value.draft.audience,info.format,value.draft.priceCents,JSON.stringify(content),now,productId,owner,productId,owner,value.expectedVersion+1,now,encoded),
@@ -147,12 +149,13 @@ export async function adoptBuilderWorkspace(productId:string,owner:string){
  return getBuilderWorkspace(productId,owner);
 }
 export async function syncGeneratedBuilderContent(productId:string,owner:string,expectedVersion:number){
- const workspace=await getBuilderWorkspace(productId,owner),job=await database().prepare('SELECT status FROM generation WHERE product_id=? AND owner=?').bind(productId,owner).first();
+ const workspace=await getBuilderWorkspace(productId,owner),job=await database().prepare('SELECT status,brief FROM generation WHERE product_id=? AND owner=?').bind(productId,owner).first();
  if(!job||job.status!=='completed')throw new ApiError('Wait for all generation steps to finish before applying the result.',409);
  if(workspace.version!==expectedVersion)throw new ApiError('Your draft changed while AI worked. Reload and review the result before applying it.',409);
+ const refs=JSON.parse(String(job.brief)).creatorContextRefs;await assertCreatorContextRefs(owner,productId,refs);
  const generated=await captureGeneratedBuilderResult(productId,owner);
  if(!generated)throw new ApiError('The generated result is not ready. Resume generation and try again.',409);
- const saved=await saveBuilderWorkspace(productId,owner,{expectedVersion,draft:{...workspace.draft,sections:generated.sections,files:generated.files||[]},revisionKind:'ai-generation'});
+ const saved=await saveBuilderWorkspace(productId,owner,{expectedVersion,draft:{...workspace.draft,sections:generated.sections,files:generated.files||[]},revisionKind:'ai-generation'},false,creatorContextGuard(owner,productId,refs));
  const finished=await database().prepare("SELECT brief FROM generation WHERE product_id=? AND owner=? AND status='completed'").bind(productId,owner).first();
  if(finished)await database().prepare("UPDATE generation SET brief=? WHERE product_id=? AND owner=? AND status='completed' AND brief=?").bind(JSON.stringify({...JSON.parse(String(finished.brief)),builderAppliedVersion:saved.version}),productId,owner,finished.brief).run();
  return saved;
