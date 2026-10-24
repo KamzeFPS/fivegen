@@ -3,11 +3,25 @@ import {readFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
+import {cva} from 'class-variance-authority';
+import {clsx} from 'clsx';
+import {twMerge} from 'tailwind-merge';
+import {Slot,Label as LabelPrimitive,Separator as SeparatorPrimitive} from 'radix-ui';
 import ts from 'typescript';
+
+process.on('uncaughtException',error=>{console.error(String(error.stack||error).replace(/data:text\/javascript;base64,[A-Za-z0-9+/=]+/g,'[auth fixture]'));process.exitCode=1;});
 
 // The shipped forms run with deterministic hooks, HTTP replies and a browser
 // location stub. No account, provider key, token delivery or real email is used.
-const compile=path=>ts.transpileModule(readFileSync(path,'utf8').replace(/^import[\s\S]*?;\r?\n/gm,''),{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React}}).outputText;
+const compile=path=>ts.transpileModule(readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React},transformers:{before:[context=>source=>context.factory.updateSourceFile(source,source.statements.filter(node=>!ts.isImportDeclaration(node)))]}}).outputText;
+async function loadPrimitive(path,dependencies){const key='authPrimitive'+randomUUID().replaceAll('-','');globalThis[key]=dependencies;try{return await import('data:text/javascript;base64,'+Buffer.from(`const {${Object.keys(dependencies).join(',')}}=globalThis.${key};\n${compile(path)}`).toString('base64'));}finally{delete globalThis[key];}}
+// Run the shipped shadcn wrappers rather than substituting passthroughs. Radix
+// internals stay React elements and are rendered by the real server renderer.
+const {cn}=await loadPrimitive('lib/utils.ts',{clsx,twMerge}),primitiveBase={React,cn,cva};
+const primitiveDependencies={...primitiveBase,...await loadPrimitive('components/ui/input.tsx',primitiveBase),...await loadPrimitive('components/ui/textarea.tsx',primitiveBase),...await loadPrimitive('components/ui/button.tsx',{...primitiveBase,Slot}),...await loadPrimitive('components/ui/label.tsx',{...primitiveBase,LabelPrimitive}),...await loadPrimitive('components/ui/separator.tsx',{...primitiveBase,SeparatorPrimitive})};
+Object.assign(primitiveDependencies,await loadPrimitive('components/ui/field.tsx',{...primitiveDependencies,useMemo:React.useMemo}));
+Object.assign(primitiveDependencies,await loadPrimitive('components/ui/input-group.tsx',primitiveDependencies));
+const primitives=Object.fromEntries(Object.entries(primitiveDependencies).filter(([name])=>/^(?:Input|Textarea|Button|Field|Label|Separator)/.test(name))),purePrimitives=new Set(Object.entries(primitives).filter(([name])=>name!=='FieldError').map(([,component])=>component));
 const paths=await import('data:text/javascript;base64,'+Buffer.from(compile('app/auth/auth-paths.ts')).toString('base64'));
 const {authReturnPath,authPageLink,AUTH_PASSWORD_MIN_LENGTH,AUTH_PASSWORD_MAX_LENGTH}=paths;
 const exactReturn='/customer?order=owned-order-123';
@@ -24,7 +38,7 @@ for(const target of invalidReturns)assert.equal(serverHelpers.safeRelativeReturn
 assert.equal(serverHelpers.safeRelativeReturnPath(exactReturn),exactReturn);assert.equal(new URL(serverHelpers.chatGPTSignInPath(exactReturn),'https://fivegen.test').searchParams.get('return_to'),exactReturn);assert.equal(new URL(serverHelpers.chatGPTSignOutPath('/signup'),'https://fivegen.test').searchParams.get('return_to'),'/');
 const sameDeps=(before,after)=>before&&after&&before.length===after.length&&before.every((value,index)=>Object.is(value,after[index]));
 const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return{promise,resolve,reject};};
-function nodes(value){return Array.isArray(value)?value.flatMap(nodes):React.isValidElement(value)?[value,...nodes(value.props.children)]:[];}
+function nodes(value){return Array.isArray(value)?value.flatMap(nodes):React.isValidElement(value)?[value,...nodes(purePrimitives.has(value.type)?value.type(value.props):value.props.children)]:[];}
 function text(value){return Array.isArray(value)?value.map(text).join(' '):React.isValidElement(value)?text(value.props.children):value==null||typeof value==='boolean'?'':String(value);}
 const readable=value=>text(value).replace(/\s+/g,' ').trim(),code=compile('app/auth/auth-screen.tsx');
 async function harness(props,href='https://fivegen.test/signin'){
@@ -34,7 +48,7 @@ async function harness(props,href='https://fivegen.test/signin'){
  const useEffect=(callback,deps)=>{const index=cursor++,old=hooks[index];if(!old||!sameDeps(old.deps,deps)){hooks[index]={deps,cleanup:old?.cleanup};effects.push(()=>{hooks[index].cleanup?.();hooks[index].cleanup=callback();});}};
  const window={location:{href,assign(path){navigations.push(path);}},history:{replaceState(_state,_title,path){replacements.push(path);window.location.href=new URL(path,window.location.href).href;}}};
  const iconNames=['ArrowLeft','ArrowRight','Check','CheckCircle2','Eye','EyeOff','FileText','Layers','Loader2','LockKeyhole','Mail','ShieldCheck','Sparkles'];
- const dependencies={React,useState,useRef,useEffect,window,...paths,Brand:()=>React.createElement('span',null,'FiveGen'),...Object.fromEntries(iconNames.map(name=>[name,()=>React.createElement('svg',{'data-test-icon':name,'aria-hidden':true})])),fetch(url,options){const pending=deferred();requests.push({url,options,...pending});return pending.promise;},localStorage:{getItem(){throw new Error('Auth must not use local storage');},setItem(){throw new Error('Auth must not persist secrets');}}};
+ const dependencies={React,useState,useRef,useEffect,window,...paths,...primitives,Brand:()=>React.createElement('span',null,'FiveGen'),...Object.fromEntries(iconNames.map(name=>[name,()=>React.createElement('svg',{'data-test-icon':name,'aria-hidden':true})])),fetch(url,options){const pending=deferred();requests.push({url,options,...pending});return pending.promise;},localStorage:{getItem(){throw new Error('Auth must not use local storage');},setItem(){throw new Error('Auth must not persist secrets');}}};
  const key=`authUi${randomUUID().replaceAll('-','')}`;globalThis[key]=dependencies;let AuthScreen;try{({AuthScreen}=await import('data:text/javascript;base64,'+Buffer.from(`const {${Object.keys(dependencies).join(',')}}=globalThis.${key};\n${code}`).toString('base64')));}finally{delete globalThis[key];}
  function render(){for(let turn=0;dirty&&turn<30;turn++){dirty=false;cursor=0;tree=AuthScreen(props);for(const node of nodes(tree))if(node.props.ref)node.props.ref.current={focus:options=>focusCalls.push({text:readable(node),options})};for(const effect of effects.splice(0))effect();}assert.equal(dirty,false,'Auth form effects settle');}
  async function settle(){for(let tick=0;tick<12;tick++){await Promise.resolve();render();}}
@@ -50,6 +64,26 @@ async function harness(props,href='https://fivegen.test/signin'){
  };
 }
 const password='a memorable private phrase';
+// The real primitive composition must preserve native form and password-manager
+// semantics in every mode, not merely produce similarly styled wrapper nodes.
+for(const props of [{mode:'signin'},{mode:'signup'},{mode:'forgot'},{mode:'verify'},{mode:'verify',token:'synthetic-proof-token'},{mode:'reset',token:'synthetic-reset-token'}]){
+ const app=await harness(props),markup=renderToStaticMarkup(app.tree),expected=props.mode==='signup'?['auth-name','auth-email','auth-password']:props.mode==='reset'?['auth-password','auth-confirmation']:props.mode==='verify'&&props.token?['auth-password']:props.mode==='signin'?['auth-email','auth-password']:['auth-email'];
+ assert.equal(app.find('form').length,1);
+ for(const form of app.find('form'))assert.equal(String(form.props.method||'get').toLowerCase(),'post','Native submission must never put named credentials in a GET query before hydration');
+ assert.match(markup,/<form\b[^>]*\bmethod="post"/i,'The actual server-rendered form keeps credentials out of URL query strings');
+ assert.deepEqual(app.find('input').map(input=>input.props.id),expected);
+ assert.equal(app.find('div').filter(node=>node.props['data-slot']==='field-group').length,1,'One actual FieldGroup contains the form controls');
+ assert.equal(app.find('div').filter(node=>node.props['data-slot']==='field'&&node.props.role==='group').length,expected.length);
+ for(const id of expected){const input=app.input(id);assert.equal(input.props.name,{'auth-name':'name','auth-email':'email','auth-password':'password','auth-confirmation':'password_confirmation'}[id]);assert.equal(input.props.required,true);assert.match(markup,new RegExp('<label\\b[^>]*\\bfor="'+id+'"'),'Real Radix-backed labels target the rendered native input');}
+ if(expected.includes('auth-password')){assert.equal(app.button('Show password').props.type,'button','The primitive reveal control cannot submit the form');assert.equal(app.find('div').filter(node=>node.props['data-slot']==='input-group'&&node.props.role==='group').length,1);}
+ const skip=app.find('a').find(node=>readable(node)==='Skip to form');assert.equal(skip?.props.href,'#auth-form');assert.equal(app.find('section').find(node=>node.props.id==='auth-form')?.props.tabIndex,-1);
+ assert.equal(app.requests.length,0);app.dispose();
+}
+{
+ const app=await harness({mode:'signup'});app.change('auth-name','A careful creator');app.change('auth-email','creator@example.test');app.change('auth-password','short');await app.submit();
+ const invalidField=app.find('div').find(node=>node.props['data-slot']==='field'&&node.props['data-invalid']===true);assert.ok(invalidField,'The actual Field exposes its invalid state');assert.equal(nodes(invalidField).filter(node=>node.props.id==='auth-error').length,1,'The message is placed inside its invalid field');assert.equal(app.find('p').filter(node=>node.props.id==='auth-error').length,1,'Only one alert has the described error ID');assert.equal(app.input('auth-password').props['aria-invalid'],true);assert.match(app.input('auth-password').props['aria-describedby'],/auth-password-hint/);assert.match(app.input('auth-password').props['aria-describedby'],/auth-error/);assert.equal(app.focusCalls.at(-1).options.preventScroll,true);assert.equal(app.requests.length,0);
+ const hint=()=>app.find('small').find(node=>node.props.id==='auth-password-hint');assert.equal(hint().props['data-ready'],undefined);app.change('auth-password',password);assert.equal(hint().props['data-ready'],true,'The hint reports the real minimum/maximum rule without an invented security rating');app.change('auth-password','x'.repeat(129));assert.equal(hint().props['data-ready'],undefined);app.dispose();
+}
 {
  const app=await harness({mode:'signin',returnTo:exactReturn});
  assert.match(app.text,/Welcome back/);assert.equal(app.requests.length,0,'Sign-in never submits automatically');
@@ -74,7 +108,7 @@ for(const mode of ['signup','signin']){
  app.click('Use a different email');assert.ok(app.input('auth-email'));app.dispose();
 }
 {
- const app=await harness({mode:'signup',returnTo:exactReturn});assert.equal(app.input('auth-password').props.minLength,15);assert.equal(app.input('auth-password').props.maxLength,128);assert.equal(app.input('auth-password').props.autoComplete,'new-password');assert.match(app.text,/15\s*–\s*128 characters/);app.change('auth-name','Taylor');app.change('auth-email','buyer@example.test');app.change('auth-password','too short');await app.submit();assert.equal(app.requests.length,0);assert.equal(app.input('auth-password').props['aria-invalid'],true);assert.match(app.input('auth-password').props['aria-describedby'],/auth-error/);app.dispose();
+ const app=await harness({mode:'signup',returnTo:exactReturn});assert.equal(app.input('auth-password').props.minLength,15);assert.equal(app.input('auth-password').props.maxLength,128);assert.equal(app.input('auth-password').props.autoComplete,'new-password');assert.match(app.text,/15\s+to\s+128 characters/);app.change('auth-name','Taylor');app.change('auth-email','buyer@example.test');app.change('auth-password','too short');await app.submit();assert.equal(app.requests.length,0);assert.equal(app.input('auth-password').props['aria-invalid'],true);assert.match(app.input('auth-password').props['aria-describedby'],/auth-error/);app.dispose();
 }
 {
  const token='synthetic-verification-token',app=await harness({mode:'verify',returnTo:exactReturn,token},`https://fivegen.test/verify-email?token=${token}&return_to=${encodeURIComponent(exactReturn)}`);
@@ -105,4 +139,4 @@ for(const value of ['https://evil.test/signin?return_to=/customer','//evil.test/
  const app=await harness({mode:'forgot'});app.change('auth-email','buyer@example.test');const pending=app.submit();await app.respond(0,null);await pending;assert.match(app.text,/We couldn’t complete that request/);assert.equal(app.button('Send reset link').props.disabled,false);app.dispose();
  const disposed=await harness({mode:'forgot'});disposed.change('auth-email','buyer@example.test');const abandoned=disposed.submit();disposed.dispose();assert.equal(disposed.requests[0].options.signal.aborted,true);await disposed.respond(0,{message:'Generic'},202);await abandoned;assert.equal(disposed.navigations.length,0);
 }
-console.log('Auth UI passed: exact buyer return paths, safe Google gateway, real form callbacks, busy/error states, verification/password proof, token URL redaction, generic recovery, no auto-login/terms acceptance, password policy and no persistent secrets.');
+console.log('Auth UI passed: actual shadcn/Radix native controls, persistent labels/names and inline error semantics, skip navigation, policy-bound hints, exact buyer return paths, safe Google gateway, real callbacks and busy/error states, verification/password proof, token URL redaction, generic recovery, no auto-login/terms acceptance and no persistent secrets.');
