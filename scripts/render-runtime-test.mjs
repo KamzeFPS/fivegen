@@ -2,13 +2,20 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { createStorage } from '../runtime/render/storage.mjs';
 import { createAuth, digest, safeReturn, verifyGoogleToken } from '../runtime/render/auth.mjs';
 import { readConfig } from '../runtime/render/server.mjs';
+
+function removeFixture(root) {
+  const target = resolve(root);
+  assert.equal(dirname(target), resolve(tmpdir()));
+  assert.match(basename(target), /^fivegen-(?:storage|auth|signout)-/);
+  rmSync(target, { recursive: true, force: true });
+}
 
 test('Render storage preserves migrations, atomic batches, and private media across restart', async () => {
   const root = mkdtempSync(join(tmpdir(), 'fivegen-storage-'));
@@ -34,7 +41,7 @@ test('Render storage preserves migrations, atomic batches, and private media acr
     assert.equal(media.size, 13);
     assert.equal(await storage.BUCKET.get('absent'), null);
     assert.throws(() => readFileSync(join(root, 'private.png')));
-  } finally { storage?.close(); rmSync(root, { recursive: true, force: true }); }
+  } finally { storage?.close(); removeFixture(root); }
 });
 
 test('Render configuration rejects insecure public origins and missing secrets', () => {
@@ -83,7 +90,15 @@ test('Google OAuth validates signatures, browser state, nonce, PKCE, verified em
   try {
     const spoof = await fetch(base, { headers: { 'oai-authenticated-user-id': 'admin', 'oai-authenticated-user-email': 'kamzewac@gmail.com', cookie: '__sites_local_auth=1' } });
     assert.equal((await spoof.json()).id, null);
-    const begin = await fetch(base + '/signin-with-chatgpt?return_to=/oauth/authorize?client_id=test', {
+    const returnTo = '/oauth/authorize?client_id=test';
+    const gateway = await fetch(base + '/signin-with-chatgpt?return_to=' + encodeURIComponent(returnTo), {
+      redirect: 'manual', headers: { 'sec-fetch-site': 'cross-site' },
+    });
+    assert.equal(gateway.status, 303, 'The legacy sign-in URL opens the sign-in chooser');
+    assert.equal(gateway.headers.get('location'), '/signin?return_to=' + encodeURIComponent(returnTo));
+    assert.equal(gateway.headers.getSetCookie().length, 0, 'Choosing a sign-in method does not start an OAuth flow');
+    assert.equal(storage.sqlite.prepare('SELECT COUNT(*) n FROM render_auth_flows').get().n, 0);
+    const begin = await fetch(base + '/signin-with-chatgpt?provider=google&return_to=' + encodeURIComponent(returnTo), {
       redirect: 'manual', headers: { 'sec-fetch-site': 'cross-site' },
     });
     assert.equal(begin.status, 302, 'External MCP authorization can begin sign-in');
@@ -120,7 +135,7 @@ test('Google OAuth validates signatures, browser state, nonce, PKCE, verified em
   } finally {
     server.closeAllConnections();
     await new Promise(resolve => server.close(resolve));
-    storage.close(); rmSync(root, { recursive: true, force: true });
+    storage.close(); removeFixture(root);
   }
 });
 
@@ -150,8 +165,8 @@ test('Sign-out clears secure cookies and cancels an in-flight sign-in without af
   const cookieFrom = response => response.headers.getSetCookie().map(c => c.split(';')[0]).join('; ');
   let interrupted;
   try {
-    const begin = await fetch(base + '/signin-with-chatgpt', { redirect: 'manual' });
-    const otherBegin = await fetch(base + '/signin-with-chatgpt', { redirect: 'manual' });
+    const begin = await fetch(base + '/signin-with-chatgpt?provider=google', { redirect: 'manual' });
+    const otherBegin = await fetch(base + '/signin-with-chatgpt?provider=google', { redirect: 'manual' });
     const flowCookie = cookieFrom(begin), otherCookie = cookieFrom(otherBegin);
     const browserCookie = auth.sessionName + '=' + session + '; ' + flowCookie;
     const pendingCount = () => storage.sqlite.prepare('SELECT COUNT(*) n FROM render_auth_flows').get().n;
@@ -194,6 +209,6 @@ test('Sign-out clears secure cookies and cancels an in-flight sign-in without af
     await interrupted?.catch(() => {});
     server.closeAllConnections();
     await new Promise(resolve => server.close(resolve));
-    storage.close(); rmSync(root, { recursive: true, force: true });
+    storage.close(); removeFixture(root);
   }
 });

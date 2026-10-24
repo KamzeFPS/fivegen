@@ -34,17 +34,24 @@ services:
         sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
+      # Optional dedicated seller Connect key; blank keeps the existing fallback.
+      - key: STRIPE_COMMERCE_SECRET_KEY
+        sync: false
       - key: STRIPE_MODE
         value: live
       - key: STRIPE_PUBLISHABLE_KEY
         sync: false
       - key: STRIPE_WALLET_CHECKOUT_ENABLED
-        value: "false"
+        # Release switches are set explicitly in each service's Environment.
+        # Do not overwrite verified production settings during Blueprint sync.
+        sync: false
       - key: STRIPE_COMMERCE_ENABLED
-        value: "false"
+        sync: false
       - key: AUTOMATIONS_WORKER_ENABLED
         value: "false"
       - key: STRIPE_WALLET_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_CONNECT_WEBHOOK_SECRET
         sync: false
       - key: STRIPE_WALLET_PORTAL_CONFIGURATION
         sync: false

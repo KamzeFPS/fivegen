@@ -2,22 +2,23 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import ts from 'typescript';
 import {DatabaseSync} from 'node:sqlite';
-import {randomUUID} from 'node:crypto';
+import {createHash, randomUUID} from 'node:crypto';
 import {z} from 'zod';
 
-// Real schemas, API handlers and SQL; only identity and object storage are fixtures.
+// Real schemas, API handlers, validation, access helpers and SQL. Identity and
+// object storage are fixtures; no provider calls or real payment state is used.
 const sqlite = new DatabaseSync(':memory:');
 for (const file of fs.readdirSync('drizzle').filter(file => file.endsWith('.sql')).sort()) sqlite.exec(fs.readFileSync('drizzle/' + file, 'utf8'));
 const stmt = (sql, args = []) => ({bind: (...values) => stmt(sql, values), first: async () => sqlite.prepare(sql).get(...args) || null, all: async () => ({results: sqlite.prepare(sql).all(...args)}), run: async () => ({meta: {changes: sqlite.prepare(sql).run(...args).changes}})});
 const objects = new Map();
 const bucket = {
   put: async (key, stream) => {const chunks = []; for await (const chunk of stream) chunks.push(Buffer.from(chunk)); objects.set(key, Buffer.concat(chunks));},
-  get: async (key, options) => {const data = objects.get(key); if (!data) return null; const range = options?.range; return {body: range ? data.subarray(range.offset, range.offset + range.length) : data};},
+  get: async (key, options) => {const data = objects.get(key); if (!data) return null; const range = options?.range; return {size: data.byteLength, body: new Blob([range ? data.subarray(range.offset, range.offset + range.length) : data]).stream()};},
   delete: async key => {objects.delete(key);},
 };
 class ApiError extends Error {constructor(message, status = 400) {super(message); this.status = status;}}
 let owner = 'creator';
-const deps = {z, ApiError, env: {BUCKET: bucket}, database: () => ({prepare: stmt}), identity: async () => ({userId: owner, email: `${owner}@example.test`}), sameOrigin: request => {if (request.headers.get('origin') && request.headers.get('origin') !== new URL(request.url).origin) throw new ApiError('Invalid origin', 403);}, failure: error => Response.json({error: error.message}, {status: error.status || (error.issues ? 400 : 500)}), ownedProduct: async (id, userId) => {const row = sqlite.prepare('SELECT * FROM products WHERE id=? AND owner=?').get(id, userId); if (!row) throw new ApiError('Product not found', 404); return row;}, productFromRow: row => ({...row, price: row.price / 100, content: JSON.parse(row.content), updatedAt: row.updated_at, createdAt: row.created_at}), orderItems: () => [], assertSubscriptionAccess: async () => {}};
+const deps = {z, ApiError, createHash, env: {BUCKET: bucket}, database: () => ({prepare: stmt}), identity: async () => ({userId: owner, email: `${owner}@example.test`}), sameOrigin: request => {if (request.headers.get('origin') && request.headers.get('origin') !== new URL(request.url).origin) throw new ApiError('Invalid origin', 403);}, failure: error => Response.json({error: error.message}, {status: error.status || (error.issues ? 400 : 500)}), ownedProduct: async (id, userId) => {const row = sqlite.prepare('SELECT * FROM products WHERE id=? AND owner=?').get(id, userId); if (!row) throw new ApiError('Product not found', 404); return row;}, productFromRow: row => ({...row, price: row.price / 100, content: JSON.parse(row.content), updatedAt: row.updated_at, createdAt: row.created_at}), orderItems: () => [], assertSubscriptionAccess: async () => {}};
 async function load(path) {
   const key = 'creatorTest' + randomUUID().replaceAll('-', '');
   globalThis[key] = {...deps};
@@ -28,6 +29,8 @@ async function load(path) {
   return result;
 }
 Object.assign(deps, await load('lib/product.ts'), await load('lib/experience.ts'));
+Object.assign(deps, await load('lib/upload-validation.ts'), await load('lib/file-sale-contract.ts'));
+Object.assign(deps, await load('lib/file-sales.ts'));
 Object.assign(deps, await load('lib/curriculum.ts'), await load('lib/access.ts'));
 const patchRoute = await load('app/api/products/[id]/route.ts');
 const uploadRoute = await load('app/api/products/[id]/uploads/route.ts');
@@ -67,8 +70,12 @@ try {
   let response = await upload(productId); assert.equal(response.status, 201, await response.clone().text());
   const recording = (await response.json()).upload;
   assert.equal(objects.size, 1);
-  assert.equal((await upload(productId, new Uint8Array([1, 2]), 1)).status, 500, 'An oversized body is rejected and its reservation cleaned up');
+  assert.equal(recording.status, 'completed');
+  assert.equal(recording.sha256, createHash('sha256').update(new Uint8Array([1, 2, 3, 4])).digest('hex'), 'Completed recordings have verified original-byte integrity');
+  assert.equal((await upload(productId, new Uint8Array([1, 2]), 1)).status, 413, 'An oversized body is rejected with a size error');
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM uploads WHERE status='uploading'").get().n, 0);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM uploads WHERE status='failed' AND validation_error IS NOT NULL").get().n, 1, 'Failed uploads retain an actionable lifecycle record without consuming storage');
+  assert.equal(objects.size, 1, 'A failed attempt does not remove the earlier verified recording');
   assert.equal((await upload(productId, new Uint8Array([1]), 100 * 1024 * 1024 + 1)).status, 413);
   assert.equal((await upload(productId, new Uint8Array([1]), 1, 'video/quicktime')).status, 400);
   assert.equal((await upload(otherProduct)).status, 404, 'A creator cannot upload into another creator’s product');

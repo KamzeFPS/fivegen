@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { CreatorPlanState } from './creator-plans';
 
 export const commerceOfferSchema = z.object({
   enabled: z.boolean(), amount: z.number().int().min(50).max(999900), currency: z.enum(['usd','eur','gbp','cad','aud']),
@@ -7,7 +8,7 @@ export const commerceOfferSchema = z.object({
   expectedUpdatedAt: z.number().int().nonnegative(),
 });
 export type CommerceOffer = Omit<z.infer<typeof commerceOfferSchema>,'expectedUpdatedAt'> & { updatedAt:number };
-export type CommerceAccount = { configured:boolean; enabled:boolean; mode:'live'|'test'|null; connected:boolean; ready:boolean; accountId:string|null };
+export type CommerceAccount = { configured:boolean; enabled:boolean; mode:'live'|'test'|null; connected:boolean; ready:boolean; accountId:string|null; creatorPlan:CreatorPlanState };
 export type CommerceSlot = { id:string; startsAt:number; endsAt:number; booked:boolean };
 export const commerceMoney = (amount:number,currency='usd') => new Intl.NumberFormat('en-US',{style:'currency',currency:currency.toUpperCase()}).format(amount/100);
 export const isConsulting = (format:string) => ['Consulting / Mentorship','Coaching session'].includes(format);

@@ -2,8 +2,9 @@ import { z } from "zod";
 import { ApiError,database,failure,identity,productFromRow,sameOrigin } from "@/lib/server";
 import { productAccess } from "@/lib/access";
 import { bookSlot,cancelBooking } from "@/lib/customer-journey";
+import {resolveFileSaleAccess} from '@/lib/file-sales';
 async function access(slug:string){const p=await database().prepare("SELECT * FROM products WHERE slug=?").bind(slug).first();if(!p)throw new ApiError("Product not found.",404);const a=await productAccess(p,undefined,true);return {p,...a};}
-export async function GET(_req:Request,{params}:{params:Promise<{slug:string}>}){try{const {p,user,owner}=await access((await params).slug),product=productFromRow(p),db=database();const [progress,posts,slots,bookings,uploads]=await Promise.all([
+export async function GET(_req:Request,{params}:{params:Promise<{slug:string}>}){try{const {p,user,owner}=await access((await params).slug),product=productFromRow(p),db=database();const sale=await resolveFileSaleAccess(p,undefined,user);if(sale)return Response.json({fileSale:sale,accessPath:`/access/${p.slug}`},{headers:{'Cache-Control':'private, no-store'}});const [progress,posts,slots,bookings,uploads]=await Promise.all([
  db.prepare("SELECT lesson_id FROM lesson_progress WHERE product_id=? AND user_id=?").bind(p.id,user!.userId).all(),
  product.experience?.community.enabled?db.prepare("SELECT id,user_id,name,body,parent_id,pinned,created_at FROM community_posts WHERE product_id=? ORDER BY pinned DESC,created_at DESC LIMIT 200").bind(p.id).all():{results:[]},
  product.experience?.booking.enabled?db.prepare("SELECT id,starts_at,duration FROM booking_slots WHERE product_id=? AND booking_id IS NULL AND starts_at>? ORDER BY starts_at LIMIT 100").bind(p.id,Date.now()).all():{results:[]},
@@ -24,6 +25,14 @@ export async function POST(req:Request,{params}:{params:Promise<{slug:string}>})
  z.object({action:z.literal("book"),slotId:z.string().uuid(),notes:z.string().max(2000).default("")}),
  z.object({action:z.literal("cancel"),id:z.string().uuid()}),
  ]).parse(await req.json());
+ const sale=await resolveFileSaleAccess(p,undefined,user);
+ if(sale){
+  if(data.action!=='complete')throw new ApiError('This feature is not part of this product.',409);
+  const course=sale.modules.find(m=>m.kind==='course');if(!course?.sections.some(s=>s.id===data.lessonId))throw new ApiError('This lesson is not included in your access.',403);
+  const progressId=`${p.id}:${user!.userId}:${data.lessonId}`;
+  if(data.complete)await db.prepare('INSERT OR IGNORE INTO lesson_progress (id,product_id,user_id,lesson_id,completed_at) VALUES (?,?,?,?,?)').bind(progressId,p.id,user!.userId,data.lessonId,Date.now()).run();else await db.prepare('DELETE FROM lesson_progress WHERE id=?').bind(progressId).run();
+  return Response.json({saved:true});
+ }
  if(data.action==="complete"){if(!product.content.sections.some((s,i)=>(s.id||String(i))===data.lessonId))throw new ApiError("Lesson not found.",404);const id=`${p.id}:${user!.userId}:${data.lessonId}`;if(data.complete)await db.prepare("INSERT OR IGNORE INTO lesson_progress (id,product_id,user_id,lesson_id,completed_at) VALUES (?,?,?,?,?)").bind(id,p.id,user!.userId,data.lessonId,Date.now()).run();else await db.prepare("DELETE FROM lesson_progress WHERE id=?").bind(id).run();}
  if(["post","deletePost","pinPost"].includes(data.action)&&!product.experience?.community.enabled)throw new ApiError("Community is not enabled.",409);
  if(data.action==="post"){const recent=await db.prepare("SELECT COUNT(*) n FROM community_posts WHERE product_id=? AND user_id=? AND created_at>?").bind(p.id,user!.userId,Date.now()-60000).first();if(Number(recent?.n)>4)throw new ApiError("Give the conversation a moment before posting again.",429);if(data.parentId&&!await db.prepare("SELECT id FROM community_posts WHERE id=? AND product_id=? AND parent_id IS NULL").bind(data.parentId,p.id).first())throw new ApiError("Discussion not found.",404);await db.prepare("INSERT INTO community_posts (id,product_id,user_id,name,body,parent_id,pinned,created_at) VALUES (?,?,?,?,?,?,0,?)").bind(crypto.randomUUID(),p.id,user!.userId,user!.displayName||user!.email.split('@')[0],data.body,data.parentId||null,Date.now()).run();}

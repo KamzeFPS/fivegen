@@ -1,7 +1,7 @@
 'use client';
 
 import {useState} from 'react';
-import {ArrowRight,ChevronDown,Coins,CreditCard,FolderOpen,History,Link2,LogOut,MessageSquare,Plus,ShieldCheck,TrendingUp,Users,LifeBuoy,Scale,FileText,LockKeyhole,Mail,ExternalLink} from 'lucide-react';
+import {ArrowRight,ChevronDown,Coins,CreditCard,Banknote,FolderOpen,History,Link2,LogOut,MessageSquare,Plus,ShieldCheck,TrendingUp,Users,LifeBuoy,Scale,FileText,LockKeyhole,Mail,ExternalLink} from 'lucide-react';
 import {DropdownMenu,DropdownMenuContent,DropdownMenuItem,DropdownMenuLabel,DropdownMenuSeparator,DropdownMenuTrigger,DropdownMenuSub,DropdownMenuSubContent,DropdownMenuSubTrigger} from '@/components/ui/dropdown-menu';
 import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
 import {Brand} from './ui-brand';
@@ -9,7 +9,7 @@ import {WorkspaceSearch} from './workspace-search';
 
 type NavigationView='overview'|'library'|'crm'|'credits'|'connections'|'admin';
 const navigation=[
-  {id:'overview' as const,label:'Overview',icon:TrendingUp},
+  {id:'overview' as const,label:'Dashboard',icon:TrendingUp},
   {id:'library' as const,label:'Products',icon:FolderOpen},
   {id:'crm' as const,label:'Customers',icon:Users},
 ];
@@ -22,6 +22,7 @@ type Props={
   creditsLabel:string;
   history:{id:string;title:string}[];
   onCreate:()=>void;
+  onHome?:()=>void;
   onView:(view:NavigationView)=>void;
   onProduct:(id:string)=>void;
   onConversation:(id:string)=>void;
@@ -29,14 +30,14 @@ type Props={
   onSignOut:()=>void;
 };
 
-export function WorkspaceNavigation({user,view,label,admin,products,creditsLabel,history,onCreate,onView,onProduct,onConversation,onVisit,onSignOut}:Props){
+export function WorkspaceNavigation({user,view,label,admin,products,creditsLabel,history,onCreate,onHome,onView,onProduct,onConversation,onVisit,onSignOut}:Props){
   const [supportOpen,setSupportOpen]=useState(false);
   const initials=(user?.name.trim().split(/\s+/).slice(0,2).map(word=>word[0]).join('')||user?.email[0]||'F').toUpperCase();
   return <>
     <a className="workspace-skip" href="#workspace-content">Skip to content</a>
     <header className="workspace-header">
       <div className="workspace-toolbar">
-        <button type="button" className="workspace-brand" onClick={onCreate} aria-label="FiveGen home"><Brand/></button>
+        <button type="button" className="workspace-brand" onClick={onHome||onCreate} aria-label="FiveGen home"><Brand/></button>
         <WorkspaceSearch products={products} history={history} admin={admin} onView={onView} onProduct={onProduct} onConversation={onConversation} onCreate={onCreate} onVisit={onVisit}/>
         <div className="workspace-header-actions">
           <button type="button" className="workspace-credit-button" onClick={()=>onView('credits')} aria-label={`AI credits: ${creditsLabel}`} title="AI credits"><Coins size={17}/><span>{creditsLabel}</span></button>
@@ -47,6 +48,7 @@ export function WorkspaceNavigation({user,view,label,admin,products,creditsLabel
               <DropdownMenuLabel className="workspace-account-identity"><span className="workspace-avatar" aria-hidden="true">{initials}</span><div><strong>{user.name||'Your account'}</strong><span>{user.email}</span></div></DropdownMenuLabel>
               <DropdownMenuSeparator/>
               <DropdownMenuLabel className="workspace-menu-section">YOUR WORKSPACE</DropdownMenuLabel>
+              <DropdownMenuItem onSelect={()=>onVisit('/account/payments')}><Banknote/><span>Seller payments</span></DropdownMenuItem>
               <DropdownMenuItem onSelect={()=>onVisit('/account/billing')}><CreditCard/><span>Billing & receipts</span></DropdownMenuItem>
               <DropdownMenuItem onSelect={()=>onView('credits')}><Coins/><span>Plans & AI credits</span></DropdownMenuItem>
               <DropdownMenuItem onSelect={()=>onView('connections')}><Link2/><span>Connected assistants</span></DropdownMenuItem>

@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
+import { ArrowRight, CheckCircle2, RefreshCw, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Brand } from '../ui-brand';
 
@@ -9,10 +9,12 @@ export function CheckoutWelcome({ signedIn, continueTo }: { signedIn: boolean; c
   const [fulfillment, setFulfillment] = useState<'waiting' | 'verified' | 'delayed' | null>(null);
   const [credits, setCredits] = useState(0);
   const [monthly,setMonthly]=useState(false);
+  const [retry,setRetry]=useState(0),[purchaseReturn,setPurchaseReturn]=useState(false);
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
     const sessionId=new URLSearchParams(location.search).get('session_id');
+    setPurchaseReturn(Boolean(sessionId));
     if(sessionId&&signedIn){
       setFulfillment('waiting');
       let attempts=0;
@@ -54,12 +56,13 @@ export function CheckoutWelcome({ signedIn, continueTo }: { signedIn: boolean; c
       }
     } catch { /* The page also works without session storage. */ }
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [signedIn]);
+  }, [signedIn,retry]);
   return <main className="paddle-pricing"><nav className="paddle-nav"><a href="/" aria-label="FiveGen home"><Brand /></a><a className="paddle-back" href="/pricing">AI credits</a></nav><section className="paddle-receipt">
     {completion ? <CheckCircle2 size={45} /> : <Sparkles size={45} />}
-    <h1>{fulfillment === 'verified' ? 'Your credits are ready.' : fulfillment==='waiting'?'Confirming your purchase…':completion ? 'Thank you for your purchase.' : 'Welcome to FiveGen.'}</h1>
+    <h1>{fulfillment === 'verified' ? 'Your credits are ready.' : fulfillment==='waiting'?'Confirming your purchase…':purchaseReturn&&!signedIn?'Sign in to confirm your purchase.':completion ? 'Thank you for your purchase.' : 'Welcome to FiveGen.'}</h1>
     <p>{completion === 'sandbox' ? 'Your test checkout is complete. No real money was charged. This test purchase does not add production AI credits.' : completion ? 'Your checkout is complete. Your payment receipt is available in Billing & receipts.' : 'Bring your next idea to life. Your workspace is ready when you are.'}</p>
     {fulfillment && <p role="status">{fulfillment === 'verified' ? `${credits} ${completion === 'sandbox' ? 'sandbox ' : ''}credits ${monthly?'included each month. Your subscription payment is verified.':'added to your account.'}` : fulfillment === 'waiting' ? 'Confirming your payment and adding your credits…' : 'Your payment confirmation is taking a little longer. Check Billing & receipts for its status. Please don’t purchase again.'}</p>}
+    {fulfillment==='delayed'&&<button className="wallet-secondary-button" onClick={()=>setRetry(value=>value+1)}><RefreshCw size={16}/>Check payment again</button>}
     <div className="paddle-receipt-actions"><Button asChild size="lg"><a href={continueTo}>{signedIn ? 'Open my workspace' : 'Sign in to FiveGen'}<ArrowRight size={17} /></a></Button>{signedIn && <a href="/account/billing">Billing & receipts</a>}<a href="/pricing">Back to AI credits</a>{completion && <small>Questions about your purchase? <a href="mailto:kamzewac@gmail.com">Contact support</a>.</small>}</div>
   </section></main>;
 }

@@ -9,6 +9,7 @@ const root=resolve('outputs/growth-strategy-qa',randomUUID()),storage=createStor
 let owner='creator-a',mode='test',growth={updatedAt:1,brief:{story:'My real story',proof:'My evidence'},assets:null};
 class ApiError extends Error {constructor(message,status=400){super(message);this.status=status;}}
 const deps={z,ApiError,database:()=>storage.DB,binding:name=>name==='STRIPE_MODE'?mode:'',
+  commerceMode:()=>{if(!['test','live'].includes(mode))throw new ApiError('Choose a payment mode',503);return mode;},refreshCommerceOrderEarnings:async()=>false,
   identity:async()=>{if(!owner)throw new ApiError('Sign in',401);return {userId:owner};},
   sameOrigin:req=>{if(req.headers.get('origin')&&req.headers.get('origin')!==new URL(req.url).origin)throw new ApiError('Wrong origin',403);},
   failure:e=>Response.json({error:e.message},{status:e.status||(e.issues?400:500)}),
@@ -21,6 +22,10 @@ async function load(file){const key='qa'+randomUUID().replaceAll('-','');globalT
 Object.assign(deps,await load('lib/growth-funnel.ts'));
 Object.assign(deps,await load('lib/offer-lab.ts'));
 Object.assign(deps,await load('lib/offer-lab-server.ts'));
+Object.assign(deps,await load('lib/marketing-plugins.ts'));
+Object.assign(deps,await load('lib/creator-plans.ts'));
+Object.assign(deps,await load('lib/creator-plan-server.ts'));
+Object.assign(deps,await load('lib/commerce-earnings-server.ts'));
 Object.assign(deps,await load('lib/growth-analytics.ts'));
 const labRoute=await load('app/api/products/[id]/offer-lab/route.ts'),publicRoute=await load('app/api/offer-lab/respond/route.ts'),eventRoute=await load('app/api/growth/events/route.ts'),dashboardRoute=await load('app/api/growth/dashboard/route.ts');
 const exportRoute=await load('app/api/products/[id]/offer-lab/export/route.ts');
@@ -73,7 +78,67 @@ try{
   const firstDay=Math.floor(now/86400000)*86400000-6*86400000;
   for(const timestamp of [firstDay-1,firstDay])db.prepare('INSERT INTO growth_events(id,owner,product_id,visitor,event,campaign,day,created_at) VALUES (?,?,?,?,?,?,?,?)').run(randomUUID(),owner,id,randomUUID(),'visit','boundary',new Date(timestamp).toISOString().slice(0,10),timestamp);
   const week=await deps.growthDashboard(owner,7);assert.equal(week.visits,2,'Seven calendar days exclude the partial eighth day');assert.equal(week.trend.reduce((n,d)=>n+d.visits,0),week.visits,'Summary totals and plotted UTC days use the same boundaries');assert.equal(week.trend[0].day,new Date(firstDay).toISOString().slice(0,10));
+  assert.ok(!overview.actions.some(action=>/area=(funnel|automations|campaigns|offer)/.test(action.href)),'Existing growth content never installs or recommends an optional plugin');
+  const bookId=randomUUID(),extraId=randomUUID();
+  for(const [productId,title] of [[bookId,'Published book without a funnel'],[extraId,'Another product']])db.prepare("INSERT INTO products(id,owner,slug,title,description,audience,format,color,content,status,created_at,updated_at) VALUES (?,?,?,?,?,'Readers','Book','orange',?,'published',?,?)").run(productId,owner,'book-'+productId,title,'A book created with the dedicated builder',JSON.stringify({sections:[],benefits:[],launch:''}),now,now);
+  db.prepare('INSERT INTO product_builder_publications(product_id,owner,version,slug,public_snapshot,content_snapshot,published_at,updated_at) VALUES (?,?,1,?,?,?,?,?)').run(bookId,owner,'book-'+bookId,'{}','{}',now,now);
+  let book=await deps.growthDashboard(owner,30,bookId);assert.equal(book.productId,bookId);assert.equal(book.products.length,1);assert.equal(book.products[0].published,true,'Builder publication is published without any funnel');assert.equal(book.actions.length,0,'A published book has no forced funnel or automation tasks');
+  for(const [productId,campaign,amount] of [[bookId,'book_launch',1500],[extraId,'other_launch',9900]]){
+    db.prepare('INSERT INTO growth_events(id,owner,product_id,visitor,event,campaign,day,created_at) VALUES (?,?,?,?,?,?,?,?)').run(randomUUID(),owner,productId,randomUUID(),'visit',campaign,new Date(now).toISOString().slice(0,10),now);
+    db.prepare("INSERT INTO growth_leads(id,owner,product_id,email,name,source,last_source,created_at,last_seen_at,updated_at) VALUES (?,?,?,?,?,'/g/test','/g/test',?,?,?)").run(randomUUID(),owner,productId,'buyer-'+productId+'@example.test','Reader',now,now,now);
+    const orderId=randomUUID();db.prepare("INSERT INTO commerce_orders(id,owner,product_id,account_id,mode,email,amount,currency,title,status,access_hash,created_at,paid_at) VALUES (?,?,?,'acct_fixture','test','buyer@example.test',?,'usd','Book','paid','hash',?,?)").run(orderId,owner,productId,amount,now,now);
+    db.prepare("INSERT INTO commerce_bookings(id,slot_id,order_id,owner,product_id,email,mode,intake,status,created_at) VALUES (?,?,?,?,?,'buyer@example.test','test','{}','confirmed',?)").run(randomUUID(),randomUUID(),orderId,owner,productId,now);
+  }
+  book=await deps.growthDashboard(owner,30,bookId);assert.equal(book.visits,1);assert.equal(book.leads,1);assert.equal(book.bookings,1);assert.equal(book.purchases,1);assert.equal(book.revenue[0].amount,1500);assert.deepEqual(book.sources,[{campaign:'book_launch',visits:1,clicks:0}]);assert.equal(book.trend.reduce((sum,day)=>sum+day.visits,0),1);assert.equal(book.trend.reduce((sum,day)=>sum+day.leads,0),1);assert.equal(book.trend.reduce((sum,day)=>sum+day.purchases,0),1);assert.match(book.actions[0].title,/1 new contact/);
+  let scoped=await dashboardRoute.GET(new Request('https://fivegen.test/api/growth/dashboard?productId='+bookId));assert.equal(scoped.status,200);assert.equal((await scoped.json()).productId,bookId);assert.equal(scoped.headers.get('cache-control'),'private, no-store');
+  assert.deepEqual(book.salesCoverage,{source:'connected-checkout',legacyOrdersExcluded:0});
+  for(const [productId,account,created] of [[bookId,owner,now],[extraId,owner,now],[bookId,owner,now-31*86400000],[other,'creator-b',now]])db.prepare("INSERT INTO orders(id,product_id,owner,email,amount,provider,token,created_at) VALUES (?,?,?,'legacy-buyer@example.test',9900,'stripe',?,?)").run(randomUUID(),productId,account,randomUUID(),created);
+  const legacyBook=await deps.growthDashboard(owner,30,bookId);assert.equal(legacyBook.salesCoverage.legacyOrdersExcluded,1,'Legacy coverage counts are product/date/owner scoped');assert.equal(legacyBook.purchases,1);assert.equal(legacyBook.revenue[0].amount,1500,'Unverifiable legacy environment/refund records never inflate current paid revenue');assert.equal((await deps.growthDashboard(owner,30)).salesCoverage.legacyOrdersExcluded,2,'Global overview identifies legacy coverage without including another owner or an old period');
+  assert.equal((await dashboardRoute.GET(new Request('https://fivegen.test/api/growth/dashboard?productId='+other))).status,404,'A product dashboard never reads another owner’s product');
+  assert.equal((await dashboardRoute.GET(new Request('https://fivegen.test/api/growth/dashboard?productId=invalid'))).status,400);
+  assert.equal((await dashboardRoute.GET(new Request('https://fivegen.test/api/growth/dashboard?productId='+randomUUID()))).status,404);
+  db.prepare('INSERT INTO product_marketing_plugins(product_id,owner,installed,updated_at) VALUES (?,?,?,?)').run(bookId,owner,JSON.stringify(['funnel','automations']),now);
+  book=await deps.growthDashboard(owner,30,bookId);assert.ok(book.actions.some(action=>action.href.endsWith('&area=funnel')),'An explicitly installed funnel can be reviewed');assert.ok(book.actions.some(action=>action.href.endsWith('&area=automations')),'An explicitly installed automation can be prepared');
+  db.prepare('UPDATE product_marketing_plugins SET installed=? WHERE product_id=?').run('[]',bookId);book=await deps.growthDashboard(owner,30,bookId);assert.ok(!book.actions.some(action=>/area=(funnel|automations|campaigns|offer)/.test(action.href)),'Removed plugins no longer appear as recommended tasks');
+  // Reporting must use the same product-publication precedence as Products.
+  // These local fixtures add no orders and never change any payment state.
+  const publicationFixtures=[['Unpublished builder','published','builder',false],['Published builder with draft row','draft','builder',true],['Unpublished file sale','published','file',false],['Published file sale with draft row','draft','file',true],['Marketing funnel only','draft','legacy',false]];
+  for(const [title,status,kind,published] of publicationFixtures){
+    const fixtureId=randomUUID();db.prepare("INSERT INTO products(id,owner,slug,title,description,audience,format,color,content,status,created_at,updated_at) VALUES (?,?,?,?,'Original content','Readers','Book','orange','{\"sections\":[],\"benefits\":[],\"launch\":\"\"}',?,?,?)").run(fixtureId,owner,'publication-'+fixtureId,title,status,now,now);
+    db.prepare("INSERT INTO growth_funnels(product_id,owner,slug,title,landing,published_at,updated_at) VALUES (?,?,?,?, '{}',?,?)").run(fixtureId,owner,'marketing-'+fixtureId,title,now,now);
+    if(kind==='builder'){
+      db.prepare("INSERT INTO product_builder_workspaces(product_id,owner,version,data,updated_at) VALUES (?,?,1,'{}',?)").run(fixtureId,owner,now);
+      if(published)db.prepare("INSERT INTO product_builder_publications(product_id,owner,version,slug,public_snapshot,content_snapshot,published_at,updated_at) VALUES (?,?,1,?,'{}','{}',?,?)").run(fixtureId,owner,'product-'+fixtureId,now,now);
+    }else if(kind==='file')db.prepare("INSERT INTO file_sale_drafts(product_id,version,data,published_revision_id) VALUES (?,1,'{}',?)").run(fixtureId,published?randomUUID():null);
+    const scopedPublication=await deps.growthDashboard(owner,30,fixtureId);assert.equal(scopedPublication.products[0].published,published,title+' uses its product publication, independently of its live funnel');
+    if(!published)assert.ok(scopedPublication.actions.some(action=>action.title==='Finish your product'),'An unpublished product remains a draft follow-up task');
+    if(kind==='builder'&&!published){db.prepare("INSERT INTO file_sale_drafts(product_id,version,data,published_revision_id) VALUES (?,1,'{}',?)").run(fixtureId,randomUUID());assert.equal((await deps.growthDashboard(owner,30,fixtureId)).products[0].published,false,'A dedicated builder takes precedence over an earlier file-sale publication');}
+  }
+  // Plot real sale/settlement aggregates, including older history. Pending fee
+  // data must never become guessed net income or mix buyer/settlement currency.
+  const oldTimestamp=now-800*86400000,recentTimestamp=now-2*86400000;
+  function graphOrder({account=owner,productId=bookId,paymentMode='test',timestamp=recentTimestamp,amount=1000,status='paid',net=700,complete=true}={}){
+    const orderId=randomUUID();
+    db.prepare("INSERT INTO commerce_orders(id,owner,product_id,account_id,mode,email,amount,currency,title,status,access_hash,created_at,paid_at) VALUES (?,?,?,'acct_graph',?,'graph@example.test',?,'usd','Graph fixture',?,'hash',?,?)").run(orderId,account,productId,paymentMode,amount,status,timestamp,timestamp);
+    db.prepare("INSERT INTO commerce_earnings(order_id,charge_id,charge_application_fee_amount,refunded_amount,disputed,balance_transaction_id,settlement_amount,settlement_currency,stripe_fee_amount,platform_fee_amount,creator_net_amount,availability,updated_at) VALUES (?,?,0,0,0,?,?,?,?,?,?,'pending',?)").run(orderId,'ch_'+orderId,complete?'txn_'+orderId:null,complete?net+100:null,complete?'eur':null,complete?100:null,complete?0:null,complete?net:null,now);
+  }
+  graphOrder({timestamp:oldTimestamp});graphOrder({amount:2000,net:1500});graphOrder({amount:3000,complete:false});graphOrder({amount:4000,status:'revoked',net:3300});
+  graphOrder({paymentMode:'live',timestamp:now-1500*86400000,amount:99900});
+  graphOrder({account:'creator-b',productId:other,timestamp:now-2000*86400000,amount:88800});
+  for(const [timestamp,event] of [[oldTimestamp,'visit'],[recentTimestamp,'vsl_play'],[recentTimestamp,'cta']])db.prepare('INSERT INTO growth_events(id,owner,product_id,visitor,event,campaign,day,created_at) VALUES (?,?,?,?,?,?,?,?)').run(randomUUID(),owner,bookId,randomUUID(),event,'graph_history',new Date(timestamp).toISOString().slice(0,10),timestamp);
+  const dailyGraph=await deps.growthDashboard(owner,30,bookId),allTimeGraph=await deps.growthDashboard(owner,0,bookId);
+  const plotted=(report,key,currency)=>report.trend.reduce((sum,point)=>sum+(point[key].find(item=>item.currency===currency)?.amount||0),0);
+  assert.equal(dailyGraph.trendInterval,'day');assert.equal(dailyGraph.trend.length,30);
+  assert.equal(dailyGraph.revenue[0].amount,6500);assert.equal(plotted(dailyGraph,'revenue','usd'),6500,'Daily gross chart matches every paid order, including fee-pending sales');
+  assert.equal(plotted(dailyGraph,'netEarnings','eur'),1500,'Daily net chart includes verified settlements only, in settlement currency');
+  assert.equal(allTimeGraph.days,0);assert.equal(allTimeGraph.trendInterval,'month');assert.ok(allTimeGraph.trend.length<30,'Long history is grouped into full months without discarding old sales');
+  assert.equal(allTimeGraph.trend[0].day,new Date(oldTimestamp).toISOString().slice(0,7)+'-01','Other owners and payment environments cannot extend the chart history');
+  assert.equal(allTimeGraph.purchases,4);assert.equal(allTimeGraph.revenue[0].amount,7500);assert.equal(allTimeGraph.earnings.sales[0].grossAmount,7500);
+  assert.equal(plotted(allTimeGraph,'revenue','usd'),7500);assert.equal(plotted(allTimeGraph,'netEarnings','eur'),2200);assert.equal(allTimeGraph.earnings.totals[0].creatorNetAmount,2200);
+  for(const key of ['visits','leads','purchases','plays','clicks','bookings'])assert.equal(allTimeGraph.trend.reduce((sum,point)=>sum+point[key],0),allTimeGraph[key],`${key} graph agrees with its all-time summary`);
+  assert.equal(allTimeGraph.trend.flatMap(point=>point.netEarnings).some(item=>item.currency==='usd'),false,'Charge currency is never substituted for settlement currency');
+  const allTimeResponse=await dashboardRoute.GET(new Request('https://fivegen.test/api/growth/dashboard?days=0&productId='+bookId));assert.equal(allTimeResponse.status,200);assert.equal((await allTimeResponse.json()).days,0);
   assert.equal((await dashboardRoute.GET(new Request('https://fivegen.test/api/growth/dashboard?days=999'))).status,400);owner='';assert.equal((await dashboardRoute.GET(new Request('https://fivegen.test/api/growth/dashboard'))).status,401);
-  console.log('Passed: Offer Lab ownership, revisions, public snapshots, archived research rounds, exact counts and complete streamed CSV beyond1000 responses, survey dedupe/closure, no accidental marketing consent, safe VSL brief handoff, anonymous event dedupe, aligned UTC reporting windows, owner/mode/currency-isolated real revenue metrics.');
+  console.log('Passed: Offer Lab ownership, revisions, public snapshots, archived research rounds, exact counts and complete streamed CSV beyond1000 responses, survey dedupe/closure, no accidental marketing consent, safe VSL brief handoff, anonymous event dedupe, aligned UTC reporting windows, owner/mode/currency-isolated revenue, product-scoped dashboard auth and all metrics, builder publication without a funnel, opt-in-only marketing recommendations.');
   console.log('QA records retained: '+root);
 }finally{storage.close();}

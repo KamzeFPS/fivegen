@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { growthBriefSchema } from './growth';
 
-export const studioFormats = ['Video course', 'Consulting / Mentorship', 'Guide', 'Mini course', 'Template kit', 'Challenge', 'Playbook', 'Custom product'] as const;
+export const studioFormats = ['Book', 'Video course', 'Consulting / Mentorship', 'Guide', 'Mini course', 'Template kit', 'Challenge', 'Playbook', 'Custom product'] as const;
 export const studioPlanSchema = z.object({
   title: z.string().min(3).max(100),
   description: z.string().min(12).max(2000),

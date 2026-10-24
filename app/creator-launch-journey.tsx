@@ -1,0 +1,59 @@
+'use client';
+
+import {useCallback,useEffect,useRef,useState} from 'react';
+import {ArrowRight,Check,ChevronDown,Copy,Loader2,RefreshCw,Trash2} from 'lucide-react';
+import type {CreatorLaunchAction,CreatorLaunchNavigation,CreatorLaunchState} from '@/lib/creator-launch';
+import './creator-launch-journey.css';
+
+type Props={productId:string;onNavigate?:(action:CreatorLaunchNavigation)=>void;refreshKey?:number};
+const channelLabels={direct:'Direct conversation',social:'Social post',newsletter:'Newsletter',other:'Other'};
+function when(value:number){return new Intl.DateTimeFormat(undefined,{dateStyle:'medium'}).format(value);}
+
+export function CreatorLaunchJourney(props:Props){return <CreatorLaunchJourneyContent key={props.productId} {...props}/>;}
+function CreatorLaunchJourneyContent({productId,onNavigate,refreshKey=0}:Props){
+ const [state,setState]=useState<CreatorLaunchState|null>(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
+ const [feedbackOpen,setFeedbackOpen]=useState(false),[shareOpen,setShareOpen]=useState(false),[summary,setSummary]=useState(''),[source,setSource]=useState<'conversation'|'email'|'survey'|'other'>('conversation'),[audience,setAudience]=useState<'potential-buyer'|'customer'>('potential-buyer'),[channel,setChannel]=useState<keyof typeof channelLabels>('direct');
+ const sequence=useRef(0),busyRef=useRef(false),lastRefresh=useRef(refreshKey),noteRef=useRef<HTMLTextAreaElement>(null),shareRef=useRef<HTMLButtonElement>(null);
+ const load=useCallback(async(signal?:AbortSignal)=>{
+  const request=++sequence.current;
+  try{const response=await fetch(`/api/builder/${encodeURIComponent(productId)}/launch`,{signal,cache:'no-store'}),data=await response.json() as CreatorLaunchState&{error?:string};if(request!==sequence.current||signal?.aborted)return;
+   if(!response.ok)throw new Error(data.error||'Your launch journey could not be loaded.');setState(data as CreatorLaunchState);setError('');
+  }catch(cause){if(request===sequence.current&&!signal?.aborted)setError(cause instanceof Error?cause.message:'Your launch journey could not be loaded.');}finally{if(request===sequence.current&&!signal?.aborted)setLoading(false);}
+ },[productId]);
+ useEffect(()=>{const controller=new AbortController();queueMicrotask(()=>{if(!controller.signal.aborted)void load(controller.signal);});return()=>controller.abort();},[load]);
+ useEffect(()=>{if(lastRefresh.current===refreshKey)return;lastRefresh.current=refreshKey;const controller=new AbortController();queueMicrotask(()=>{if(!controller.signal.aborted)void load(controller.signal);});return()=>controller.abort();},[refreshKey,load]);
+ useEffect(()=>{if(!state?.sharing||state.phase==='improve')return;const timer=setInterval(()=>{if(document.visibilityState==='visible'&&!busyRef.current)void load();},30000);return()=>clearInterval(timer);},[load,state?.sharing,state?.phase]);
+ useEffect(()=>{if(feedbackOpen)noteRef.current?.focus();},[feedbackOpen]);
+ useEffect(()=>{if(shareOpen)shareRef.current?.focus();},[shareOpen]);
+
+ async function update(action:Record<string,unknown>){
+  if(!state||busyRef.current)return false;busyRef.current=true;setBusy(true);setError('');setNotice('');const request=++sequence.current;
+  try{const response=await fetch(`/api/builder/${encodeURIComponent(productId)}/launch`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({...action,expectedUpdatedAt:state.updatedAt})}),data=await response.json() as CreatorLaunchState&{error?:string};if(request!==sequence.current)return false;
+   if(!response.ok)throw new Error(data.error||'Your launch note could not be saved.');setState(data as CreatorLaunchState);setNotice(action.action==='mark-shared'?'Sharing confirmation saved. This does not record visits or sales.':action.action==='clear-shared'?'Sharing confirmation cleared.':'Your private feedback notes were saved.');return true;
+  }catch(cause){if(request===sequence.current)setError(cause instanceof Error?cause.message:'Your launch note could not be saved.');return false;}finally{busyRef.current=false;setBusy(false);}
+ }
+ function act(action:CreatorLaunchAction){
+  if(busyRef.current)return;
+  if(action.kind==='feedback'){setAudience(state?.phase==='improve'?'customer':'potential-buyer');setFeedbackOpen(true);requestAnimationFrame(()=>noteRef.current?.focus());}
+  else if(action.kind==='share'){setShareOpen(true);requestAnimationFrame(()=>shareRef.current?.focus());}
+  else if(action.kind==='refresh'){setLoading(true);void load();}
+  else if(action.kind==='navigate'){if(onNavigate)onNavigate(action.navigate);else location.assign(action.navigate==='payments'?'/account/payments':'/build/'+encodeURIComponent(productId));}
+ }
+ async function copy(){if(!state?.sharing?.publicUrl)return;try{await navigator.clipboard.writeText(state.sharing.publicUrl);setNotice('Public link copied. Share it yourself, then mark it shared below.');setError('');}catch{setError('The link could not be copied. Select and copy the public address below.');}}
+ return <section className="creator-launch" aria-label="Your launch journey" aria-busy={loading||busy}>
+  <header className="cl-heading"><div><span className="cl-eyebrow">YOUR NEXT MILESTONE</span><h2>{state?.phase==='improve'?'Keep improving your product':state?.path==='free'?'Launch your free resource':'Your first sale, one step at a time'}</h2><p>Use your saved product and real payment records to see what comes next.</p></div><button type="button" className="cl-refresh" onClick={()=>{setLoading(true);void load();}} disabled={loading||busy} aria-label="Refresh launch journey">{loading?<Loader2 size={17} className="spin"/>:<RefreshCw size={17}/>}</button></header>
+  {error&&<p className="cl-error" role="alert">{error}</p>}{notice&&<p className="cl-notice" role="status">{notice}</p>}
+  {!state?<p className="cl-loading">{loading?'Checking your saved product…':'Refresh to check your next step. Your saved work is safe.'}</p>:<>
+   {state.sales.livePaidCount>0&&<p className="cl-achievement"><Check size={17}/><span>{state.sales.livePaidCount===1?'Your first verified live paid sale is recorded.':`${state.sales.livePaidCount} verified live paid orders are recorded.`}{state.sales.firstLivePaidAt?` First sale: ${when(state.sales.firstLivePaidAt)}.`:''}</span></p>}
+   {state.path==='free'&&<p className="cl-free-note">Free access can help you learn from your audience. It is a lead magnet, not paid revenue.</p>}
+   <div className="cl-next"><span className="cl-next-label">{state.phase==='improve'?'BUILD ON WHAT YOU LEARNED':'NEXT STEP'}</span><h3>{state.nextTitle}</h3><p>{state.nextDetail}</p><button type="button" className="button primary" disabled={busy||loading} onClick={()=>act(state.nextAction)}>{state.nextAction.label}<ArrowRight size={16}/></button></div>
+   <details className="cl-checklist"><summary><span>See your launch steps</span><ChevronDown size={16}/></summary><ol>{state.steps.map(step=><li key={step.id} data-status={step.status} aria-current={step.status==='current'?'step':undefined}><span className="cl-step-mark" aria-label={step.status==='complete'?'Complete':step.status==='current'?'Current step':'Upcoming'}>{step.status==='complete'?<Check size={13}/>:null}</span><div><strong>{step.title}</strong><p>{step.detail}</p></div></li>)}</ol></details>
+   <details className="cl-feedback" open={feedbackOpen} onToggle={event=>setFeedbackOpen(event.currentTarget.open)}><summary><span>Private feedback notes{state.feedback.length?` · ${state.feedback.length}`:''}</span><ChevronDown size={16}/></summary><p className="cl-help">Record feedback from a real conversation or response. These notes are entered by you, remain private, and are not independently verified. Avoid names, email addresses and sensitive details.</p>
+    <form onSubmit={event=>{event.preventDefault();void update({action:'add-feedback',id:crypto.randomUUID(),source,audience,summary}).then(saved=>{if(saved)setSummary('');});}}><fieldset disabled={busy||state.feedback.length>=20}><div className="cl-form-row"><label>Who gave feedback?<select value={audience} onChange={event=>setAudience(event.target.value as typeof audience)}><option value="potential-buyer">Potential buyer</option><option value="customer">Customer / participant</option></select></label><label>Where did it come from?<select value={source} onChange={event=>setSource(event.target.value as typeof source)}><option value="conversation">Conversation</option><option value="email">Email response</option><option value="survey">Survey response</option><option value="other">Other real feedback</option></select></label></div><label>What did you learn?<textarea ref={noteRef} value={summary} minLength={20} maxLength={1200} rows={4} required placeholder="The problem they described, their response to the idea, and what you plan to change." onChange={event=>setSummary(event.target.value)}/></label><div className="cl-form-footer"><small>{state.feedback.length>=20?'20-note limit reached. Remove an old note to add another.':`${summary.length}/1,200 characters · at least 20`}</small><button type="submit" className="button secondary" disabled={summary.trim().length<20||busy}>{busy?<Loader2 size={14} className="spin"/>:null}Save private note</button></div></fieldset></form>
+    {state.feedback.length>0&&<ul className="cl-notes">{state.feedback.slice().reverse().map(note=><li key={note.id}><div><small>{note.audience==='customer'?'Customer / participant':'Potential buyer'} · {note.source} · {when(note.recordedAt)} · Entered by you</small><p>{note.summary}</p></div><button type="button" className="cl-remove" aria-label="Remove feedback note" disabled={busy} onClick={()=>void update({action:'remove-feedback',id:note.id})}><Trash2 size={15}/></button></li>)}</ul>}
+   </details>
+   {state.sharing?.publicUrl&&<details className="cl-sharing" open={shareOpen} onToggle={event=>setShareOpen(event.currentTarget.open)}><summary><span>Your public product link</span><ChevronDown size={16}/></summary><p className="cl-help">This address opens your published product page. Copying it does not post it or mark it shared.</p><div className="cl-public-link"><input aria-label="Published product address" readOnly value={state.sharing.publicUrl} onFocus={event=>event.currentTarget.select()}/><button ref={shareRef} type="button" className="button secondary" disabled={busy} onClick={()=>void copy()}><Copy size={15}/>Copy link</button></div><form onSubmit={event=>{event.preventDefault();void update({action:'mark-shared',channel,expectedPublicationVersion:state.sharing!.publicationVersion});}}><div className="cl-share-action"><label>Where did you share it?<select value={channel} disabled={busy} onChange={event=>setChannel(event.target.value as keyof typeof channelLabels)}>{Object.entries(channelLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><button type="submit" className="button secondary" disabled={busy}>I shared this version</button></div></form>{state.sharing.current&&<p className="cl-shared">Marked shared {state.sharing.sharedAt?when(state.sharing.sharedAt):''} · {channelLabels[state.sharing.channel as keyof typeof channelLabels]||'Other'}. <button type="button" disabled={busy} onClick={()=>void update({action:'clear-shared'})}>Clear confirmation</button></p>}</details>}
+   <details className="cl-test"><summary><span>Optional buyer-experience check{state.testPurchase.complete?' · test payment recorded':''}</span><ChevronDown size={16}/></summary><p>{state.testPurchase.detail}</p><button type="button" className="button secondary" disabled={busy} onClick={()=>act(state.testPurchase.action)}>{state.testPurchase.action.label}<ArrowRight size={15}/></button></details>
+  </>}
+ </section>;
+}

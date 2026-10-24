@@ -2,6 +2,8 @@ import { env } from 'cloudflare:workers';
 import { z } from 'zod';
 import { ApiError, database, identity, ownedProduct } from './server';
 import { customerOrder } from './commerce-v2-server';
+import { builderDraftSchema, builderTypeDetails } from './builder-contract';
+import { saleDraftSchema } from './file-sale-contract';
 import {
   defaultProductPageConfig, productPageConfigSchema, productPageSaveSchema, productPageRevisionSchema, productReviewSchema,
   type ProductPageConfig, type ProductPageState, type PublicProductPage, type PublicProductSummary, type ProductReviewSummary,
@@ -18,15 +20,28 @@ const eligibleImage = "id=? AND product_id=? AND owner=? AND status='completed' 
 const emptyReviews = (): ProductReviewSummary => ({ count: 0, average: null, reviews: [] });
 function pagePath(slug: string) { return `/product/${encodeURIComponent(slug)}`; }
 
-function snapshotProduct(product: Record<string, unknown>): PublicProductSummary {
+async function snapshotProduct(product: Record<string, unknown>) {
   // Deliberately project individual public fields. Never spread private content,
   // even when a future lesson or product schema adds more fields.
-  const content = z.object({ sections: z.array(sectionSummarySchema).max(30) }).parse(JSON.parse(String(product.content)));
-  return publicProductSchema.parse({
-    id: String(product.id), slug: String(product.slug), title: String(product.title),
-    description: String(product.description), format: String(product.format),
+  const builder = await database().prepare('SELECT version,data FROM product_builder_workspaces WHERE product_id=? AND owner=?').bind(product.id, product.owner).first();
+  const sale = !builder ? await database().prepare('SELECT version,data FROM file_sale_drafts WHERE product_id=?').bind(product.id).first() : null;
+  const builderDraft = builder ? builderDraftSchema.parse(JSON.parse(String(builder.data))) : null;
+  const saleDraft = sale ? saleDraftSchema.parse(JSON.parse(String(sale.data))) : null;
+  const content = builderDraft || (saleDraft ? { sections: saleDraft.modules.filter(module => module.included && module.kind === 'course').flatMap(module => module.sections) } : z.object({ sections: z.array(sectionSummarySchema).max(30) }).parse(JSON.parse(String(product.content))));
+  const snapshot = publicProductSchema.parse({
+    id: String(product.id), slug: String(product.slug), title: builderDraft?.title ?? saleDraft?.title ?? String(product.title),
+    description: builderDraft?.description ?? saleDraft?.description ?? String(product.description),
+    format: builderDraft ? builderTypeDetails[builderDraft.type].format : String(product.format),
     sections: content.sections.map(section => ({ title: section.title, ...(section.category ? { category: section.category } : {}) })),
   });
+  return {
+    snapshot,
+    guardSql: builder ? ' AND EXISTS(SELECT 1 FROM product_builder_workspaces WHERE product_id=? AND owner=? AND version=? AND data=?)'
+      : sale ? ' AND EXISTS(SELECT 1 FROM file_sale_drafts WHERE product_id=? AND version=? AND data=?) AND NOT EXISTS(SELECT 1 FROM product_builder_workspaces WHERE product_id=?)'
+      : ' AND NOT EXISTS(SELECT 1 FROM product_builder_workspaces WHERE product_id=?) AND NOT EXISTS(SELECT 1 FROM file_sale_drafts WHERE product_id=?)',
+    guardValues: builder ? [product.id, product.owner, builder.version, builder.data]
+      : sale ? [product.id, sale.version, sale.data, product.id] : [product.id, product.id],
+  };
 }
 
 async function assertPageImages(productId: string, owner: string, config: ProductPageConfig) {
@@ -94,13 +109,14 @@ export async function publishProductPage(productId: string, owner: string, input
   const page = await getProductPage(productId, owner);
   if (page.updatedAt !== expectedUpdatedAt) throw new ApiError('Your product page changed in another tab. Reload before publishing.', 409);
   await assertPageImages(productId, owner, page.draft);
-  const publicProduct = snapshotProduct(product), now = Math.max(Date.now(), expectedUpdatedAt + 1), guard = imageGuard(page.draft, productId, owner);
-  const unchangedProduct = 'EXISTS(SELECT 1 FROM products WHERE id=? AND owner=? AND updated_at=?)';
+  const publicProduct = await snapshotProduct(product), now = Math.max(Date.now(), expectedUpdatedAt + 1), guard = imageGuard(page.draft, productId, owner);
+  const unchangedProduct = 'EXISTS(SELECT 1 FROM products WHERE id=? AND owner=? AND updated_at=?)' + publicProduct.guardSql;
+  const productGuardValues = [productId, owner, product.updated_at, ...publicProduct.guardValues];
   const result = expectedUpdatedAt === 0
     ? await database().prepare(`INSERT OR IGNORE INTO product_pages (product_id,owner,draft,published,public_product,published_at,updated_at) SELECT ?,?,?,?,?,?,? WHERE ${unchangedProduct}${guard.sql}`)
-      .bind(productId, owner, JSON.stringify(page.draft), JSON.stringify(page.draft), JSON.stringify(publicProduct), now, now, productId, owner, product.updated_at, ...guard.values).run()
+      .bind(productId, owner, JSON.stringify(page.draft), JSON.stringify(page.draft), JSON.stringify(publicProduct.snapshot), now, now, ...productGuardValues, ...guard.values).run()
     : await database().prepare(`UPDATE product_pages SET published=draft,public_product=?,published_at=?,updated_at=? WHERE product_id=? AND owner=? AND updated_at=? AND ${unchangedProduct}${guard.sql}`)
-      .bind(JSON.stringify(publicProduct), now, now, productId, owner, expectedUpdatedAt, productId, owner, product.updated_at, ...guard.values).run();
+      .bind(JSON.stringify(publicProduct.snapshot), now, now, productId, owner, expectedUpdatedAt, ...productGuardValues, ...guard.values).run();
   if (!result.meta.changes) throw new ApiError('Your product or page changed. Reload before publishing.', 409);
   return getProductPage(productId, owner);
 }
@@ -123,12 +139,16 @@ async function publishedPage(slug: string) {
 export async function getPublicProductPage(slug: string): Promise<PublicProductPage> {
   const row = await publishedPage(slug), config = productPageConfigSchema.parse(JSON.parse(String(row.published)));
   const product = publicProductSchema.parse(JSON.parse(String(row.public_product)));
-  const funnel = await database().prepare('SELECT slug FROM growth_funnels WHERE product_id=? AND owner=? AND published_at IS NOT NULL').bind(row.product_id, row.owner).first();
+  const builder = await database().prepare('SELECT slug FROM product_builder_publications WHERE product_id=? AND owner=?').bind(row.product_id, row.owner).first();
+  const builderDraft = !builder ? await database().prepare('SELECT product_id FROM product_builder_workspaces WHERE product_id=? AND owner=?').bind(row.product_id, row.owner).first() : null;
+  const fileDraft = !builder && !builderDraft ? await database().prepare('SELECT product_id,published_revision_id FROM file_sale_drafts WHERE product_id=?').bind(row.product_id).first() : null;
+  const fileSale = fileDraft?.published_revision_id ? await database().prepare('SELECT id FROM file_sale_revisions WHERE id=? AND product_id=?').bind(fileDraft.published_revision_id, row.product_id).first() : null;
+  const funnel = !builder && !builderDraft && !fileDraft ? await database().prepare('SELECT slug FROM growth_funnels WHERE product_id=? AND owner=? AND published_at IS NOT NULL').bind(row.product_id, row.owner).first() : null;
   return {
     product: { ...product, sections: config.showContent ? product.sections : [] },
     config: { ...config, creatorName: config.showCreator ? config.creatorName : '', location: config.showLocation ? config.location : '' },
     publishedAt: Number(row.published_at), publicPath: pagePath(String(row.slug)),
-    funnelPath: funnel ? `/g/${encodeURIComponent(String(funnel.slug))}` : null,
+    funnelPath: builder ? `/b/${encodeURIComponent(String(builder.slug))}` : fileSale ? `/p/${encodeURIComponent(String(row.slug))}` : funnel ? `/g/${encodeURIComponent(String(funnel.slug))}` : null,
     reviewSummary: config.showReviews ? await reviewSummary(String(row.product_id), String(row.owner)) : emptyReviews(),
   };
 }
@@ -159,7 +179,7 @@ export async function addProductReview(request: Request, slug: string, input: un
   const value = productReviewSchema.parse(input), page = await publishedPage(slug);
   const config = productPageConfigSchema.parse(JSON.parse(String(page.published)));
   if (!config.showReviews) throw new ApiError('Reviews are not available for this product page.', 404);
-  const order = await customerOrder(request, value.orderId);
+  const order = await customerOrder(request, value.orderId, true, { purchaserOnly: true });
   if (order.product_id !== page.product_id || order.owner !== page.owner || order.mode !== 'live' || order.status !== 'paid' || Number(order.amount) <= 0 || order.paid_at == null)
     throw new ApiError('Only a confirmed live purchase of this product can leave a review.', 403);
   const user = await identity({ allowUnaccepted: true }).catch(() => null);

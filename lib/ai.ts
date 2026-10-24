@@ -103,8 +103,10 @@ export async function textGeneration(
   const key = await providerKey(owner, config.textProvider);
   // Responses JSON mode checks the input messages, not just instructions.
   const schemaText=outputSchema ? JSON.stringify(outputSchema.schema) : '';
-  const requestPrompt = `Return only a valid JSON object for the following request.\n\n${prompt}`;
-  const inputBytes=new TextEncoder().encode(system+requestPrompt+schemaText).length;
+  // JSON-object mode guarantees JSON syntax, not this application's shape.
+  // Give both providers the same schema instead of referring to an absent one.
+  const requestPrompt = `Return only a valid JSON object for the following request.${schemaText ? `\n\nMatch this JSON schema exactly:\n${schemaText}` : ''}\n\nRequest:\n${prompt}`;
+  const inputBytes=new TextEncoder().encode(system+requestPrompt).length;
   if(inputBytes>64000)throw new ApiError("This request is too large. Shorten the brief or instructions.");
   const inputRate=config.textProvider==="anthropic"?1:0.4,outputRate=config.textProvider==="anthropic"?5:1.6;
   await reserveAIBudget(Math.ceil(inputBytes*inputRate+maxTokens*outputRate),owner);
@@ -160,7 +162,7 @@ export async function textGeneration(
         model: config.textModel,
         system,
         max_tokens: maxTokens,
-        messages: [{ role: "user", content: schemaText ? `${requestPrompt}\n\nMatch this JSON schema exactly:\n${schemaText}` : requestPrompt }],
+        messages: [{ role: "user", content: requestPrompt }],
       }),
     });
     const d = (await r.json()) as any;

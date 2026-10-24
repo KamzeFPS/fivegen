@@ -17,6 +17,7 @@ const deps = {
   sameOrigin: request => { if (request.headers.get('origin') && request.headers.get('origin') !== new URL(request.url).origin) throw new ApiError('Origin rejected', 403); },
   failure: error => Response.json({ error: error.issues ? 'Invalid input' : error.message }, { status: error.status || (error.issues ? 400 : 500) }),
   Stripe: class { constructor() { throw new Error('Product page tests must never call Stripe.'); } },
+  teamSeatAllows: async () => true,
   enrollAutomationPurchase: async () => {},
 };
 async function load(path) {
@@ -26,6 +27,8 @@ async function load(path) {
   const result = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64')); delete globalThis[key]; return result;
 }
 Object.assign(deps, await load('lib/product.ts'));
+Object.assign(deps, await load('lib/builder-contract.ts'));
+Object.assign(deps, await load('lib/file-sale-contract.ts'));
 Object.assign(deps, await load('lib/commerce-v2.ts'));
 Object.assign(deps, await load('lib/commerce-v2-server.ts'));
 Object.assign(deps, await load('lib/product-page.ts'));
@@ -99,6 +102,9 @@ try {
   assert.equal((await imageRoute.GET(request(), { params: Promise.resolve({ slug, kind: 'icon' }) })).status, 404); assert.equal((await imageRoute.GET(request(), { params: Promise.resolve({ slug, kind: 'banner' }) })).status, 200);
   user = null;
   const buyer = await order();
+  user = { userId: 'team-member', email: 'team-member@example.test' };
+  assert.equal((await review(inputReview(buyer.id))).status, 403, 'A team seat cannot submit a review in the purchaser’s name');
+  user = null;
   assert.equal((await review(inputReview(buyer.id))).status, 403, 'Order ID alone cannot review');
   assert.equal((await review(inputReview(buyer.id), { cookie: buyer.cookie, Origin: 'https://evil.test' })).status, 403);
   assert.equal((await review({ ...inputReview(buyer.id), displayName: 'buyer@example.test' }, { cookie: buyer.cookie })).status, 400);
@@ -134,6 +140,32 @@ try {
   const firstPublication = await publishRoute.POST(request('POST', { expectedUpdatedAt: 0 }), { params: Promise.resolve({ id: other }) });
   assert.equal(firstPublication.status, 200, 'Explicitly publishing the default profile is allowed before a customization save');
   assert.equal((await deps.getPublicProductPage('someone-elses-product')).product.id, other);
+  let otherPage = (await firstPublication.json()).page;
+  const builderDraft = { ...deps.defaultBuilderDraft('book'), title: 'Actual saved builder title', description: 'The actual current saved builder description.', sections: [{ title: 'Current builder chapter', body: 'PRIVATE BUILDER LESSON', category: 'Chapter group' }] };
+  sql.prepare('INSERT INTO product_builder_workspaces(product_id,owner,version,data,updated_at) VALUES (?,?,?,?,?)').run(other, 'creator-b', 1, JSON.stringify(builderDraft), now);
+  assert.equal((await deps.getPublicProductPage('someone-elses-product')).product.title, 'Original title', 'A saved builder draft never changes the published profile automatically');
+  const prepareBeforeRace = storage.DB.prepare;
+  let raced = false;
+  storage.DB.prepare = query => { if (!raced && query.startsWith('UPDATE product_pages SET published=draft')) { raced = true; sql.prepare('UPDATE product_builder_workspaces SET version=version+1 WHERE product_id=?').run(other); } return prepareBeforeRace(query); };
+  try { assert.equal((await publishRoute.POST(request('POST', { expectedUpdatedAt: otherPage.updatedAt }), { params: Promise.resolve({ id: other }) })).status, 409, 'Builder edits racing the snapshot prevent stale publication'); }
+  finally { storage.DB.prepare = prepareBeforeRace; }
+  assert.equal((await deps.getPublicProductPage('someone-elses-product')).product.title, 'Original title');
+  response = await publishRoute.POST(request('POST', { expectedUpdatedAt: otherPage.updatedAt }), { params: Promise.resolve({ id: other }) });
+  assert.equal(response.status, 200, await response.clone().text()); otherPage = (await response.json()).page;
+  let builderPublic = await deps.getPublicProductPage('someone-elses-product');
+  assert.equal(builderPublic.product.title, builderDraft.title); assert.equal(builderPublic.product.description, builderDraft.description); assert.equal(builderPublic.product.format, 'Book'); assert.deepEqual(builderPublic.product.sections, [{ title: 'Current builder chapter', category: 'Chapter group' }]); assert.ok(!JSON.stringify(builderPublic).includes('PRIVATE BUILDER LESSON'));
+  sql.prepare('INSERT INTO growth_funnels(product_id,owner,slug,title,landing,published_at,updated_at) VALUES (?,?,?,?,?,?,?)').run(other, 'creator-b', 'old-unrelated-legacy-funnel', 'Old funnel', '{}', now, now);
+  assert.equal((await deps.getPublicProductPage('someone-elses-product')).funnelPath, null, 'An unpublished builder must not link to an old legacy funnel');
+  sql.prepare('INSERT INTO product_builder_publications(product_id,owner,version,slug,public_snapshot,content_snapshot,published_at,updated_at) VALUES (?,?,?,?,?,?,?,?)').run(other, 'creator-b', 1, 'actual-published-builder', '{}', '{}', now, now);
+  assert.equal((await deps.getPublicProductPage('someone-elses-product')).funnelPath, '/b/actual-published-builder');
+  sql.prepare('DELETE FROM product_builder_publications WHERE product_id=?').run(other); sql.prepare('DELETE FROM product_builder_workspaces WHERE product_id=?').run(other);
+  const fileDraft = { title: 'Actual saved file offer', description: 'Current file offer description.', currency: 'usd', priceCents: 4900, modules: [{ kind: 'course', name: 'Included course', included: true, uploadIds: [], sections: [{ title: 'Public file lesson title', body: 'PRIVATE FILE LESSON' }] }] };
+  const revisionId = randomUUID();
+  sql.prepare('INSERT INTO file_sale_drafts(product_id,version,data) VALUES (?,?,?)').run(other, 1, JSON.stringify(fileDraft));
+  response = await publishRoute.POST(request('POST', { expectedUpdatedAt: otherPage.updatedAt }), { params: Promise.resolve({ id: other }) }); assert.equal(response.status, 200, await response.clone().text());
+  const filePublic = await deps.getPublicProductPage('someone-elses-product'); assert.equal(filePublic.product.title, fileDraft.title); assert.deepEqual(filePublic.product.sections, [{ title: 'Public file lesson title' }]); assert.ok(!JSON.stringify(filePublic).includes('PRIVATE FILE LESSON')); assert.equal(filePublic.funnelPath, null, 'A file draft without a public revision must not link to the legacy funnel');
+  sql.prepare('INSERT INTO file_sale_revisions(id,product_id,version,snapshot,created_at) VALUES (?,?,?,?,?)').run(revisionId, other, 1, JSON.stringify(fileDraft), now); sql.prepare('UPDATE file_sale_drafts SET published_revision_id=? WHERE product_id=?').run(revisionId, other);
+  assert.equal((await deps.getPublicProductPage('someone-elses-product')).funnelPath, '/p/someone-elses-product');
   console.log('Passed: owner/auth/CSRF/revision guards; separate draft/public snapshots; safe curriculum summaries without private lessons/files/scripts/meeting links; hidden creator/location/content settings; HTTPS-only links; owned completed raster images, actual signatures, voice isolation, exact published image access and unpublish revocation; real live paid buyer-only reviews, cookie/sign-in entitlement, no self/test/free/pending/revoked reviews, dedupe, no email/order leakage, and refund-aware public ratings. No Stripe or AI network calls.');
   console.log('QA records retained: ' + root);
 } finally { storage.close(); }

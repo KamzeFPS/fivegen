@@ -106,6 +106,62 @@
       "when": 1792127603710,
       "tag": "0014_commerce_offer_modes",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1792141230000,
+      "tag": "0015_admin_credit_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1792386394162,
+      "tag": "0016_file_sale_revisions",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1792389400669,
+      "tag": "0017_product_builders",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1792390015452,
+      "tag": "0018_builder_pdf_updates",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1792392834010,
+      "tag": "0019_marketing_plugins",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1792400400000,
+      "tag": "0020_builder_revisions",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1792411200000,
+      "tag": "0021_commerce_earnings",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1792425600000,
+      "tag": "0022_creator_fee_plans",
+      "breakpoints": true
     }
   ]
 }

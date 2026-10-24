@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex, primaryKey, unique, check } from "drizzle-orm/sqlite-core";
 import { sql } from 'drizzle-orm';
 export * from './growth-schema';
 export * from './growth-funnel-schema';
@@ -7,13 +7,37 @@ export * from './commerce-v2-schema';
 export * from './automation-schema';
 export * from './creator-voice-schema';
 export * from './product-page-schema';
+export * from './creator-trust-schema';
+export * from './product-builder-schema';
+export * from './marketing-plugin-schema';
+
+// Existing production migration 0015 is mirrored here so future generation
+// retains administrator grants rather than attempting to remove their table.
+export const creditAdminGrants=sqliteTable('credit_admin_grants',{
+ id:text('id').primaryKey(),owner:text('owner').notNull(),email:text('email').notNull(),credits:integer('credits').notNull(),admin:text('admin').notNull(),applied:integer('applied').notNull().default(0),createdAt:integer('created_at').notNull(),
+},t=>[index('idx_credit_admin_grants_owner').on(t.owner,t.createdAt)]);
+
+// Opt-in revisions leave legacy product/order behavior untouched. Published
+// snapshots and grants must be retained even when creation is disabled.
+export const fileSaleDrafts=sqliteTable('file_sale_drafts',{
+ productId:text('product_id').primaryKey().references(()=>products.id),version:integer('version').notNull().default(1),data:text('data').notNull(),publishedRevisionId:text('published_revision_id'),
+});
+export const fileSaleRevisions=sqliteTable('file_sale_revisions',{
+ id:text('id').primaryKey(),productId:text('product_id').notNull().references(()=>products.id),version:integer('version').notNull(),snapshot:text('snapshot').notNull(),createdAt:integer('created_at').notNull(),
+},t=>[unique('file_sale_revisions_product_id_version_unique').on(t.productId,t.version)]);
+export const fileSaleGrants=sqliteTable('file_sale_grants',{
+ orderId:text('order_id').notNull().references(()=>orders.id),revisionId:text('revision_id').notNull().references(()=>fileSaleRevisions.id),module:text('module').notNull(),createdAt:integer('created_at').notNull(),
+},t=>[primaryKey({columns:[t.orderId,t.module,t.revisionId]}),check('file_sale_grants_module_check',sql`${t.module} IN ('downloads','course')`)]);
+export const fileSaleEvents=sqliteTable('file_sale_events',{
+ id:text('id').primaryKey(),productId:text('product_id').notNull(),owner:text('owner').notNull(),event:text('event').notNull(),detail:text('detail').notNull().default('{}'),createdAt:integer('created_at').notNull(),
+},t=>[index('idx_file_sale_events').on(t.productId,t.createdAt)]);
 
 // Wallet checkout records are permanent, including test-mode records.
 export const walletCustomers = sqliteTable('wallet_customers', {
   key:text('key').primaryKey(),owner:text('owner').notNull(),environment:text('environment').notNull(),customerId:text('customer_id').notNull().unique(),
 });
 export const walletCheckoutIntents = sqliteTable('wallet_checkout_intents', {
-  id:text('id').primaryKey(),owner:text('owner').notNull(),environment:text('environment').notNull(),offerId:text('offer_id').notNull(),email:text('email').notNull(),amount:integer('amount').notNull(),credits:integer('credits').notNull(),billingInterval:text('billing_interval'),sessionId:text('session_id').unique(),status:text('status').notNull().default('open'),createdAt:integer('created_at').notNull(),
+  id:text('id').primaryKey(),owner:text('owner').notNull(),environment:text('environment').notNull(),offerId:text('offer_id').notNull(),email:text('email').notNull(),amount:integer('amount').notNull(),credits:integer('credits').notNull(),billingInterval:text('billing_interval'),checkoutName:text('checkout_name'),sessionId:text('session_id').unique(),status:text('status').notNull().default('open'),createdAt:integer('created_at').notNull(),
 },t=>[uniqueIndex('idx_wallet_open_checkout').on(t.owner,t.environment).where(sql`${t.status} = 'open'`)]);
 export const walletSubscriptions = sqliteTable('wallet_subscriptions', {
   subscriptionId:text('subscription_id').primaryKey(),owner:text('owner').notNull(),environment:text('environment').notNull(),customerId:text('customer_id').notNull(),intentId:text('intent_id').notNull(),status:text('status').notNull(),cancelAt:integer('cancel_at'),periodEnd:integer('period_end'),updatedAt:integer('updated_at').notNull(),
@@ -23,7 +47,7 @@ export const walletPayments = sqliteTable('wallet_payments', {
 },t=>[index('idx_wallet_payments_owner').on(t.owner,t.environment)]);
 export const walletChargeState = sqliteTable('wallet_charge_state', {
   chargeId:text('charge_id').primaryKey(),environment:text('environment').notNull(),paymentIntent:text('payment_intent').notNull(),amount:integer('amount').notNull(),reversedAmount:integer('reversed_amount').notNull(),eventTime:integer('event_time').notNull(),
-});
+},t=>[index('idx_wallet_charge_payment').on(t.environment,t.paymentIntent)]);
 export const walletTestBalances = sqliteTable('wallet_test_balances', {
   owner:text('owner').primaryKey(),credits:integer('credits').notNull().default(0),
 });
@@ -84,6 +108,7 @@ export const memberships = sqliteTable("memberships", {
   updatedAt: integer("updated_at").notNull(),
 });
 export const checkoutIntents = sqliteTable("checkout_intents", {
+  saleRevisionId:text('sale_revision_id'),
   id: text("id").primaryKey(), owner: text("owner").notNull(), productId: text("product_id").notNull(),
   account: text("account").notNull(), amount: integer("amount").notNull(), mode: text("mode").notNull(),
   items: text("items").notNull(), quantity: integer("quantity").notNull().default(1),
@@ -95,6 +120,7 @@ export const checkoutIntents = sqliteTable("checkout_intents", {
 export const orders = sqliteTable(
   "orders",
   {
+    saleRevisionId:text('sale_revision_id'),
     id: text("id").primaryKey(),
     productId: text("product_id").notNull(),
     owner: text("owner").notNull(),
@@ -109,7 +135,7 @@ export const orders = sqliteTable(
     stripeAccount: text("stripe_account"),
     createdAt: integer("created_at").notNull(),
   },
-  (t) => [index("idx_orders_owner_date").on(t.owner, t.createdAt)],
+  (t) => [index("idx_orders_owner_date").on(t.owner, t.createdAt), index('idx_file_sale_orders').on(t.productId,t.saleRevisionId)],
 );
 export const visits = sqliteTable(
   "visits",
@@ -212,6 +238,7 @@ export const assets = sqliteTable(
 );
 
 export const uploads = sqliteTable("uploads", {
+ sha256:text('sha256'),validationError:text('validation_error'),updatedAt:integer('updated_at').notNull().default(0),
  id:text("id").primaryKey(),owner:text("owner").notNull(),productId:text("product_id").notNull(),name:text("name").notNull(),mime:text("mime").notNull(),size:integer("size").notNull(),objectKey:text("object_key").notNull(),status:text("status").notNull().default("uploading"),createdAt:integer("created_at").notNull(),
 },t=>[index("idx_uploads_owner").on(t.owner),index("idx_uploads_product").on(t.productId)]);
 export const leads = sqliteTable("leads", {

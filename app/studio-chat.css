@@ -103,3 +103,5 @@
 }
 @media(max-height:570px){.gen-chat-active .gen-mobile-nav{display:none}.chat-heading>div>span{display:none}.chat-heading{padding-bottom:8px}.chat-workspace{padding-top:10px}.chat-compose-hint{display:none}.gen-app .chat-composer textarea{min-height:34px;max-height:70px}.chat-compose-dock{padding-top:8px;padding-bottom:8px}.chat-draft-summary{padding-bottom:6px}}
 @media(prefers-reduced-motion:reduce){.chat-workspace *,.chat-plan-dialog *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+.chat-avatar.is-gen-avatar{background:transparent;border:0;overflow:visible}.chat-thinking>.gen-mascot{flex:none}

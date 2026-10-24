@@ -1,0 +1,72 @@
+/* The rich product studio shares FiveGen's workspace chrome and product context. */
+.pb-app.pb-workspace-app { --workspace-header-height:128px; display:flex; flex-direction:column; padding-bottom:0; }
+.pb-workspace-app > .workspace-shell { width:100%; }
+.pb-workspace-app .workspace-stage { min-width:0; }
+.pb-workspace-app .pb-layout { width:100%; max-width:1500px; grid-template-columns:minmax(0,1fr); padding:25px 28px 40px; margin:0 auto; }
+.pb-workspace-app .pb-layout.pb-layout-page { max-width:1260px; padding:24px 28px 45px; }
+.pb-workspace-app .pb-main { container-type:inline-size; container-name:buildermain; outline:none; }
+.pb-workspace-app .workspace-header button { font-size:12px; line-height:1.5; }
+.pb-workspace-app .workspace-primary-nav > button { font-size:13px; }
+.pb-workspace-app .workspace-brand { line-height:1; }
+.pb-workspace-app .workspace-header .workspace-create-button { font-weight:550; }
+.pb-workspace-app .workspace-product-sidebar button { line-height:1.5; }
+.pb-workspace-app .product-tool-groups button { font-size:12px; }
+.pb-workspace-app .product-sidebar-footer button { font-size:12px; }
+.pb-workspace-context { display:flex; align-items:center; justify-content:space-between; gap:16px; padding-bottom:20px; margin-bottom:24px; border-bottom:1px solid var(--pb-line); }
+.pb-workspace-context > span { display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-size:11px; color:var(--pb-muted); }
+.pb-workspace-context > span strong { font-size:11px; font-weight:500; color:#d7d4d2; }
+.pb-workspace-context > div { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+.pb-workspace-app .pb-workspace-context .button { min-height:36px; padding:8px 10px; font-size:11px; }
+.pb-workspace-app .pb-workspace-context .pb-save-state { font-size:11px; }
+.pb-workspace-app .pb-builder-heading h1 { font-size:clamp(24px,2.5vw,34px); }
+.pb-workspace-app .pb-work-tabs { gap:22px; }
+.pb-workspace-app .pb-work-tabs > button { white-space:nowrap; }
+.pb-workspace-app .ps-format-toolbar { top:calc(var(--workspace-header-height) + 8px); }
+.pb-workspace-app .pb-actionbar { bottom:16px; }
+.pb-workspace-app .product-page-publish-status { white-space:normal; }
+.pb-workspace-app .product-page-view-switch button { font-size:12px; }
+.pb-workspace-app .product-page-tabs button { font-size:13px; }
+.pb-workspace-app .product-page-content-card { font-size:14px; }
+.pb-profile-save-pending { display:flex; min-height:300px; align-items:center; justify-content:center; flex-direction:column; gap:12px; text-align:center; padding:28px; color:var(--pb-muted); }
+.pb-profile-save-pending h2 { color:var(--pb-text); margin:0; font-size:20px; }
+.pb-profile-save-pending p { max-width:440px; font-size:13px; line-height:1.7; }
+@container buildermain (max-width:840px) {
+  .pb-form-grid, .ps-three-columns { grid-template-columns:1fr; }
+  .pb-section-editor { grid-template-columns:190px minmax(0,1fr); }
+  .pb-writing-canvas { padding-left:24px; padding-right:24px; }
+  .pb-content-heading { flex-wrap:wrap; gap:14px; }
+  .ps-cover-designer { grid-template-columns:1fr; }
+  .pb-publication-summary { grid-template-columns:1fr; gap:18px; }
+  .pb-sales-control { padding:16px 0 0; border-left:0; border-top:1px solid var(--pb-line); }
+  .pb-ai-section-heading { flex-wrap:wrap; }
+}
+@container buildermain (max-width:620px) {
+  .pb-section-editor { grid-template-columns:1fr; }
+  .pb-section-list { display:none; }
+  .pb-mobile-section-nav { display:flex; align-items:center; gap:9px; min-height:60px; padding:10px 12px; border-bottom:1px solid #d9d6ce; background:#e8e5dc; }
+  .pb-mobile-section-nav > select { width:0; min-width:0; flex:1; min-height:42px; padding:8px; border:1px solid #cec9be; border-radius:7px; background:#f5f2eb; color:#46413a; color-scheme:light; }
+  .pb-mobile-section-nav > .button { flex:none; min-height:42px; padding:8px 10px; border-color:#cec9be; background:#f5f2eb; color:#514b42; }
+  .pb-workspace-context { flex-wrap:wrap; gap:12px; }
+  .pb-workspace-context > div { margin-left:auto; }
+  .pb-workspace-context .pb-save-state { display:none; }
+  .pb-builder-heading { align-items:flex-start; }
+  .pb-content-heading { padding:20px; }
+  .pb-work-tabs > button { font-size:12px; }
+  .ps-two-columns { grid-template-columns:1fr; }
+  .ps-import { flex-direction:column; align-items:flex-start; }
+}
+@media(max-width:900px) {
+  .pb-workspace-app .pb-layout { padding:22px 22px 35px; }
+  .pb-workspace-app .pb-layout.pb-layout-page { padding:20px 20px 35px; }
+}
+@media(max-width:700px) {
+  .pb-app.pb-workspace-app { --workspace-header-height:116px; }
+  .pb-workspace-app .pb-layout { padding:20px 16px 30px; }
+  .pb-workspace-app .pb-layout.pb-layout-page { padding:14px 12px 30px; }
+  .pb-workspace-app .workspace-header button { font-size:11px; }
+  .pb-workspace-app .workspace-primary-nav > button { font-size:12px; }
+  .pb-workspace-app .ps-format-toolbar { top:calc(var(--workspace-header-height) + 4px); }
+  .pb-workspace-context > span { display:none; }
+  .pb-workspace-context > div { width:100%; justify-content:flex-end; }
+  .pb-workspace-app .pb-builder-heading h1 { font-size:25px; }
+}

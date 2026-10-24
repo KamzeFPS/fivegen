@@ -2,9 +2,12 @@ import { readFileSync } from 'node:fs';
 import { statfs } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {randomBytes} from 'node:crypto';
 import { getStorage } from './storage.mjs';
 import { createAuth, stripHeaders } from './auth.mjs';
 import { createPaddleWebhookIpGuard } from './paddle-webhook-ips.mjs';
+import {initializePurchaseEmailDispatchSecret,startPurchaseEmailWorker} from './purchase-email-worker.mjs';
+import {loopbackRequest} from './loopback-http.mjs';
 
 export function readConfig(source = process.env) {
   const origin = new URL(source.APP_ORIGIN || source.RENDER_EXTERNAL_URL || '');
@@ -40,8 +43,14 @@ export async function start() {
   process.env.APP_ORIGIN = config.origin;
   process.env.MCP_ORIGIN = config.origin;
   process.env.VINEXT_TRUST_PROXY = '1';
+  initializePurchaseEmailDispatchSecret();
+  if(!process.env.PRODUCT_REMINDER_DISPATCH_SECRET?.trim())process.env.PRODUCT_REMINDER_DISPATCH_SECRET=randomBytes(32).toString('base64url');
+  if(!process.env.AUTH_EMAIL_DISPATCH_SECRET?.trim())process.env.AUTH_EMAIL_DISPATCH_SECRET=randomBytes(32).toString('base64url');
   const storage = getStorage();
-  const auth = createAuth(config, storage);
+  const auth = createAuth(config, storage,{sendEmail:async payload=>{
+    const response=await loopbackRequest(`http://127.0.0.1:${config.port}/api/auth/email-delivery`,{method:'POST',headers:{Host:new URL(config.origin).host,Authorization:`Bearer ${process.env.AUTH_EMAIL_DISPATCH_SECRET}`,'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(20000)});
+    return response.ok;
+  }});
   const allowPaddleWebhookSource = createPaddleWebhookIpGuard();
   const { startProdServer } = await import('vinext/server/prod-server');
   // Initialize Vinext on loopback, then install our authentication boundary
@@ -66,7 +75,7 @@ export async function start() {
       req.headers['x-forwarded-proto'] = authority.protocol.slice(0, -1);
       req.rawHeaders.push('x-forwarded-proto', req.headers['x-forwarded-proto']);
       res.setHeader('X-Content-Type-Options', 'nosniff');
-      res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+      res.setHeader('Referrer-Policy', url.pathname.startsWith('/access/')?'no-referrer':'strict-origin-when-cross-origin');
       res.setHeader('X-Frame-Options', 'DENY');
       res.setHeader('Content-Security-Policy', "frame-ancestors 'none'; object-src 'none'; base-uri 'self'");
       res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
@@ -86,7 +95,9 @@ export async function start() {
       let routePath;
       try { routePath = decodeURIComponent(url.pathname).replace(/\/+$/, ''); }
       catch { res.writeHead(400); res.end(); return; }
-      if ((productHost && host !== authority.host && !['www','app'].includes(host.slice(0,-domain.length-1))) || /^\/(?:p|f|r|invite|partners)(?:\/|$)/.test(routePath) || /^\/api\/(?:checkout|quote|connect\/stripe|referrals|invite|leads|visits|crm)(?:\/|$)/.test(routePath) || /^\/api\/products\/[^/]+\/slots(?:\/|$)/.test(routePath)) { res.writeHead(410,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:'FiveGen is a private AI creation studio. Storefronts, seller payments, referrals and payouts are no longer available.'}));return; }
+      if(['/signin','/signup','/forgot-password','/verify-email','/reset-password'].includes(routePath)||routePath.startsWith('/api/auth/')){res.setHeader('Cache-Control','private, no-store');res.setHeader('Referrer-Policy','no-referrer');}
+      const fileSalePage=process.env.FIVEGEN_FILE_SALES_ENABLED==='true'&&process.env.STRIPE_MODE==='test'&&/^\/p\/[^/]+$/.test(routePath);
+      if ((productHost && host !== authority.host && !['www','app'].includes(host.slice(0,-domain.length-1))) || (!fileSalePage&&/^\/(?:p|f|r|invite|partners)(?:\/|$)/.test(routePath)) || /^\/api\/(?:checkout|quote|connect\/stripe|referrals|invite|leads|visits|crm)(?:\/|$)/.test(routePath) || /^\/api\/products\/[^/]+\/slots(?:\/|$)/.test(routePath)) { res.writeHead(410,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:'FiveGen is a private AI creation studio. Storefronts, seller payments, referrals and payouts are no longer available.'}));return; }
       if (routePath === '/api/webhooks/paddle' && process.env.PADDLE_ENVIRONMENT === 'production') {
         try { await allowPaddleWebhookSource(webhookSource, { mode: process.env.PADDLE_WEBHOOK_IP_MODE, render: process.env.RENDER === 'true' }); }
         catch (error) { res.writeHead(error.status === 403 ? 403 : 503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...(error.status === 403 ? {} : { 'Retry-After': '60' }) }); res.end(JSON.stringify({ error: error.status === 403 ? 'Webhook source IP is not allowed.' : 'Webhook IP verification is temporarily unavailable.' })); return; }
@@ -99,7 +110,7 @@ export async function start() {
       if (req.headers['oai-authenticated-user-id']) res.setHeader('Cache-Control', 'private, no-store');
       // Revoked landing pages and VSLs must disappear immediately, including for
       // anonymous visitors. Never cache a previously published snapshot.
-      if (/^\/(?:g|o|customer|unsubscribe)(?:\/|$)/.test(routePath) || /^\/api\/(?:growth|commerce|automations|offer-lab)(?:\/|$)/.test(routePath)) {
+      if (/^\/(?:b|g|o|customer|unsubscribe)(?:\/|$)/.test(routePath) || /^\/api\/(?:builder|builder-cover|builder-preview|growth|commerce|automations|offer-lab)(?:\/|$)/.test(routePath)) {
         res.setHeader('Cache-Control', 'private, no-store');
         res.setHeader('Referrer-Policy', 'no-referrer');
       }
@@ -131,10 +142,18 @@ export async function start() {
   };
   const dispatchTimer = setInterval(() => { void dispatch(); }, 60000);
   dispatchTimer.unref();
+  // Transactional confirmations are independent of optional marketing queues.
+  const purchaseEmailWorker=startPurchaseEmailWorker(config);
+  const productReminderWorker=startPurchaseEmailWorker(config,{source:{...process.env,PURCHASE_EMAILS_WORKER_ENABLED:process.env.PRODUCT_REMINDERS_WORKER_ENABLED,PURCHASE_EMAIL_DISPATCH_SECRET:process.env.PRODUCT_REMINDER_DISPATCH_SECRET},fetcher:(url,options)=>loopbackRequest(String(url).replace('/api/purchase-emails/dispatch','/api/product-reminders/dispatch'),options)});
+  const serviceIntegrationWorker=startPurchaseEmailWorker(config,{source:{...process.env,PURCHASE_EMAILS_WORKER_ENABLED:process.env.SERVICE_INTEGRATIONS_WORKER_ENABLED??process.env.PRODUCT_REMINDERS_WORKER_ENABLED,PURCHASE_EMAIL_DISPATCH_SECRET:process.env.PRODUCT_REMINDER_DISPATCH_SECRET},fetcher:(url,options)=>loopbackRequest(String(url).replace('/api/purchase-emails/dispatch','/api/service-integrations/dispatch'),options)});
+  server.once('close',()=>{purchaseEmailWorker.stop();productReminderWorker.stop();serviceIntegrationWorker.stop();});
   const shutdown = () => {
     if (stopping) return;
     stopping = true;
     clearInterval(dispatchTimer);
+    purchaseEmailWorker.stop();
+    productReminderWorker.stop();
+    serviceIntegrationWorker.stop();
     server.close(() => { storage.close(); process.exit(0); });
     server.closeIdleConnections();
     // Exit before Render's default 30-second limit for disk-backed services.

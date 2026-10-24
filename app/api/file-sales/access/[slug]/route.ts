@@ -1,0 +1,3 @@
+import {ApiError,database,failure} from '@/lib/server';
+import {resolveFileSaleAccess,fileSaleHeaders} from '@/lib/file-sales';
+export async function GET(req:Request,{params}:{params:Promise<{slug:string}>}){try{const {slug}=await params,product=await database().prepare('SELECT * FROM products WHERE slug=?').bind(slug).first();if(!product)throw new ApiError('Product not found.',404);const access=await resolveFileSaleAccess(product,new URL(req.url).searchParams.get('token')||undefined);if(!access)throw new ApiError('This product uses its existing member space.',404);const {user:_,...publicAccess}=access;return Response.json(publicAccess,{headers:fileSaleHeaders});}catch(e){return failure(e);}}

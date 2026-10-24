@@ -1,0 +1,11 @@
+# Product marketing workspace
+
+Marketing opens the selected product’s sales dashboard (`/?project={id}&area=dashboard`). CRM remains in the separate Customers section. The dashboard supports 7/30/90-day reports, owner-verified product filtering, and sales/revenue from the current connected checkout. Revenue remains separate by currency and payment mode; refunded/revoked orders are excluded. Legacy order records lack reliable mode/refund fields and are explicitly counted as excluded history, without inventing paid revenue.
+
+Optional built-in plugins: VSL (`vsl`), Funnel (`funnel`), Campaigns (`campaigns`), Automations (`automations`), Offer tests (`offer`), and Creator voice (`voice`). Add plugin opens a per-product gallery; added tools appear alongside Dashboard. No tool is automatically installed from historical content or an old deep link. Disabled deep links resolve to Dashboard without mounting the tool.
+
+`GET/PATCH /api/products/{id}/marketing-plugins` reads or changes `{installed,updatedAt}`. Changes require authenticated ownership, same-origin requests, strict validated IDs and optimistic concurrency via `expectedUpdatedAt`. The additive `0019_marketing_plugins.sql` migration creates a preference table only. Product metadata, files, published pages, purchases, campaigns, voice sources, and automations are untouched. Removing a plugin hides its editor and keeps its saved work. It does **not** unpublish existing pages or pause active email sequences; the removal confirmation explains this and directs the owner to the tool to stop those operations.
+
+Both unified builders and legacy file-sale editors link to this Marketing dashboard. Returning to Product resumes the correct `/build/{id}` or `/sell/{id}` editor. Dirty or busy plugin panels block navigation and plugin-management operations until saved/finished.
+
+Verification: `npm run test:marketing-plugins`, `node scripts/growth-strategy-test.mjs`, `node scripts/creator-suite-runtime-test.mjs`, `node scripts/growth-runtime-test.mjs`, TypeScript and a production build. Tests use retained synthetic SQLite/media fixtures and block external provider calls. Browser checks cover disabled deep-link fallback, add/open/reload/remove/re-add, preserved Funnel drafts, product isolation, separate Customers navigation, and dedicated builder return.
