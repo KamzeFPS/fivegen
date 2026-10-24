@@ -5,7 +5,7 @@ import {ArrowUpRight,Coins,CreditCard,FolderOpen,Link2,MessageSquare,Plus,Search
 import {Command,CommandEmpty,CommandGroup,CommandInput,CommandItem,CommandList} from '@/components/ui/command';
 import {Dialog,DialogContent,DialogDescription,DialogTitle,DialogTrigger} from '@/components/ui/dialog';
 
-type NavigationView='overview'|'library'|'crm'|'credits'|'connections'|'admin';
+type NavigationView='overview'|'library'|'crm'|'credits'|'connections'|'creator-library'|'admin';
 export type WorkspaceSearchProps={
   products:{id:string;title:string;format:string}[];
   history:{id:string;title:string}[];
@@ -36,7 +36,7 @@ export function WorkspaceSearch({products,history,admin,onView,onProduct,onConve
   };
 
   useEffect(()=>{
-    setShortcut(/Mac|iPhone|iPad|iPod/i.test(navigator.platform)?'⌘':'Ctrl');
+    let mounted=true;queueMicrotask(()=>{if(mounted)setShortcut(/Mac|iPhone|iPad|iPod/i.test(navigator.platform)?'⌘':'Ctrl');});return()=>{mounted=false;};
   },[]);
 
   useEffect(()=>{
@@ -61,6 +61,7 @@ export function WorkspaceSearch({products,history,admin,onView,onProduct,onConve
     {id:'overview',label:'Overview',description:'Your results and next step',keywords:'dashboard analytics growth',icon:TrendingUp,run:()=>onView('overview')},
     {id:'library',label:'Products',description:'Content, checkout, and marketing',keywords:'library vsl funnel campaigns',icon:FolderOpen,run:()=>onView('library')},
     {id:'crm',label:'Customers',description:'Contacts and your lead pipeline',keywords:'crm leads contacts',icon:Users,run:()=>onView('crm')},
+    {id:'creator-library',label:'Creator library',description:'Private profile and reusable sources',keywords:'voice references recordings stories expertise',icon:FolderOpen,run:()=>onView('creator-library')},
     {id:'credits',label:'AI credits',description:'Your balance and credit options',keywords:'plans pricing generation wallet',icon:Coins,run:()=>onView('credits')},
     {id:'billing',label:'Account & billing',description:'Manage your subscription',keywords:'payment invoices settings account profile',icon:CreditCard,run:()=>onVisit('/account/billing')},
     {id:'connections',label:'Connect assistant',description:'Connect your AI workspace',keywords:'integrations connection mcp chatgpt',icon:Link2,run:()=>onView('connections')},

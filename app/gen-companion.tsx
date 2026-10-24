@@ -7,10 +7,14 @@ import './gen-companion.css';
 export type GenPosition={left:number;top:number;width:number;height:number};
 type Point={left:number;top:number};
 type Drag={pointerId:number;x:number;y:number;left:number;top:number;moved:boolean};
-type Props={onOpen:()=>void;mood?:GenMood;status?:string;expanded?:boolean;hidden?:boolean;salesEnabled?:boolean;launcherRef?:RefObject<HTMLButtonElement|null>;onPositionChange?:(position:GenPosition)=>void};
+type Props={onOpen:()=>void;mood?:GenMood;status?:string;expanded?:boolean;hidden?:boolean;salesEnabled?:boolean;launcherRef?:RefObject<HTMLButtonElement|null>;onPositionChange?:(position:GenPosition)=>void;defaultMinimized?:boolean};
 const positionKey='fivegen:gen-position:v1';
-export function GenCompanion({onOpen,mood='idle',status='',expanded,hidden=false,salesEnabled=true,launcherRef,onPositionChange}:Props){
+const minimizedKey='fivegen:gen-minimized:v1';
+export function GenCompanion({onOpen,mood='idle',status='',expanded,hidden=false,salesEnabled=true,launcherRef,onPositionChange,defaultMinimized=false}:Props){
  const [hover,setHover]=useState(false),[attentive,setAttentive]=useState(false),[celebration,setCelebration]=useState(''),[saleKey,setSaleKey]=useState('');
+ const [minimized,setMinimized]=useState(defaultMinimized);
+ useEffect(()=>{let active=true;queueMicrotask(()=>{if(active)try{{const saved=localStorage.getItem(minimizedKey);setMinimized(saved===null?defaultMinimized:saved==='true');}}catch{/* Optional preference. */}});return()=>{active=false;};},[defaultMinimized]);
+ function toggleMinimized(){const next=!minimized;setMinimized(next);try{localStorage.setItem(minimizedKey,String(next));}catch{/* Works without storage. */}}
  const [position,setPosition]=useState<Point|null>(null),[dragging,setDragging]=useState(false);
  const timer=useRef<ReturnType<typeof setTimeout>|null>(null),root=useRef<HTMLDivElement>(null),point=useRef<Point|null>(null),drag=useRef<Drag|null>(null),suppressClick=useRef(false);
  const lastRect=useRef<GenPosition>({left:0,top:0,width:104,height:112}),positionCallback=useRef(onPositionChange),resetFrame=useRef<number|null>(null);
@@ -40,7 +44,7 @@ export function GenCompanion({onOpen,mood='idle',status='',expanded,hidden=false
   const frame=requestAnimationFrame(()=>{if(hidden)return;if(saved)move(saved);else sync();}),visual=window.visualViewport;
   window.addEventListener('resize',sync);visual?.addEventListener('resize',sync);visual?.addEventListener('scroll',sync);
   return()=>{cancelAnimationFrame(frame);window.removeEventListener('resize',sync);visual?.removeEventListener('resize',sync);visual?.removeEventListener('scroll',sync);};
- },[hidden,measure,move,viewport]);
+ },[hidden,minimized,measure,move,viewport]);
  useEffect(()=>()=>{if(timer.current)clearTimeout(timer.current);if(resetFrame.current!==null)cancelAnimationFrame(resetFrame.current);},[]);
  useEffect(()=>{let rest:ReturnType<typeof setTimeout>|undefined;const notice=(event:Event)=>{const target=event.target;if(!(target instanceof HTMLTextAreaElement)&&!(target instanceof HTMLInputElement&&['text','number','search','url'].includes(target.type)))return;setAttentive(true);if(rest)clearTimeout(rest);rest=setTimeout(()=>setAttentive(false),3500);};document.addEventListener('input',notice);return()=>{document.removeEventListener('input',notice);if(rest)clearTimeout(rest);};},[]);
  function pointerDown(event:PointerEvent<HTMLButtonElement>){
@@ -72,11 +76,12 @@ export function GenCompanion({onOpen,mood='idle',status='',expanded,hidden=false
  }
  const expression=celebration?'happy':(hover||attentive)&&mood==='idle'?'curious':mood;
  const copy=celebration||status||(expression==='thinking'?'Thinking it through…':expression==='curious'?'What are we making?':expression==='helping'?'Let’s make it a little clearer.':expression==='concerned'?'We can try that together.':'Need a little hand?');
- return <div ref={root} className={'gen-companion'+(expanded?' is-expanded':'')+(hidden?' is-hidden':'')+(dragging?' is-dragging':'')+(position&&position.left<220?' is-left':'')+(position&&position.top<100?' is-high':'')} style={position?{left:position.left,top:position.top,right:'auto',bottom:'auto'}:undefined} data-mood={expression} onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)}>
+ return <div ref={root} className={'gen-companion'+(expanded?' is-expanded':'')+(hidden?' is-hidden':'')+(minimized?' is-minimized':'')+(dragging?' is-dragging':'')+(position&&position.left<220?' is-left':'')+(position&&position.top<100?' is-high':'')} style={position?{left:position.left,top:position.top,right:'auto',bottom:'auto'}:undefined} data-mood={expression} onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)}>
   <div className={'gen-companion-speech'+(celebration||mood==='thinking'||mood==='concerned'?' is-visible':'')} aria-hidden="true">{copy}</div>
   <span className="gen-companion-announcement" role="status" aria-live="polite" aria-atomic="true">{celebration}</span>
   <span className="gen-companion-announcement" id="gen-companion-move-hint">Drag to move Gen. You can also use the arrow keys, or Home to reset the position.</span>
-  <button ref={launcherRef} type="button" className="gen-companion-launcher" onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} onLostPointerCapture={pointerEnd} onKeyDown={keyboardMove} onClick={event=>{if(suppressClick.current&&event.detail!==0){suppressClick.current=false;event.preventDefault();event.stopPropagation();return;}suppressClick.current=false;onOpen();}} aria-label={expanded?'Close Gen, your product assistant':'Ask Gen, your product assistant'} aria-describedby="gen-companion-move-hint" aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home" aria-expanded={expanded} aria-controls={expanded===undefined?undefined:'fivegen-assistant-panel'} aria-haspopup={expanded===undefined?undefined:'dialog'} title={expanded?'Close Gen · drag to move':'Ask Gen · drag to move'}><GenMascot key={saleKey} mood={expression} size={94}/><span className="gen-companion-name">Gen</span></button>
+  <button ref={launcherRef} type="button" className="gen-companion-launcher" onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} onLostPointerCapture={pointerEnd} onKeyDown={keyboardMove} onClick={event=>{if(suppressClick.current&&event.detail!==0){suppressClick.current=false;event.preventDefault();event.stopPropagation();return;}suppressClick.current=false;onOpen();}} aria-label={expanded?'Close Gen, your product assistant':'Ask Gen, your product assistant'} aria-describedby="gen-companion-move-hint" aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home" aria-expanded={expanded} aria-controls={expanded===undefined?undefined:'fivegen-assistant-panel'} aria-haspopup={expanded===undefined?undefined:'dialog'} title={expanded?'Close Gen · drag to move':'Ask Gen · drag to move'}><GenMascot key={saleKey} mood={expression} size={94}/><span className="gen-companion-name">{minimized?'Ask Gen':'Gen'}</span></button>
+  {!expanded&&<button type="button" className="gen-companion-minimize" aria-label={minimized?'Restore Gen mascot':'Minimize Gen mascot'} aria-pressed={minimized} title={minimized?'Restore Gen mascot':'Minimize Gen mascot'} onClick={toggleMinimized}>{minimized?'+':'−'}</button>}
  </div>;
 }
 

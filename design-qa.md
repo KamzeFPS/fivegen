@@ -1,69 +1,58 @@
-# FiveGen product workspace design QA
+# Marketing role implementation QA
 
 final result: passed
 
-Reviewed 2026-10-24. This is an adaptation of the user's Whop references, not a pixel clone. FiveGen keeps its own logo, orange accent, typography, creator tools, and product content. Reference customer actions were adapted to creator actions; unavailable features were not represented as working controls.
+This review covers the approved marketing-role audit implementation in the isolated local fixture. It does not certify a production deployment, live AI or Email delivery, live payments, calendar availability, or a full assistive-technology audit. The earlier three-concept implementation review is preserved in `docs/improvement-workstreams/design-qa-before-marketing-role-update.md`.
 
-## Evidence
+## Source and rendered evidence
 
-Source visual truth paths:
+Source visual truth: `outputs/product-plan-2026-10-25/designs/02-page-studio.png` and `03-connected-launch.png`, both 1487 × 1058 pixels. The original source font metrics/density are unknown. Final desktop captures use 1487 × 1058 CSS/output pixels, devicePixelRatio 1; phone captures use 390 × 844 CSS/output pixels. No density resampling was used.
 
-- Header: `/var/folders/86/cm4skwb14sn12224ft91gk6c0000gn/T/TemporaryItems/NSIRD_screencaptureui_ptm6fv/Screenshot 2026-10-24 at 22.26.19.png` (2928 × 100 pixels).
-- Account menu: `/var/folders/86/cm4skwb14sn12224ft91gk6c0000gn/T/TemporaryItems/NSIRD_screencaptureui_BDxcuC/Screenshot 2026-10-24 at 22.26.27.png` (496 × 848 pixels).
-- Product rail and page: `/var/folders/86/cm4skwb14sn12224ft91gk6c0000gn/T/TemporaryItems/NSIRD_screencaptureui_8Y3lV0/Screenshot 2026-10-24 at 22.28.21.png` (2926 × 1486 pixels).
-- Reviews: `/var/folders/86/cm4skwb14sn12224ft91gk6c0000gn/T/TemporaryItems/NSIRD_screencaptureui_B1BPRo/Screenshot 2026-10-24 at 22.30.32.png` (1362 × 1448 pixels).
-- Product menu: `/var/folders/86/cm4skwb14sn12224ft91gk6c0000gn/T/TemporaryItems/NSIRD_screencaptureui_Heo2wi/Screenshot 2026-10-24 at 22.31.53.png` (664 × 550 pixels).
+The combined images were opened and judged together, including the focused inspector crop:
 
-Browser-rendered implementation screenshots are under `outputs/ux-product-workspace/`:
+- `outputs/marketing-role-implementation-2026-10-25/page-studio-comparison.png`
+- `outputs/marketing-role-implementation-2026-10-25/page-inspector-comparison.png`
+- `outputs/marketing-role-implementation-2026-10-25/growth-plan-comparison.png`
 
-- `11-latest-workspace-hero.jpg`: 1280 × 720 desktop; branded product home, creator mode.
-- `06-latest-account-menu.jpg`: 1280 × 720; expanded account menu and visible Sign out.
-- `04-latest-product-options.jpg`: 1280 × 720; expanded creator product menu.
-- `07-latest-reviews.jpg`: reviews empty state, genuine ratings only.
-- `08-latest-mobile-tools.jpg` and `09-latest-mobile-page.jpg`: 390 × 844 CSS phone viewport; product tools dialog and member preview.
-- `10-public-protected-outline.jpg`: published public outline without private chapter text.
-- `12-final-workspace.jpg` and `13-final-product-menu.jpg`: final build at the actual 805 × 827 CSS viewport, creator draft and expanded product menu.
+Implementation URL: `http://localhost:5198`. Screenshots and logs below are under `outputs/marketing-role-implementation-2026-10-25/`.
 
-Local preview: `http://localhost:5199/design-preview`, synthetic data only. Production provider calls and real payments were not used. The final build is based on GitHub main `dcdb143` plus this integration. Temporary responsive overrides were reset after testing.
+## Intentional state and design adaptations
 
-Source screenshot CSS dimensions and density are unknown; no exact pixel or font-identity claim is made. Desktop implementation captures were 1280 × 720 CSS/pixels; phone captures were 390 × 844 CSS/pixels. The final in-app browser constrained the wider override to its actual 805 × 827 viewport, which was measured from the DOM and recorded as such. Source browser chrome and crops differ. Comparisons use the corresponding navigation, menu, and page regions rather than equating entire frames.
+The concept shows an example $49 course, creator portrait and an approved voice recording. The fixture is a $19 book, paused checkout, no private sources and real unfinished content. Those facts remain truthful. The existing product rail is retained. The new page selector and template/section controls occupy space above the inspector fields; scrolling within the inspector keeps all editing controls reachable. Lead/application pages use the same renderer and omit the purchase card when their primary action is a form.
 
-The source product page and implementation were viewed together in one comparison input. The source header, account menu, and product menu were also viewed together with implementation captures in a second comparison input. Focused menu captures made labels, icons, dividers, and Sign out readable; full product captures established the rail/sidebar/content hierarchy.
+Growth plan follows the subsequent audit: required steps depend on the selected goal and exact published page, manual workflows are valid, and private references, scripts, campaigns and Emails are optional. It therefore intentionally replaces the concept’s mandatory creator-source/video/email chain and two-column sample email with a next action, exact revision queue, optional settings and actual running activity.
 
-## Required surfaces
+## Required fidelity surfaces
 
-- **Fonts and typography:** FiveGen's existing sans-serif system is retained intentionally. Product names have a clear display hierarchy; descriptions wrap naturally; long sidebar names truncate with the full name available via the product heading and accessible name. Menus and support text remain readable. The different source font scale is acceptable because the supplied screenshots are references, not a fidelity specification.
-- **Spacing and layout:** The three-level hierarchy is present: global header, product rail and tools, product page. Menu rows and divider groups are distinct. At 805 px the rail/sidebar collapses into the selected product row and Tools dialog. At 390 and 320 px the global destinations, avatar, search, and primary action fit without document overflow. Desktop 1280 and tablet 805 px also have no horizontal overflow.
-- **Colors and tokens:** Existing charcoal surfaces, warm orange selected states and primary actions, muted supporting text, and visible green saved/live states give FiveGen its own identity. No Whop blue verification mark or fabricated online status is shown. Keyboard focus uses the existing visible control treatment.
-- **Image quality:** The existing FiveGen raster logo is preserved. Product images are real owned uploads, displayed with cover cropping; the test banner uses an existing local product image. Uploaded icons are supported; initials are the intentional empty identity state. Whop's logos and product artwork were not copied or redrawn.
-- **Copy and content:** Creator actions use product-specific language: Customize page, View as member, Share & invite, Manage checkout & access. Home/Content/Reviews are clear. Private, saved draft, published page, and member preview states explain their actual behavior. No review score is fabricated when there are no reviews. Paid lesson bodies and downloads stay out of the public page.
+- Typography: Inter and the existing fallback stack remain consistent. The inspector uses readable 13px labels/inputs and 14px legends. Phone navigation uses compact labels with all four destinations visible. Text wraps within the available width.
+- Spacing/layout: the dark two-panel editor, product navigation, section selection and live canvas preserve the approved direction. The additional page selector is deliberate. Phone tools use a dismissible drawer and restore focus; the long-name selector no longer widens the document.
+- Colors/tokens: orange actions, warm selected sections and restrained dark borders remain consistent. The new Page label was corrected from the background-valued `--muted` token to a readable foreground. Lead/application primary buttons use the selected brand color.
+- Images: the actual raster template artwork and existing FiveGen logo render sharply with consistent crops. No invented creator portrait, testimonial or rating was inserted. Owned public-media access is checked independently from private Creator library approval.
+- Copy/content: Sales video, Lead capture, Campaigns, Emails, Offer research and Results describe their actual jobs. Publishing, approval, review, payment, access, qualification and marketing permission remain explicit separate actions. Current goal and saved/public status are visible.
 
-## Findings and fixes
+## Findings and repair history
 
-No actionable P0/P1/P2 visual findings remain in the final comparison.
+| Priority | Earlier evidence | Fix | Revised evidence |
+| --- | --- | --- | --- |
+| P1 | `lead-create-iteration-1.png`: draft saved but document navigation remained on Creating. | Client routing after releasing busy; legacy compatibility dirty/busy guards prevent losing edits. Actual-handler regression added. | Browser created Workshop early access and opened its own `/build/...&page=...` editor; two lead IDs retained independently. |
+| P2 | `page-phone-iteration-1.png`: long selected page name caused document width 463px at 390px; fourth global destination overlapped the create action. | Constrained select/grid minimum sizes; four equal phone navigation columns beside Create. | `shared-page-phone.png`; document width 390px at 390px. |
+| P2 | Lead/application hero inherited hidden phone inline CTA; new Page label used a background token. | Purpose-aware hero CTA display and readable label foreground. | `published-lead-phone.png` and `shared-page-phone.png`. |
+| P2 | Page manager retained Draft after successful publication. | Refresh its inventory on the actual publication event. | Selected Workshop early access reads Published after publishing. |
+| P2 | Initial unsaved default campaign Results rejected its virtual ID. | Owner-scoped virtual default summary matches getCampaign; selection and first save retain identity. | Real SQLite Results regression, identity/isolation tests and final 51-suite run. |
+| P1 audit | Sales video checkbox stretched across the pane and widened phone layout. | Generic text-field CSS excludes checkbox/radio/file/color; explicit compact control sizing. | `vsl-checkbox-desktop.png`, `vsl-checkbox-phone.png`: 18 × 18px; phone document width 390px. |
 
-Earlier implementation checks found an intrinsic flex-width risk at 805 px. The stage now has constrained flex width/min-width and mobile sizing. Post-fix DOM evidence measured `scrollWidth === innerWidth` at 1280, 805, 390, and 320 px. The final tablet screenshots and phone captures show accessible persistent controls.
+No actionable P0/P1/P2 remains in the reviewed states. The generic section icons are a minor future polish opportunity; labels and selection states remain clear.
 
-Integration checks found three routing regressions after incorporating the newer editors: builder Creative assets returned to product home, file-product Product home returned to the file editor, and file-product checkout opened content. The final handlers route to appearance, the branded profile, and pricing stage 1 respectively. Browser testing confirmed Creative assets reaches the Design & cover editor; actual-handler regression tests cover all three paths. Installing or removing marketing tools also now updates the sidebar immediately, with stale-request protection.
+## Interactions and boundaries verified
 
-## Interaction and validation record
+- Create and switch independent lead/application pages; edit/save one without replacing another; explicit publication updates the correct link and inventory status.
+- Interactive lead preview confirms no saved details; database query proves zero preview-created leads.
+- Published phone signup with marketing declined saves an exact page/version/section receipt and marketing=0.
+- Published application → private owner answers/review → person and permission detail preserves product/person context. Database checks prove no purchase, marketing lead or Email enrollment was created by the application.
+- Create two campaigns, write/save a manual Email draft in the first, switch away and back; original copy/destination remains. Handoff requires approved copy and reviewed append/update actions. No messages sent.
+- Lead-only Growth plan reaches Ready after reviewing its exact published page without AI sources, paid checkout, campaign or Email activation.
+- Results separately displays canonical observations and additional-page requests; unmeasured visits are labeled explicitly. Test/live/currency filters remain financial scope controls.
+- Global Creator library opens from product references and retains a separate profile review/enable boundary.
+- Phone source drawer opens/closes and restores focus; no horizontal overflow in checked final phone screens. Final browser console error queries were empty.
 
-- Actual browser: product library to rich builder; page customization; existing cover selection; creator/location/link visibility; save draft; explicit publish; public offer and protected outline; member chapter preview; real empty reviews; search match beyond the initial eight suggestions and no-results state; account menu; product dropdown; mobile Tools dismissal; desktop/tablet/phone widths; and successful local Sign out returning to a signed-out interface.
-- Rich builder details/design/history/publish controls and the file editor's uploads/pricing/review remain present. The purchased-book fixture retains the online reader and original protected download links.
-- Final browser console check returned no errors or warnings.
-- TypeScript, production Render build, product-page/database tests, commerce-v2, customer portal, file upload, file sales, workspace-library, builder navigation, and marketing-navigation checks passed. The isolated file navigation harness verified save-before-leave and failed-save protection.
-- A pre-existing import-stripping fixture in `file-sale-boundary-test.mjs` lacks the newer `teamSeatAllows` dependency from main; that unrelated fixture failure was not counted as a production failure or a passing check.
-- Live deployment and production-account verification remain separate from this design QA. Render access to the previously configured service was unavailable in the current account during review.
-
-## Implementation checklist
-
-- [x] Preserve the latest rich product and customer experiences.
-- [x] Adapt the top header, account menu, product rail, tools, and product dropdown.
-- [x] Provide editable branding and guarded draft/publish behavior.
-- [x] Keep private content protected and customer reviews verified.
-- [x] Check responsive widths and core navigation interactions.
-- [x] Build and run focused regression checks.
-
-## Follow-up polish
-
-No blocking polish remains. Creators can replace the intentional initials/default banner states with their own owned images. Email invitations, theme selection, language settings, and online-member counts are outside this change and are not presented as implemented features.
+Validation: 51/51 local synthetic service/UI suites, TypeScript, production Render build and four Render runtime checks passed. Source/media/owner/CAS/migration/refund/consent/publication race tests use isolated fixtures and no external providers. Existing deferred live-wallet verification and full manual assistive-technology coverage from the earlier 66-item program remain separate.

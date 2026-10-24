@@ -1,8 +1,10 @@
-export type CreatorLaunchNavigation='details'|'content'|'review'|'payments'|'preview'|'publish';
+import type {ProductLaunchFacts} from './product-launch-state';
+export type CreatorLaunchNavigation='details'|'content'|'review'|'payments'|'preview'|'publish'|'sales-page';
 export type CreatorLaunchAction={kind:'navigate';navigate:CreatorLaunchNavigation;label:string}|{kind:'feedback'|'share'|'refresh';label:string};
 export type CreatorLaunchFeedback={id:string;source:'conversation'|'email'|'survey'|'other';audience:'potential-buyer'|'customer';summary:string;recordedAt:number;provenance:'creator-entered'};
 export type CreatorLaunchStep={id:string;title:string;status:'complete'|'current'|'upcoming';detail:string;action?:CreatorLaunchAction};
 export type CreatorLaunchState={
+ summary?:ProductLaunchFacts&{title:string;format:string;coverUrl:string|null;pagePublishedAt:number|null;lastSavedAt:number|null};
  productId:string;updatedAt:number;draftVersion:number;path:'paid'|'free'|'mixed';phase:'first-sale'|'free-access'|'improve';
  steps:CreatorLaunchStep[];nextAction:CreatorLaunchAction;nextTitle:string;nextDetail:string;
  feedback:CreatorLaunchFeedback[];
@@ -15,6 +17,6 @@ export type CreatorLaunchState={
 export function creatorLaunchPublicUrl(origin:string,slug:string){
  try{const url=new URL(origin);if(url.pathname!=='/'||url.search||url.hash||url.username||url.password||!(/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug))||slug.length>120)return null;
   if(url.protocol!=='https:'&&!(url.protocol==='http:'&&['localhost','127.0.0.1'].includes(url.hostname)))return null;
-  return url.origin+'/b/'+encodeURIComponent(slug);
+  return url.origin+'/product/'+encodeURIComponent(slug);
  }catch{return null;}
 }

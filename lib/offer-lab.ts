@@ -5,6 +5,7 @@ export const offerVariantSchema = z.object({
   currency: z.enum(['usd', 'eur', 'gbp']),
 });
 export const offerStudySchema = z.object({
+  research:z.object({hypothesis:z.string().trim().max(1500),primaryOutcome:z.literal('stated_preference'),minimumResponses:z.number().int().min(5).max(10000)}).optional(),
   question: z.string().trim().min(5).max(300), problem: z.string().trim().max(1000),
   a: offerVariantSchema, b: offerVariantSchema,
 });
@@ -23,3 +24,5 @@ export function offerPrice(variant: OfferVariant) {
 export function completeOfferStudy(study: OfferStudy) {
   return [study.a, study.b].every(v => v.title.length >= 3 && v.audience.length >= 3 && v.outcome.length >= 3 && v.includes.length >= 3);
 }
+
+export function offerEvidenceSummary(lab:Pick<OfferLab,'draft'|'published'|'responseCount'|'preferenceCounts'>){const plan=lab.published?.research||lab.draft.research,threshold=plan?.minimumResponses||30;return {state:lab.responseCount<threshold?'Inconclusive':'Directional feedback',threshold,outcome:'Stated preference',limitation:'This is a planning threshold, not a statistical significance test. Survey preference is not purchase conversion; assignment, cross-device identity, checkout and refund attribution are not established by this survey.'};}

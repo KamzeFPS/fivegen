@@ -1,0 +1,683 @@
+{
+  "approvedOn": "2026-10-25",
+  "status": "implemented_with_verification_gates",
+  "productionDeployed": false,
+  "counts": {
+    "awaiting_manual_accessibility_verification": 1,
+    "awaiting_provider_verification": 1,
+    "deferred_by_approved_plan": 4,
+    "evaluation_complete_activation_gated": 1,
+    "implemented": 59
+  },
+  "items": [
+    {
+      "id": "FG-01",
+      "title": "Use one canonical public product address",
+      "action": "merge",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/foundation.md",
+        "docs/improvement-workstreams/page-template-validation.md"
+      ]
+    },
+    {
+      "id": "FG-02",
+      "title": "Show one consistent launch-state summary",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/foundation.md"
+      ]
+    },
+    {
+      "id": "FG-03",
+      "title": "Promote the existing launch journey to product home",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/foundation.md"
+      ]
+    },
+    {
+      "id": "FG-04",
+      "title": "Remove duplicate product navigation layers",
+      "action": "remove",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/foundation.md"
+      ]
+    },
+    {
+      "id": "FG-05",
+      "title": "Keep the selected-product menu stable across tools",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/foundation.md"
+      ]
+    },
+    {
+      "id": "FG-06",
+      "title": "Unify save feedback and navigation recovery",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/foundation.md",
+        "docs/improvement-workstreams/page-template-validation.md"
+      ]
+    },
+    {
+      "id": "FG-07",
+      "title": "Make the library show commercial readiness",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/foundation.md"
+      ]
+    },
+    {
+      "id": "FG-08",
+      "title": "Start with creator intent and existing material",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/foundation.md"
+      ]
+    },
+    {
+      "id": "FG-09",
+      "title": "Make upload/import recovery a first-class flow",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/foundation.md"
+      ]
+    },
+    {
+      "id": "FG-10",
+      "title": "Add a reusable brand preset with product overrides",
+      "action": "add",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/page-template-validation.md"
+      ]
+    },
+    {
+      "id": "FG-11",
+      "title": "Remove AI generation as the implied default teaching path",
+      "action": "remove",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/foundation.md"
+      ]
+    },
+    {
+      "id": "FG-12",
+      "title": "Preview the real visitor and buyer experience",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/page-template-validation.md",
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-13",
+      "title": "Make start, pause and update-sales consequences explicit",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/foundation.md",
+        "docs/improvement-workstreams/page-template-validation.md"
+      ]
+    },
+    {
+      "id": "FG-14",
+      "title": "Separate seller setup, buyer purchase and FiveGen billing",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/foundation.md",
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-15",
+      "title": "Give each checkout a coherent branded summary and recovery",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/page-template-validation.md",
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-16",
+      "title": "Validate express methods and local currency per journey",
+      "action": "enhance",
+      "status": "awaiting_provider_verification",
+      "note": "Eligibility-aware UI, card fallback and separate creator/platform terms are implemented. Real device/account wallet and local-currency charge/renewal verification remains open.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-17",
+      "title": "Simplify existing pricing models rather than rebuilding offers",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-18",
+      "title": "Make receipts, access and billing easy to recover",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-19",
+      "title": "Make the next useful buyer action dominant",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-20",
+      "title": "Simplify booking setup and timezone clarity",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-21",
+      "title": "Expose a small course setup and keep advanced learning optional",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-22",
+      "title": "Unify leads and paid people into one audience record",
+      "action": "merge",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-23",
+      "title": "Add a clear cross-tool contact timeline",
+      "action": "add",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-24",
+      "title": "Add reusable consent-safe audience segments",
+      "action": "add",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-25",
+      "title": "Use one reviewed context selection across AI tools",
+      "action": "merge",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/marketing.md"
+      ]
+    },
+    {
+      "id": "FG-26",
+      "title": "Show provenance and claim review beside generated copy",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/marketing.md"
+      ]
+    },
+    {
+      "id": "FG-27",
+      "title": "Reduce the work from recording to reviewed source",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/marketing.md"
+      ]
+    },
+    {
+      "id": "FG-28",
+      "title": "Standardise AI scope, cost, review and undo",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/marketing.md"
+      ]
+    },
+    {
+      "id": "FG-29",
+      "title": "Add outcome-based connected launch recipes",
+      "action": "add",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/marketing.md"
+      ]
+    },
+    {
+      "id": "FG-30",
+      "title": "Hand approved campaign emails into Email Automations",
+      "action": "add",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/marketing.md"
+      ]
+    },
+    {
+      "id": "FG-31",
+      "title": "Preserve existing work when regenerating campaigns",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/marketing.md"
+      ]
+    },
+    {
+      "id": "FG-32",
+      "title": "Make draft, reminder and actual publication states unmistakable",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/marketing.md"
+      ]
+    },
+    {
+      "id": "FG-33",
+      "title": "Add previewable goal-based automation blueprints",
+      "action": "add",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/marketing.md"
+      ]
+    },
+    {
+      "id": "FG-34",
+      "title": "Add a readable delivery timeline and failure recovery",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/marketing.md"
+      ]
+    },
+    {
+      "id": "FG-35",
+      "title": "Replace technical sender errors with an owned readiness checklist",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/marketing.md"
+      ]
+    },
+    {
+      "id": "FG-36",
+      "title": "Clarify research offers versus live checkout terms",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/marketing.md"
+      ]
+    },
+    {
+      "id": "FG-37",
+      "title": "Turn research into a reviewable launch brief",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/marketing.md"
+      ]
+    },
+    {
+      "id": "FG-38",
+      "title": "Adapt the overview to launch stage",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/foundation.md"
+      ]
+    },
+    {
+      "id": "FG-39",
+      "title": "Instrument coherent journeys before displaying conversion rates",
+      "action": "add",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-40",
+      "title": "Expose actionable campaign performance with evidence",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/marketing.md"
+      ]
+    },
+    {
+      "id": "FG-41",
+      "title": "Add task-aware self-service help and support context",
+      "action": "add",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-42",
+      "title": "Add an attention centre for actionable failures",
+      "action": "add",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-43",
+      "title": "Unify hierarchy, density and responsive behaviour",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/foundation.md"
+      ]
+    },
+    {
+      "id": "FG-44",
+      "title": "Complete end-to-end keyboard, zoom and screen-reader verification",
+      "action": "enhance",
+      "status": "awaiting_manual_accessibility_verification",
+      "note": "Keyboard, semantic, dialog, reflow and focus fixes are implemented and partly checked in the browser. Full screen-reader and complete 200% zoom journey verification remains open; no compliance claim.",
+      "evidence": [
+        "docs/improvement-workstreams/foundation.md"
+      ]
+    },
+    {
+      "id": "FG-45",
+      "title": "Make Gen contextual, collapsible and out of the way",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/foundation.md"
+      ]
+    },
+    {
+      "id": "FG-46",
+      "title": "Rename plugin installation and distinguish Hide from Pause",
+      "action": "merge",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/foundation.md"
+      ]
+    },
+    {
+      "id": "FG-47",
+      "title": "Defer a broad third-party app marketplace",
+      "action": "defer",
+      "status": "deferred_by_approved_plan",
+      "note": "Approved scope decision retained. No mandatory marketplace, native video suite, open affiliate/ad platform or universal cart was introduced.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-48",
+      "title": "Defer a native generative video production suite",
+      "action": "defer",
+      "status": "deferred_by_approved_plan",
+      "note": "Approved scope decision retained. No mandatory marketplace, native video suite, open affiliate/ad platform or universal cart was introduced.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-49",
+      "title": "Add a safe buyer-journey simulation and effect summary",
+      "action": "add",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-50",
+      "title": "Expose transactional access-message readiness and order delivery status",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-51",
+      "title": "Make renewal, past-due and access states understandable",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-52",
+      "title": "Show separate consequences for cancel, pause, refund and revoke",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-53",
+      "title": "Add a lightweight order-linked buyer help path",
+      "action": "add",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-54",
+      "title": "Add creator collaborator roles with scoped authority",
+      "action": "add",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/foundation.md",
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-55",
+      "title": "Add consent-aware checkout recovery after real checkout intent",
+      "action": "add",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/marketing.md",
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-56",
+      "title": "Make tracked sharing a clear part of each launch",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-57",
+      "title": "Make bundles and recommendations aware of existing ownership",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-58",
+      "title": "Separate interest lists, applications and paid preorders",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/marketing.md"
+      ]
+    },
+    {
+      "id": "FG-59",
+      "title": "Make source processing health and cost visible",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/marketing.md"
+      ]
+    },
+    {
+      "id": "FG-60",
+      "title": "Consolidate page sections, cover and live draft preview",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/page-template-validation.md"
+      ]
+    },
+    {
+      "id": "FG-61",
+      "title": "Add a shared review queue and important-change history",
+      "action": "add",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/foundation.md",
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-62",
+      "title": "Evaluate and adapt retired referrals for a private partner pilot",
+      "action": "enhance",
+      "status": "evaluation_complete_activation_gated",
+      "note": "Persisted private pilot proposal, bounded cohort, policy/ledger evaluation and explicit No-Go gate implemented. Invitations, commissions and payouts remain disabled pending current-commerce ledger compatibility and provider validation.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-63",
+      "title": "Add evidence-aware experiments only after tracking is coherent",
+      "action": "add",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/marketing.md"
+      ]
+    },
+    {
+      "id": "FG-64",
+      "title": "Provide a coherent creator export and migration package",
+      "action": "enhance",
+      "status": "implemented",
+      "note": "Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-65",
+      "title": "Defer an open affiliate network and ad-buying platform",
+      "action": "defer",
+      "status": "deferred_by_approved_plan",
+      "note": "Approved scope decision retained. No mandatory marketplace, native video suite, open affiliate/ad platform or universal cart was introduced.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    },
+    {
+      "id": "FG-66",
+      "title": "Defer universal carts and complex upsell trees",
+      "action": "defer",
+      "status": "deferred_by_approved_plan",
+      "note": "Approved scope decision retained. No mandatory marketplace, native video suite, open affiliate/ad platform or universal cart was introduced.",
+      "evidence": [
+        "docs/improvement-workstreams/operations.md"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+import {failure,identity,sameOrigin} from '@/lib/server';
+import {createCampaignShareLink,listCampaignShareLinks} from '@/lib/campaign-share-links-server';
+import {readCreatorContextJson} from '@/lib/creator-context-request';
+type Context={params:Promise<{id:string}>};
+export async function GET(req:Request,{params}:Context){try{const user=await identity();return Response.json({links:await listCampaignShareLinks((await params).id,user.userId,new URL(req.url).searchParams.get('campaignId')||undefined),attribution:'Counts reflect the named link code supplied to checkout, not a verified causal conversion or cross-device window. Redirect opens may repeat. Links follow the selected page’s current published version; the stored destination version records the creator’s reviewed choice at creation. Different campaigns retain separate identities.'},{headers:{'Cache-Control':'private, no-store'}});}catch(error){return failure(error);}}
+export async function POST(req:Request,{params}:Context){try{sameOrigin(req);const user=await identity();return Response.json(await createCampaignShareLink((await params).id,user.userId,await readCreatorContextJson(req,4096)));}catch(error){return failure(error);}}

@@ -89,6 +89,6 @@ function validPrivateUrl(value:string){try{const url=new URL(value);return url.p
 export async function getPublicBuilderProduct(slug:string){
  const row=await database().prepare('SELECT product_id,owner,version,slug,public_snapshot,published_at FROM product_builder_publications WHERE slug=?').bind(slug).first();
  if(!row)throw new ApiError('This product page is unavailable.',404);
- const offer=await publicFreeStudioOffer(slug)||await publicCommerceOffer(slug);
- return {snapshot:builderPublicSnapshotSchema.parse(JSON.parse(String(row.public_snapshot))),productId:String(row.product_id),owner:String(row.owner),version:Number(row.version),slug:String(row.slug),publishedAt:Number(row.published_at),selling:!!offer,offer};
+ const paidOffer=await publicCommerceOffer(slug),offer=await publicFreeStudioOffer(slug)||paidOffer;
+ return {snapshot:builderPublicSnapshotSchema.parse(JSON.parse(String(row.public_snapshot))),productId:String(row.product_id),owner:String(row.owner),version:Number(row.version),slug:String(row.slug),publishedAt:Number(row.published_at),selling:!!offer,paidReady:!!paidOffer,offer};
 }

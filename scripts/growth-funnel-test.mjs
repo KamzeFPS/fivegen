@@ -31,6 +31,7 @@ async function load(path) {
   const result = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64')); delete globalThis[key]; return result;
 }
 Object.assign(deps, await load('lib/growth.ts'));
+Object.assign(deps,await load('lib/marketing-versions-server.ts'));
 Object.assign(deps, await load('lib/growth-server.ts'));
 let afterGrowthRead = null;
 const readGrowth = deps.getGrowth;
@@ -62,9 +63,26 @@ try {
   assert.equal((await video.GET(request('/api/growth/video/growth-fixture'), videoContext)).status, 404);
   owner = 'creator-b'; assert.equal((await publication.GET(request('/'), context)).status, 404); assert.equal((await publish()).status, 404); owner = 'creator-a';
   assert.equal((await publish({ creatorVslUploadId: otherVideo })).status, 409, 'Another creator’s video cannot be published');
+  const saveVideo=(creatorVslUploadId,expectedUpdatedAt,headers)=>publication.PATCH(request(`/api/products/${productId}/growth/publish`,'PATCH',{creatorVslUploadId,expectedUpdatedAt},headers),context);
+  owner='creator-b';assert.equal((await saveVideo(videoId,0)).status,404);owner='creator-a';
+  assert.equal((await saveVideo(otherVideo,0)).status,409,'Private video drafts keep the same product/owner boundary as publication');
+  const privateVoice=randomUUID();upload(privateVoice,productId,owner,'voice/private-recording');assert.equal((await saveVideo(privateVoice,0)).status,409,'Private voice recordings cannot become funnel media');
+  assert.equal((await saveVideo(videoId,0,{origin:'https://attacker.test'})).status,403);
+  let draftResponse=await saveVideo(videoId,0);assert.equal(draftResponse.status,200,await draftResponse.clone().text());let videoDraft=(await draftResponse.json()).videoDraft;
+  assert.equal((await deps.getOwnedFunnelVideoDraft(productId,owner)).creatorVslUploadId,videoId);assert.equal(await deps.getOwnedFunnel(productId,owner),null,'Saving a private video draft does not create or publish a landing page');
+  await assert.rejects(()=>deps.getPublicFunnel('growth-fixture'),error=>error.status===404);assert.equal((await video.GET(request('/api/growth/video/growth-fixture'),videoContext)).status,404,'A private draft video never opens the public media route');
+  assert.equal((await saveVideo(null,0)).status,409,'Stale draft saves cannot overwrite the selection');
+
   let response = await publish(); assert.equal(response.status, 200, await response.clone().text()); let published = (await response.json()).funnel;
   let live = await deps.getPublicFunnel('growth-fixture'); assert.deepEqual(live.landing, landing); assert.ok(!JSON.stringify(live).includes('PRIVATE'));
   assert.equal((await publish()).status, 409, 'Stale publication revisions cannot overwrite a live page');
+  draftResponse=await saveVideo(null,videoDraft.updatedAt);assert.equal(draftResponse.status,200);videoDraft=(await draftResponse.json()).videoDraft;assert.equal(videoDraft.creatorVslUploadId,null);
+  assert.equal((await deps.getPublicFunnel('growth-fixture')).creatorVslUploadId,videoId,'Changing a saved private video selection never changes the public snapshot');
+  const ownedResponse=await publication.GET(request('/'),context),ownedData=await ownedResponse.json();assert.deepEqual(ownedData.videoDraft,videoDraft);assert.ok(!('videoDraft' in await deps.getPublicFunnel('growth-fixture')),'Private draft metadata is never exposed by the public page getter');
+  assert.equal((await publish({expectedUpdatedAt:published.updatedAt,expectedVideoDraftUpdatedAt:videoDraft.updatedAt-1})).status,409,'Explicit publication checks the reviewed video draft version');
+  afterGrowthRead=()=>storage.sqlite.prepare('UPDATE growth_funnel_drafts SET updated_at=updated_at+1 WHERE product_id=?').run(productId);
+  assert.equal((await publish({expectedUpdatedAt:published.updatedAt,expectedVideoDraftUpdatedAt:videoDraft.updatedAt})).status,409,'A video draft edit arriving between read and publication cannot bypass its version guard');
+
   response = await video.GET(request('/api/growth/video/growth-fixture', 'GET', undefined, { range: 'bytes=1-3' }), videoContext); assert.equal(response.status, 206); assert.equal(await response.text(), '123'); assert.equal(response.headers.get('cache-control'), 'private, no-store');
   assert.equal((await video.GET(request('/api/growth/video/growth-fixture', 'GET', undefined, { range: 'bytes=100-' }), videoContext)).status, 416);
   growth = await deps.saveGrowth(productId, owner, { brief, assets: { ...assets, landing: { ...landing, headline: 'Edited private headline' } }, expectedUpdatedAt: growth.updatedAt });
@@ -104,6 +122,7 @@ try {
   response = await publication.DELETE(request('/', 'DELETE'), context); assert.equal(response.status, 200);
   await assert.rejects(() => deps.getPublicFunnel('growth-fixture'), error => error.status === 404); assert.equal((await signup()).status, 404); assert.equal((await video.GET(request('/api/growth/video/growth-fixture'), videoContext)).status, 404, 'Unpublish immediately revokes page, signup and video access');
   owner = ''; assert.equal((await crm.GET(request('/api/growth/crm'))).status, 401);
-  console.log('Passed: funnel ownership, immutable snapshots, explicit refresh, generation/publication revision checks, scoped public video/ranges, lead attribution, consent preservation, dedupe, honeypot/rate limit, CRM isolation/revisions/status, CSV escaping and immediate unpublish. No external calls.');
+  owner='';assert.equal((await saveVideo(null,0)).status,401);owner='creator-a';
+  console.log('Passed: durable private VSL drafts, no-publication saves, scoped media/voice boundaries, draft CAS and publish-race guards; funnel ownership, immutable snapshots, explicit refresh, generation/publication revision checks, scoped public video/ranges, lead attribution, consent preservation, dedupe, honeypot/rate limit, CRM isolation/revisions/status, CSV escaping and immediate unpublish. No external calls.');
   console.log('QA records retained: ' + root);
 } finally { storage.close(); }

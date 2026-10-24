@@ -1,18 +1,24 @@
 import { env } from 'cloudflare:workers';
 import { z } from 'zod';
+import {applicationConfigIssues} from './service-applications';
 import { ApiError, database, identity, ownedProduct } from './server';
 import { customerOrder } from './commerce-v2-server';
+import { publicCommerceOffer } from './commerce-v2-server';
+import { publicFreeStudioOffer } from './product-studio-commerce';
+import {getPublishedFileSale} from './file-sales';
+import type {ProductStudioConfig} from './product-studio-contract';
 import { builderDraftSchema, builderTypeDetails } from './builder-contract';
 import { saleDraftSchema } from './file-sale-contract';
 import {
   defaultProductPageConfig, productPageConfigSchema, productPageSaveSchema, productPageRevisionSchema, productReviewSchema,
-  type ProductPageConfig, type ProductPageState, type PublicProductPage, type PublicProductSummary, type ProductReviewSummary,
+  type ProductPageConfig, type ProductPageState, type PublicProductPage, type PublicProductSummary, type ProductReviewSummary, type LandingCommerce,
 } from './product-page';
 
 const sectionSummarySchema = z.object({ title: z.string().max(150), category: z.string().max(80).optional() });
-const publicProductSchema = z.object({
+export const publicProductSchema = z.object({
   id: z.string(), slug: z.string().max(100), title: z.string().max(100), description: z.string().max(12000),
   format: z.string().max(200), sections: z.array(sectionSummarySchema).max(30),
+  priceCents: z.number().int().min(0).max(999900).default(0), currency: z.string().regex(/^[a-z]{3}$/).default('usd'), benefits: z.array(z.string().max(600)).max(12).default([]),
 });
 const imageMimes = ['image/jpeg', 'image/png', 'image/webp'];
 const imageMaxBytes = 10 * 1024 * 1024;
@@ -20,7 +26,7 @@ const eligibleImage = "id=? AND product_id=? AND owner=? AND status='completed' 
 const emptyReviews = (): ProductReviewSummary => ({ count: 0, average: null, reviews: [] });
 function pagePath(slug: string) { return `/product/${encodeURIComponent(slug)}`; }
 
-async function snapshotProduct(product: Record<string, unknown>) {
+export async function snapshotProduct(product: Record<string, unknown>) {
   // Deliberately project individual public fields. Never spread private content,
   // even when a future lesson or product schema adds more fields.
   const builder = await database().prepare('SELECT version,data FROM product_builder_workspaces WHERE product_id=? AND owner=?').bind(product.id, product.owner).first();
@@ -32,6 +38,8 @@ async function snapshotProduct(product: Record<string, unknown>) {
     id: String(product.id), slug: String(product.slug), title: builderDraft?.title ?? saleDraft?.title ?? String(product.title),
     description: builderDraft?.description ?? saleDraft?.description ?? String(product.description),
     format: builderDraft ? builderTypeDetails[builderDraft.type].format : String(product.format),
+    priceCents: builderDraft?.priceCents ?? saleDraft?.priceCents ?? Number(product.price || 0), currency: builderDraft?.currency ?? saleDraft?.currency ?? 'usd',
+    benefits: z.object({ benefits: z.array(z.string().max(600)).max(12).default([]) }).passthrough().parse(JSON.parse(String(product.content))).benefits,
     sections: content.sections.map(section => ({ title: section.title, ...(section.category ? { category: section.category } : {}) })),
   });
   return {
@@ -44,8 +52,8 @@ async function snapshotProduct(product: Record<string, unknown>) {
   };
 }
 
-async function assertPageImages(productId: string, owner: string, config: ProductPageConfig) {
-  for (const id of new Set([config.iconUploadId, config.bannerUploadId].filter((value): value is string => !!value))) {
+export async function assertPageImages(productId: string, owner: string, config: ProductPageConfig) {
+  for (const id of new Set([config.iconUploadId, config.bannerUploadId, ...config.sections.map(section => section.imageUploadId)].filter((value): value is string => !!value))) {
     const row = await database().prepare(`SELECT * FROM uploads WHERE ${eligibleImage}`).bind(id, productId, owner).first();
     if (!row) throw new ApiError('Choose a completed JPEG, PNG, or WebP uploaded to this product, up to 10 MB. Voice Library files stay private.', 409);
     const object = await (env as unknown as { BUCKET?: R2Bucket }).BUCKET?.get(String(row.object_key), { range: { offset: 0, length: Math.min(16, Number(row.size)) } });
@@ -59,15 +67,28 @@ async function assertPageImages(productId: string, owner: string, config: Produc
   }
 }
 
-function imageGuard(config: ProductPageConfig, productId: string, owner: string) {
-  const ids = Array.from(new Set([config.iconUploadId, config.bannerUploadId].filter((id): id is string => !!id)));
+export const eligiblePageVideo="id=? AND product_id=? AND owner=? AND status='completed' AND mime IN ('video/mp4','video/webm') AND size BETWEEN 12 AND 1073741824 AND object_key NOT LIKE 'voice/%' AND NOT EXISTS(SELECT 1 FROM creator_voice_sources WHERE upload_id=uploads.id)";
+export async function assertPageRecordings(productId:string,owner:string,config:ProductPageConfig){
+ for(const id of new Set(config.sections.map(s=>s.videoUploadId).filter((id):id is string=>!!id))){
+  const row=await database().prepare('SELECT * FROM uploads WHERE '+eligiblePageVideo).bind(id,productId,owner).first();
+  if(!row)throw new ApiError('Choose a completed MP4 or WebM recording uploaded to this product. Creator Library recordings remain private.',409);
+  const object=await (env as unknown as {BUCKET?:R2Bucket}).BUCKET?.get(String(row.object_key),{range:{offset:0,length:16}});
+  if(!object)throw new ApiError('This recording is unavailable. Upload the original before publishing.',409);
+  const bytes=new Uint8Array(await new Response(object.body).arrayBuffer()),valid=row.mime==='video/mp4'?String.fromCharCode(...bytes.slice(4,8))==='ftyp':[26,69,223,163].every((b,i)=>bytes[i]===b);
+  if(!valid)throw new ApiError('This recording does not match its MP4 or WebM format. Upload a valid video.',400);
+ }
+}
+
+export function imageGuard(config: ProductPageConfig, productId: string, owner: string) {
+  const videoIds=Array.from(new Set(config.sections.map(s=>s.videoUploadId).filter((id):id is string=>!!id)));
+  const ids = Array.from(new Set([config.iconUploadId, config.bannerUploadId, ...config.sections.map(section => section.imageUploadId)].filter((id): id is string => !!id)));
   return {
-    sql: ids.length ? ` AND ${ids.map(() => `EXISTS(SELECT 1 FROM uploads WHERE ${eligibleImage})`).join(' AND ')}` : '',
-    values: ids.flatMap(id => [id, productId, owner]),
+    sql: (ids.length ? ` AND ${ids.map(() => `EXISTS(SELECT 1 FROM uploads WHERE ${eligibleImage})`).join(' AND ')}` : '')+(videoIds.length?` AND ${videoIds.map(()=>`EXISTS(SELECT 1 FROM uploads WHERE ${eligiblePageVideo})`).join(' AND ')}`:''),
+    values: [...ids.flatMap(id => [id, productId, owner]),...videoIds.flatMap(id=>[id,productId,owner])],
   };
 }
 
-async function reviewSummary(productId: string, owner: string): Promise<ProductReviewSummary> {
+export async function reviewSummary(productId: string, owner: string): Promise<ProductReviewSummary> {
   // Refunded, disputed, test, zero-value and removed purchases never contribute
   // to the public rating, including after the review was originally written.
   const eligible = "r.product_id=? AND r.owner=? AND o.id=r.order_id AND o.product_id=r.product_id AND o.owner=r.owner AND o.email=r.email AND o.mode='live' AND o.status='paid' AND o.amount>0 AND o.paid_at IS NOT NULL";
@@ -79,28 +100,52 @@ async function reviewSummary(productId: string, owner: string): Promise<ProductR
   };
 }
 
+export async function pageCommerce(productId:string, owner:string, product:PublicProductSummary):Promise<LandingCommerce> {
+  const builder = await database().prepare('SELECT slug,version,public_snapshot FROM product_builder_publications WHERE product_id=? AND owner=?').bind(productId,owner).first();
+  if (builder) {
+    const shown=JSON.parse(String(builder.public_snapshot)) as {priceCents?:number;currency?:string;studio?:ProductStudioConfig};
+    const freeOffer=await publicFreeStudioOffer(String(builder.slug)),paidOffer=await publicCommerceOffer(String(builder.slug)),offer=freeOffer||paidOffer;
+    const tiers=shown.studio?.community?.tiers,amount=tiers?.length?Math.min(...tiers.map(tier=>tier.priceCents)):Number(shown.priceCents??product.priceCents??0);
+    // Read only the published pricing presentation, never the delivery snapshot.
+    return {amount,currency:shown.currency??product.currency??'usd',enabled:!!offer,paidReady:!!paidOffer,path:offer?`/b/${encodeURIComponent(String(builder.slug))}`:null,...(offer?{mode:offer.mode as 'test'|'live'}:{}),model:shown.studio?.pricing?.model??'one-time',interval:shown.studio?.pricing?.interval,publicationVersion:Number(builder.version),...(offer?{checkout:{slug:String(builder.slug),pricing:shown.studio?.pricing,tiers:shown.studio?.community?.tiers,physical:shown.studio?.custom?.requiresShipping===true}}:{})};
+  }
+  const draft=await database().prepare('SELECT product_id FROM product_builder_workspaces WHERE product_id=? AND owner=?').bind(productId,owner).first();
+  if (draft) return {amount:product.priceCents??0,currency:product.currency??'usd',enabled:false,path:null};
+  const file=await database().prepare('SELECT product_id FROM file_sale_drafts WHERE product_id=?').bind(productId).first();
+  if(file){const sale=await getPublishedFileSale(product.slug);return {amount:product.priceCents??0,currency:product.currency??'usd',enabled:!!sale?.readiness.ready,path:sale?.readiness.ready?`/p/${encodeURIComponent(product.slug)}`:null};}
+  const funnel=await database().prepare('SELECT slug FROM growth_funnels WHERE product_id=? AND owner=? AND published_at IS NOT NULL').bind(productId,owner).first();
+  const offer=funnel?await publicCommerceOffer(String(funnel.slug)):null;
+  return {amount:offer?.amount??product.priceCents??0,currency:offer?.currency??product.currency??'usd',enabled:!!offer,paidReady:!!offer,model:'one-time',...(offer&&funnel?{checkout:{slug:String(funnel.slug)}}:{}),path:offer&&funnel?`/g/${encodeURIComponent(String(funnel.slug))}`:null,...(offer?{mode:offer.mode as 'test'|'live'}:{})};
+}
+
 export async function getProductPage(productId: string, owner: string): Promise<ProductPageState> {
   const product = await ownedProduct(productId, owner);
   const row = await database().prepare('SELECT * FROM product_pages WHERE product_id=? AND owner=?').bind(productId, owner).first();
   return {
-    draft: row ? productPageConfigSchema.parse(JSON.parse(String(row.draft))) : defaultProductPageConfig(),
+    id:productId,purpose:'sales',name:'Sales page',
+    draft: row ? productPageConfigSchema.parse(JSON.parse(String(row.draft))) : defaultProductPageConfig(String(product.format)),
     published: row?.published_at != null && row.published ? productPageConfigSchema.parse(JSON.parse(String(row.published))) : null,
     publishedAt: row?.published_at == null ? null : Number(row.published_at), updatedAt: Number(row?.updated_at || 0),
     publicPath: pagePath(String(product.slug)), reviewSummary: await reviewSummary(productId, owner),
+    commerce: await pageCommerce(productId,owner,(await snapshotProduct(product)).snapshot),
   };
 }
 
-export async function saveProductPage(productId: string, owner: string, input: unknown) {
+export async function saveProductPage(productId: string, owner: string, input: unknown, operationGuard: {sql: string; values: unknown[]} = {sql: '', values: []}) {
   await ownedProduct(productId, owner);
   const value = productPageSaveSchema.parse(input);
   await assertPageImages(productId, owner, value.config);
+  await assertPageRecordings(productId,owner,value.config);
   const now = Math.max(Date.now(), value.expectedUpdatedAt + 1), guard = imageGuard(value.config, productId, owner);
+  guard.sql += operationGuard.sql ? ` AND (${operationGuard.sql})` : '';
+  guard.values.push(...operationGuard.values as string[]);
   const result = value.expectedUpdatedAt === 0
     ? await database().prepare(`INSERT OR IGNORE INTO product_pages (product_id,owner,draft,updated_at) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM products WHERE id=? AND owner=?)${guard.sql}`)
       .bind(productId, owner, JSON.stringify(value.config), now, productId, owner, ...guard.values).run()
     : await database().prepare(`UPDATE product_pages SET draft=?,updated_at=? WHERE product_id=? AND owner=? AND updated_at=?${guard.sql}`)
       .bind(JSON.stringify(value.config), now, productId, owner, value.expectedUpdatedAt, ...guard.values).run();
   if (!result.meta.changes) throw new ApiError('Your product page or its images changed. Reload before saving.', 409);
+  await database().prepare('INSERT INTO product_page_revisions(id,product_id,owner,config,created_at) VALUES(?,?,?,?,?)').bind(crypto.randomUUID(), productId, owner, JSON.stringify(value.config), now).run();
   return getProductPage(productId, owner);
 }
 
@@ -108,7 +153,12 @@ export async function publishProductPage(productId: string, owner: string, input
   const { expectedUpdatedAt } = productPageRevisionSchema.parse(input), product = await ownedProduct(productId, owner);
   const page = await getProductPage(productId, owner);
   if (page.updatedAt !== expectedUpdatedAt) throw new ApiError('Your product page changed in another tab. Reload before publishing.', 409);
+  if (page.draft.templateId !== 'classic' && !page.draft.sections.some(section => section.type === 'hero' && section.enabled)) throw new ApiError('Enable a hero section before publishing your sales page.', 409);
+  if(page.draft.ctaMode==='form'&&!page.draft.sections.some(s=>s.enabled&&((s.type==='lead-form'&&s.leadForm)||(s.type==='application'&&s.application))))throw new ApiError('Add and enable a signup or application form before publishing.',409);
+  if (page.draft.ctaMode === 'link' && !page.draft.ctaUrl) throw new ApiError('Add the HTTPS destination for your custom button before publishing.', 409);
+  for(const s of page.draft.sections.filter(s=>s.enabled&&s.type==='application'&&s.application)){const issues=applicationConfigIssues(s.application!);if(issues.length)throw new ApiError(issues[0],409);}
   await assertPageImages(productId, owner, page.draft);
+  await assertPageRecordings(productId,owner,page.draft);
   const publicProduct = await snapshotProduct(product), now = Math.max(Date.now(), expectedUpdatedAt + 1), guard = imageGuard(page.draft, productId, owner);
   const unchangedProduct = 'EXISTS(SELECT 1 FROM products WHERE id=? AND owner=? AND updated_at=?)' + publicProduct.guardSql;
   const productGuardValues = [productId, owner, product.updated_at, ...publicProduct.guardValues];
@@ -139,24 +189,26 @@ async function publishedPage(slug: string) {
 export async function getPublicProductPage(slug: string): Promise<PublicProductPage> {
   const row = await publishedPage(slug), config = productPageConfigSchema.parse(JSON.parse(String(row.published)));
   const product = publicProductSchema.parse(JSON.parse(String(row.public_product)));
-  const builder = await database().prepare('SELECT slug FROM product_builder_publications WHERE product_id=? AND owner=?').bind(row.product_id, row.owner).first();
+  const builder = await database().prepare('SELECT slug,version,public_snapshot FROM product_builder_publications WHERE product_id=? AND owner=?').bind(row.product_id, row.owner).first();
   const builderDraft = !builder ? await database().prepare('SELECT product_id FROM product_builder_workspaces WHERE product_id=? AND owner=?').bind(row.product_id, row.owner).first() : null;
   const fileDraft = !builder && !builderDraft ? await database().prepare('SELECT product_id,published_revision_id FROM file_sale_drafts WHERE product_id=?').bind(row.product_id).first() : null;
   const fileSale = fileDraft?.published_revision_id ? await database().prepare('SELECT id FROM file_sale_revisions WHERE id=? AND product_id=?').bind(fileDraft.published_revision_id, row.product_id).first() : null;
   const funnel = !builder && !builderDraft && !fileDraft ? await database().prepare('SELECT slug FROM growth_funnels WHERE product_id=? AND owner=? AND published_at IS NOT NULL').bind(row.product_id, row.owner).first() : null;
   return {
+    pageId:String(row.product_id),pagePurpose:'sales',
     product: { ...product, sections: config.showContent ? product.sections : [] },
-    config: { ...config, creatorName: config.showCreator ? config.creatorName : '', location: config.showLocation ? config.location : '' },
+    config: { ...config, sections:config.sections.filter(section=>section.enabled && (section.type!=='curriculum'||config.showContent) && (section.type!=='reviews'||config.showReviews) && (section.type!=='creator'||config.showCreator)), creatorName: config.showCreator ? config.creatorName : '', about:config.showCreator?config.about:'', location: config.showLocation ? config.location : '' },
     publishedAt: Number(row.published_at), publicPath: pagePath(String(row.slug)),
     funnelPath: builder ? `/b/${encodeURIComponent(String(builder.slug))}` : fileSale ? `/p/${encodeURIComponent(String(row.slug))}` : funnel ? `/g/${encodeURIComponent(String(funnel.slug))}` : null,
+    commerce: await pageCommerce(String(row.product_id),String(row.owner),product),
     reviewSummary: config.showReviews ? await reviewSummary(String(row.product_id), String(row.owner)) : emptyReviews(),
   };
 }
 
 export async function productPageImage(slug: string, kind: string) {
-  if (kind !== 'icon' && kind !== 'banner') throw new ApiError('Image not found.', 404);
+  if (kind !== 'icon' && kind !== 'banner' && !/^section-[a-zA-Z0-9_-]{1,80}$/.test(kind)) throw new ApiError('Image not found.', 404);
   const page = await publishedPage(slug), config = productPageConfigSchema.parse(JSON.parse(String(page.published)));
-  const id = kind === 'icon' ? config.iconUploadId : config.bannerUploadId;
+  const id = kind === 'icon' ? config.iconUploadId : kind === 'banner' ? config.bannerUploadId : config.sections.find(section => section.enabled && (section.type!=='creator'||config.showCreator) && (section.type!=='curriculum'||config.showContent) && (section.type!=='reviews'||config.showReviews) && `section-${section.id}` === kind)?.imageUploadId;
   if (!id) throw new ApiError('Image not found.', 404);
   const file = await database().prepare(`SELECT * FROM uploads WHERE ${eligibleImage}`).bind(id, page.product_id, page.owner).first();
   if (!file || !imageMimes.includes(String(file.mime)) || Number(file.size) > imageMaxBytes) throw new ApiError('Image not found.', 404);

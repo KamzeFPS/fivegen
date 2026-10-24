@@ -8,6 +8,7 @@ import { ArrowRight, ChevronDown, CircleCheck, Loader2, RefreshCw } from 'lucide
 import type { GrowthDashboardData } from '@/lib/growth-analytics';
 import type {CommerceEarningsRefresh} from '@/lib/commerce-earnings';
 import {CreatorEarnings, earningsMoney} from './creator-earnings';
+import {ProductLaunchResume} from './product-launch-resume';
 
 const number = (value: number) => value.toLocaleString('en-US');
 const count = (value: number, singular: string, plural = `${singular}s`) => `${number(value)} ${value === 1 ? singular : plural}`;
@@ -167,6 +168,7 @@ export function GrowthDashboard({productId}:{productId?:string}={}) {
       : loading ? <div className="overview-load-state" role="status"><Loader2 className="spin" size={22} /><p>{days===0?'Loading all your activity…':`Loading your last ${days} days…`}</p></div> : null}
 
     {report && <>
+      <ProductLaunchResume key={productId||'workspace'} productId={productId}/>
       {!productId&&report.mode === 'test' && <p className="overview-test-notice"><strong>Test payments are on.</strong> Sales, revenue, and bookings below use test records.</p>}
       {report.salesCoverage.legacyOrdersExcluded>0&&<p className="overview-test-notice" role="note"><strong>Earlier checkout history is separate.</strong> {number(report.salesCoverage.legacyOrdersExcluded)} legacy {report.salesCoverage.legacyOrdersExcluded===1?'order record lacks':'order records lack'} reliable payment-environment and refund status. Current checkout sales and revenue below exclude those records.</p>}
 
@@ -194,18 +196,20 @@ export function GrowthDashboard({productId}:{productId?:string}={}) {
       {!productId&&<section className="overview-products" aria-labelledby="overview-products-heading">
         <div className="overview-section-heading"><h2 id="overview-products-heading">Published products</h2><a className="overview-text-link" href="/?view=library">All products <ArrowRight size={15} /></a></div>
         {publishedProducts.length ? <div className="overview-product-list">{publishedProducts.slice(0,4).map(product => <article className="overview-product" key={product.id}>
-          <div className="overview-product-info"><h3><a href={`/?project=${product.id}&area=content`}>{product.title}</a></h3><span className="overview-product-status published"><CircleCheck size={14}/>Published</span></div>
+          <div className="overview-product-info"><h3><a href={`/?project=${product.id}&area=content`}>{product.title}</a></h3><span className="overview-product-status published"><CircleCheck size={14}/>Delivery published</span></div>
           <p className="overview-product-activity" aria-label={`${period}: ${count(product.visits, 'visit')}, ${count(product.leads, 'contact')}, ${count(product.purchases, 'sale')}`}><span>{count(product.visits, 'visit')}</span><span>{count(product.leads, 'contact')}</span><span>{count(product.purchases, 'sale')}</span></p>
           <a className="overview-product-open" href={`/?project=${product.id}&area=content`}>Open<ArrowRight size={16} /></a>
-        </article>)}</div> : <div className="overview-products-empty"><p>No published products yet. Your published products will appear here.</p><a className="overview-text-link" href="/?view=library">Go to Products <ArrowRight size={16} /></a></div>}
+        </article>)}</div> : <div className="overview-products-empty"><p>No published content yet. Your public sales page and checkout have their own launch status.</p><a className="overview-text-link" href="/?view=library">Go to Products <ArrowRight size={16} /></a></div>}
       </section>}
+
+      {productId&&report.actions.length>0&&<section className="overview-other-actions"><h3>Next steps <span>· this product</span></h3><div>{report.actions.map(action=><article key={action.title}><h4>{action.title}</h4><p>{action.reason}</p><a className="overview-text-link" href={action.href}>{action.label}<ArrowRight size={15}/></a></article>)}</div></section>}
 
       <CreatorEarnings report={report.earnings} refreshing={refreshingFees} onRefresh={()=>void refreshFees()} error={feeError} notice={feeNotice}/>
 
       <details className="overview-details">
         <summary><span><strong>More details</strong><span>Campaign traffic and how your results are counted</span></span><ChevronDown size={19} /></summary>
         <div className="overview-details-content">
-          {productId&&report.actions.length>0&&<section className="overview-other-actions"><h3>Next steps <span>· this product</span></h3><div>{report.actions.map(action=><article key={action.title}><h4>{action.title}</h4><p>{action.reason}</p><a className="overview-text-link" href={action.href}>{action.label}<ArrowRight size={15}/></a></article>)}</div></section>}
+
           <section><h3>Campaign traffic</h3><p className="overview-detail-intro">Share a campaign’s tracked link to see which messages bring visitors.</p>{report.sources.length?<div className="overview-table-wrap"><table><caption>{period}</caption><thead><tr><th scope="col">Campaign</th><th scope="col">Visits</th><th scope="col">Clicks</th></tr></thead><tbody>{report.sources.map(source=><tr key={source.campaign}><th scope="row">{source.campaign==='direct'?'Direct / no campaign tag':source.campaign}</th><td>{number(source.visits)}</td><td>{number(source.clicks)}</td></tr>)}</tbody></table></div>:<p className="overview-detail-empty">No recorded campaign visits in this period.</p>}</section>
           <section className="overview-counting-notes"><h3>How these numbers work</h3><ul><li>All results use the selected period, including today, with dates counted in UTC.{productId?' This report includes only this product.':''} All time includes the full recorded history. Histories longer than one year are grouped by month.</li><li>Visits count recorded optional marketing-page sessions, not all views of your product page. They are anonymous daily sessions, so they are not a count of individual people. Browsers with Do Not Track enabled are not recorded.</li><li>A contact is counted once per email address for each product. Contacts and sales are counted separately from visits; they do not form a conversion rate.</li><li>Product sales include orders that are currently paid. Refunded or revoked orders and purchases of FiveGen credits are excluded.</li><li>Gross sales use the payment currency. Confirmed net earnings use the Stripe settlement currency, after actual Stripe and FiveGen fees. Different currencies are kept separate; the currency selector changes the financial graphs. Pending fees never count as confirmed net earnings.</li><li>Bookings are counted by when they were created, rather than the appointment date.</li></ul></section>
         </div>

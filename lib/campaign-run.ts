@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { ApiError, database } from './server';
 import { reserveCredits, refundCredits } from './credits';
 export const creatorRunInput = z.object({ expectedUpdatedAt: z.number().int().positive(), requestId: z.string().uuid(), maxCredits: z.number().int().min(0).max(30) });
-type Kind = 'campaign' | 'transcript';
-function target(kind: Kind) { return kind === 'campaign' ? { table: 'creator_campaigns', id: 'product_id' } : { table: 'creator_voice_sources', id: 'id' }; }
+type Kind = 'campaign' | 'transcript' | 'page-copy';
+function target(kind: Kind) { return kind === 'page-copy'?{table:'page_copy_proposals',id:'id'}:kind === 'campaign' ? { table: 'marketing_campaigns', id: 'id' } : { table: 'creator_voice_sources', id: 'id' }; }
 export async function recoverCreatorRuns(kind: Kind, targetId: string, owner: string) {
   const db = database(), now = Date.now(), t = target(kind);
   const rows = await db.prepare("SELECT id FROM creator_ai_runs WHERE owner=? AND kind=? AND target_id=? AND state='pending' AND created_at<=? LIMIT 50").bind(owner, kind, targetId, now - 180000).all();
@@ -24,7 +24,7 @@ export async function previousCreatorRun(kind: Kind, targetId: string, owner: st
   if (row.state === 'completed') return JSON.parse(String(row.response));
   throw new ApiError(row.state === 'failed' ? 'This attempt failed. Start a new attempt to retry.' : 'This request is still running. Reload before retrying.', 409);
 }
-export async function runCreatorAI<T>(kind: Kind, targetId: string, owner: string, input: z.infer<typeof creatorRunInput>, cost: number, generate: () => Promise<T>, commit: (result: T, now: number) => D1PreparedStatement) {
+export async function runCreatorAI<T>(kind: Kind, targetId: string, owner: string, input: z.infer<typeof creatorRunInput>, cost: number, generate: () => Promise<T>, commit: (result: T, now: number) => D1PreparedStatement | D1PreparedStatement[]) {
   if (cost > input.maxCredits) throw new ApiError(`This run needs ${cost} credits. Review the cost before continuing.`, 402);
   const db = database(), t = target(kind), now = Date.now();
   const claim = await db.prepare(`UPDATE ${t.table} SET lease=?,lease_id=? WHERE ${t.id}=? AND owner=? AND updated_at=? AND lease<?`).bind(now + 180000, input.requestId, targetId, owner, input.expectedUpdatedAt, now).run();
@@ -35,7 +35,7 @@ export async function runCreatorAI<T>(kind: Kind, targetId: string, owner: strin
     if (cost) { await reserveCredits(owner, input.requestId, 'text', cost); charged = true; }
     const generated = await generate(), updatedAt = Math.max(Date.now(), input.expectedUpdatedAt + 1), response = { result: generated, updatedAt, spent: cost };
     const committed = await db.batch([
-      commit(generated, updatedAt),
+      ...[commit(generated, updatedAt)].flat(),
       db.prepare(`UPDATE creator_ai_runs SET state='completed',response=? WHERE id=? AND EXISTS(SELECT 1 FROM ${t.table} WHERE ${t.id}=? AND owner=? AND updated_at=? AND lease_id=?)`).bind(JSON.stringify(response), input.requestId, targetId, owner, updatedAt, input.requestId),
       db.prepare("UPDATE credit_usage SET state='completed' WHERE id=? AND state='reserved' AND EXISTS(SELECT 1 FROM creator_ai_runs WHERE id=? AND state='completed')").bind(input.requestId, input.requestId),
     ]);

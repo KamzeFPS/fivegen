@@ -5,7 +5,7 @@ export type BuilderPanel='details'|'content'|'resources'|'appearance';
 
 export function builderPublicationStatus(workspace:{version:number;selling:boolean;publication:{version:number}|null},dirty:boolean){
  const hasUnpublishedChanges=!!workspace.publication&&(dirty||workspace.publication.version!==workspace.version);
- const label=workspace.selling?(hasUnpublishedChanges?'Selling · draft changes':'Selling'):hasUnpublishedChanges?'Unpublished changes':workspace.publication?'Page published':'Private draft';
+ const label=workspace.selling?(hasUnpublishedChanges?'Checkout enabled · delivery draft changes':'Checkout enabled'):hasUnpublishedChanges?'Delivery has unpublished changes':workspace.publication?'Delivery published · sales paused':'Private draft';
  return {label,hasUnpublishedChanges};
 }
 

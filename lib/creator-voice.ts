@@ -9,3 +9,5 @@ export type VoiceSource = Omit<z.infer<typeof voiceInputSchema>, 'expectedUpdate
 export type VoiceReference = { id: string; title: string; updatedAt: number };
 export type VoiceContext = VoiceReference & { kind: VoiceSource['kind']; transcript: string; evidence: string };
 export const voiceLabels: Record<VoiceSource['kind'], string> = { video: 'Creator video', audio: 'Voice note', story: 'Personal story', result: 'Customer result' };
+
+export function voiceSourceHealth(source:Pick<VoiceSource,'approved'|'permission'|'transcript'|'uploadId'|'uploadAvailable'>){if(source.uploadId&&!source.uploadAvailable)return {state:'partial',label:source.transcript.trim()?'Partial · original unavailable, transcript retained':'Original recording unavailable'};if(!source.permission)return {state:'needs-review',label:'Permission review needed'};if(!source.transcript.trim())return {state:'needs-review',label:'Transcript needed'};return source.approved?{state:'ready',label:'Ready · reviewed text'}:{state:'needs-review',label:'Text needs review'};}

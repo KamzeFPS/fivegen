@@ -1,0 +1,292 @@
+# FiveGen approved implementation checklist
+
+Approved 25 October 2026. All 66 plan items are accounted for. **60 implementation/evaluation items are implemented, 4 approved deferrals are retained, and 2 verification items remain open.** A code-complete item does not certify live provider behavior. Production deployment has not been performed.
+
+- `[x]` Implemented locally, evaluated with a deliberate gate, or resolved as an approved deferral.
+- `[ ]` Required external/manual verification remains outstanding.
+- The partner pilot is a saved evaluation/proposal. It cannot activate commissions or send invitations.
+
+## Checklist
+
+- [x] **FG-01 — Use one canonical public product address** (merge; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Product cards, share menu and launch home copy the same canonical address. The canonical page exposes the chosen public offer and truthful checkout availability; drafts and paid content retain current protection. Existing published addresses redirect or remain supported by an explicit migration plan.
+  - Evidence: [foundation](improvement-workstreams/foundation.md), [page-template-validation](improvement-workstreams/page-template-validation.md)
+- [x] **FG-02 — Show one consistent launch-state summary** (enhance; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Every product view derives Content saved / Page public / Checkout enabled / Buyer check from one shared status adapter. Each unavailable step shows a specific blocker, action owner and next link. Publishing does not silently enable checkout or expose unsaved changes.
+  - Evidence: [foundation](improvement-workstreams/foundation.md)
+- [x] **FG-03 — Promote the existing launch journey to product home** (enhance; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: An unlaunched product opens with one appropriate next action and an expandable checklist. Nonblocking design or optional marketing work never appears as a sales prerequisite. Launched products show meaningful performance and the next growth action using existing milestone state.
+  - Evidence: [foundation](improvement-workstreams/foundation.md)
+- [x] **FG-04 — Remove duplicate product navigation layers** (remove; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Choose one primary navigation layer per product task; secondary tabs are used only for true subtasks. No differently labelled visible navigation items open the same unexplained panel. Existing deep links resolve into the chosen navigation and preserve selected state.
+  - Evidence: [foundation](improvement-workstreams/foundation.md)
+- [x] **FG-05 — Keep the selected-product menu stable across tools** (enhance; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Product home, Content, Sales page, Price & access, Marketing, Customers and Settings retain stable labels and order. Disabled or unavailable destinations explain why rather than vanishing. Browser back/forward and global search restore product and destination.
+  - Evidence: [foundation](improvement-workstreams/foundation.md)
+- [x] **FG-06 — Unify save feedback and navigation recovery** (enhance; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: All editors use the same Saving / Saved / Could not save language and announce errors. Leaving a dirty manual editor offers Save and continue or Keep editing without losing work. Conflict recovery preserves the local draft and never overwrites newer saved content silently.
+  - Evidence: [foundation](improvement-workstreams/foundation.md), [page-template-validation](improvement-workstreams/page-template-validation.md)
+- [x] **FG-07 — Make the library show commercial readiness** (enhance; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Cards show meaningful states such as Draft, Page live · sales paused, or Selling. A blocker or Continue setup action appears on incomplete products. Search/filter vocabulary matches product home and dashboard.
+  - Evidence: [foundation](improvement-workstreams/foundation.md)
+- [x] **FG-08 — Start with creator intent and existing material** (enhance; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: The opening choice distinguishes existing content, teaching/recording and a service/community outcome. FiveGen recommends a type with a short reason and exposes all formats as an optional choice. The existing-content path reaches upload/review without an AI charge or compulsory generation.
+  - Evidence: [foundation](improvement-workstreams/foundation.md)
+- [x] **FG-09 — Make upload/import recovery a first-class flow** (enhance; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: A queued upload row shows file, size, state, retry and cancel; rejected files explain the constraint. Creators review imported section structure and choose append versus replace before applying. Returning to setup restores saved uploads and the last completed review step; never imply network-level resumability unless implemented.
+  - Evidence: [foundation](improvement-workstreams/foundation.md)
+- [x] **FG-10 — Add a reusable brand preset with product overrides** (add; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: A preset contains logo/icon, colour, typography and support links with preview. Applying shows affected fields and preserves explicit product overrides. Contrast and upload constraints are visible; applying never republishes automatically.
+  - Evidence: [page-template-validation](improvement-workstreams/page-template-validation.md)
+- [x] **FG-11 — Remove AI generation as the implied default teaching path** (remove; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Existing content and manual recording are equally discoverable without disparaging valid AI assistance. AI outlines/drafts are explicitly chosen and labelled editable suggestions. Source upload, script help and marketing generation are presented as distinct tasks.
+  - Evidence: [foundation](improvement-workstreams/foundation.md)
+- [x] **FG-12 — Preview the real visitor and buyer experience** (enhance; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Visitor preview reflects current offer and checkout availability; Buyer preview reuses the real delivery renderer. Persistent Preview labels and synthetic entitlement data make the scope explicit. Preview creates no payment, email, real booking or membership and cannot bypass server access checks.
+  - Evidence: [page-template-validation](improvement-workstreams/page-template-validation.md), [operations](improvement-workstreams/operations.md)
+- [x] **FG-13 — Make start, pause and update-sales consequences explicit** (enhance; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Before a publish/update action, the dialog states whether buying will pause and which existing buyer access stays intact. After publication, the product home offers the exact next action to restart sales when eligible. Start selling failures list one actionable blocker at a time with the proper platform/creator owner.
+  - Evidence: [foundation](improvement-workstreams/foundation.md), [page-template-validation](improvement-workstreams/page-template-validation.md)
+- [x] **FG-14 — Separate seller setup, buyer purchase and FiveGen billing** (enhance; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Account destinations use clear goal labels such as Get paid and My FiveGen plan. Setup status distinguishes platform configuration from creator onboarding and test from live. Returning from Stripe restores the correct product/task and refreshes readiness safely.
+  - Evidence: [foundation](improvement-workstreams/foundation.md), [operations](improvement-workstreams/operations.md)
+- [x] **FG-15 — Give each checkout a coherent branded summary and recovery** (enhance; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Before payment, show product/plan, amount, currency, recurrence, included access, policy and payee clearly. Payment pending, cancelled and failed states offer safe resume/check-status paths without duplicate purchase prompts. Confirmations appear only after verified payment and link directly to the first useful buyer action.
+  - Evidence: [page-template-validation](improvement-workstreams/page-template-validation.md), [operations](improvement-workstreams/operations.md)
+- [ ] **FG-16 — Validate express methods and local currency per journey** (enhance; P2)
+  - Status: awaiting provider verification. Eligibility-aware UI, card fallback and separate creator/platform terms are implemented. Real device/account wallet and local-currency charge/renewal verification remains open.
+  - Acceptance: Eligibility-driven express buttons have a card fallback; no dead wallet-only checkout. Displayed local currency and final charged/renewal currency match provider-supported behaviour and receipts. Test plan covers a recurring and one-time platform purchase separately from creator buyer purchases; unsupported combinations fall back explicitly.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-17 — Simplify existing pricing models rather than rebuilding offers** (enhance; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Show one price decision first with advanced models behind an intentional expansion. Supported options are consistent for the chosen product and reveal provider/minimum/bundle limits before save. Published prices and billing terms are reviewed together; drafts never silently change existing subscriptions.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-18 — Make receipts, access and billing easy to recover** (enhance; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Customer order view exposes purchase status, access, receipt/invoice route and subscription management when applicable. Wrong-email/no-purchase/pending-payment states explain the next safe recovery step. Billing recovery verifies ownership and payment state; never request full card data or keys in support.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-19 — Make the next useful buyer action dominant** (enhance; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Each delivery family has one dominant first action and, after activity, a Continue action. Secondary resources, billing and support stay visible but do not compete with starting. An unavailable resource/session has a creator/support path without falsely claiming the purchased content is ready.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-20 — Simplify booking setup and timezone clarity** (enhance; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Setup shows a sample client journey and exact required calendar/meeting-provider action. Slot lists consistently name the viewer timezone and show no-availability recovery. Conflict/reschedule failures preserve the existing booking; reminder readiness is explicit.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-21 — Expose a small course setup and keep advanced learning optional** (enhance; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Core setup asks modules, lessons, recordings and first learner action. Drip/cohorts/quizzes/certificates appear as contextual advanced settings with previews. Learners see completion and next lesson clearly; locked content states explain the release/prerequisite without leaking content.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-22 — Unify leads and paid people into one audience record** (merge; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Global Customers can filter Lead, Buyer, Member, Client and product with explicit definitions. A person may have several roles/products without duplicate-looking rows or lost notes. Consent, transaction state and access remain separate fields; merging does not infer marketing permission from purchase.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-23 — Add a clear cross-tool contact timeline** (add; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Timeline distinguishes consent, signup, purchase, enrolment, accepted email, booking and creator note with timestamps. Each event links to the owning tool, with pending/unknown delivery labelled accurately. Access visibility is role/product scoped and private client notes never become public AI context.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-24 — Add reusable consent-safe audience segments** (add; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Segments combine product, lifecycle and consent with a recipient preview/count. Sending/enrolment actions re-check eligibility at execution, not only when segment is saved. Existing contacts are not silently enrolled into newly activated sequences.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-25 — Use one reviewed context selection across AI tools** (merge; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Product context shows selected approved sources and profile used by VSL, page, campaign and email suggestions. Overrides are explicit per task, with before/after scope and source limits explained. Source approval changes invalidate pending proposals consistently without deleting already edited creator text.
+  - Evidence: [marketing](improvement-workstreams/marketing.md)
+- [x] **FG-26 — Show provenance and claim review beside generated copy** (enhance; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Generated assets show which reviewed sources and brief version informed them. Unverified creator-attested results retain limits; missing evidence produces a review prompt rather than invented proof. Changed/revoked references clearly require review without exposing private source transcripts publicly.
+  - Evidence: [marketing](improvement-workstreams/marketing.md)
+- [x] **FG-27 — Reduce the work from recording to reviewed source** (enhance; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Before upload, disclose storage and transcription limits separately and offer a short-clip/manual-text path. A linear checklist covers attach, transcribe/paste, correct, permission, approve with draft retention. Processing failure keeps the original and edited text, reports charge outcome accurately and allows retry.
+  - Evidence: [marketing](improvement-workstreams/marketing.md)
+- [x] **FG-28 — Standardise AI scope, cost, review and undo** (enhance; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Every AI action states inputs, intended output, estimated credits and whether existing work is replaced. Changes requiring replacement show a reviewable diff or new draft version before apply. Failure leaves saved work intact, shows charge/refund state truthfully and offers manual continuation.
+  - Evidence: [marketing](improvement-workstreams/marketing.md)
+- [x] **FG-29 — Add outcome-based connected launch recipes** (add; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Recipes explain outcome, included tools, prerequisites and a non-saving preview. Selecting a recipe reuses current product/offer/context and produces reviewable connected steps. Publishing pages, approving email and enabling sales remain separate deliberate actions; progress deep-links to exact blockers.
+  - Evidence: [marketing](improvement-workstreams/marketing.md)
+- [x] **FG-30 — Hand approved campaign emails into Email Automations** (add; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Approved email items can be reviewed and imported into the correct draft sequence with source refs and delay mapping. Existing approved or active sequences are never replaced or activated silently. Sender readiness, recipients, consent and purchase-stop behaviour remain enforced by Automations.
+  - Evidence: [marketing](improvement-workstreams/marketing.md)
+- [x] **FG-31 — Preserve existing work when regenerating campaigns** (enhance; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Generate creates a new version or asks append, replace selected, or replace all with a clear preview. Edited/approved/completed items are protected by default. History can restore earlier copy without claiming that already sent/published content was rolled back.
+  - Evidence: [marketing](improvement-workstreams/marketing.md)
+- [x] **FG-32 — Make draft, reminder and actual publication states unmistakable** (enhance; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Use explicit Reminder set / Publish manually / Mark published labels and clear calendar descriptions. Email actions distinguish export/copy from import into a real delivery sequence. No metric implies reach or successful publication merely because a draft was approved or scheduled.
+  - Evidence: [marketing](improvement-workstreams/marketing.md)
+- [x] **FG-33 — Add previewable goal-based automation blueprints** (add; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Blueprint cards show intended recipients, stop conditions, steps and duration. A no-save preview explains trigger, wait and message before selecting. Choosing creates a draft only, preserving existing active snapshots until explicit approval.
+  - Evidence: [marketing](improvement-workstreams/marketing.md)
+- [x] **FG-34 — Add a readable delivery timeline and failure recovery** (enhance; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Sequence preview shows relative delays, active revision and stop-on-purchase branch in plain language. Recipient activity distinguishes queued, paused, accepted, failed and cancelled; does not equate accepted with inbox delivery. A failed or ambiguous delivery links to a safe recovery instruction; retries respect existing idempotency window.
+  - Evidence: [marketing](improvement-workstreams/marketing.md)
+- [x] **FG-35 — Replace technical sender errors with an owned readiness checklist** (enhance; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Creator sees sender name/reply-to/address steps; platform administrators see technical configuration separately. Unavailable platform delivery explains impact, offers saved drafts/manual export and a support/recheck path. Activation is blocked truthfully without exposing secret values or asking creators to paste keys.
+  - Evidence: [marketing](improvement-workstreams/marketing.md)
+- [x] **FG-36 — Clarify research offers versus live checkout terms** (enhance; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Name the task Test my offer or Validate positioning with a visible research-only price label. Survey result summaries show sample/round, neither preference and evidence limits. No survey preference is presented as paid validation or a forecast.
+  - Evidence: [marketing](improvement-workstreams/marketing.md)
+- [x] **FG-37 — Turn research into a reviewable launch brief** (enhance; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Apply shows field-by-field changes, source survey round and existing content to retain. Research notes distinguish stated preference, creator judgment and actual purchase evidence. Checkout price, published copy and active emails remain unchanged until separately reviewed.
+  - Evidence: [marketing](improvement-workstreams/marketing.md)
+- [x] **FG-38 — Adapt the overview to launch stage** (enhance; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Before launch, show readiness and one next action above empty charts. After launch, prioritise orders, confirmed earnings, meaningful customer activity and attention items with period/product scope. No synthetic success numbers, arbitrary readiness percentage or ungrounded AI recommendation appears.
+  - Evidence: [foundation](improvement-workstreams/foundation.md)
+- [x] **FG-39 — Instrument coherent journeys before displaying conversion rates** (add; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Define event coverage, product/offer/campaign scope, session attribution, consent and deduplication before UI changes. Until coverage is coherent, show counts and definitions rather than conversion percentages. Any new rate declares denominator, time window, coverage exclusions and test/live separation; blocked/DNT traffic remains respected.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-40 — Expose actionable campaign performance with evidence** (enhance; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Tracked links are created from the campaign and retain product/offer association. Recommendations show observed counts, period and uncertainty, with a direct edit/test action. When attribution is unknown or sample small, use descriptive activity rather than a confident revenue-causation claim.
+  - Evidence: [marketing](improvement-workstreams/marketing.md)
+- [x] **FG-41 — Add task-aware self-service help and support context** (add; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Help opens with current task/product, relevant short guidance and next action. A support draft includes nonsecret diagnostic state only after creator review. Payment recovery, missing access and publication help have separate understandable entries.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-42 — Add an attention centre for actionable failures** (add; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Only actionable issues appear with product, time, severity, owner and deep link. Resolved states clear without losing history; test/live and platform/creator issues remain distinct. No private client details or secrets appear in global notices; notification preferences are respected.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-43 — Unify hierarchy, density and responsive behaviour** (enhance; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Use shared tokens for typography, spacing, surfaces, focus, fields, status and buttons. Each screen has a clear title, one primary action and deliberate advanced sections. At desktop, tablet and phone widths, product scope, current step, saved state and primary action remain discoverable without overlap.
+  - Evidence: [foundation](improvement-workstreams/foundation.md)
+- [ ] **FG-44 — Complete end-to-end keyboard, zoom and screen-reader verification** (enhance; P1)
+  - Status: awaiting manual accessibility verification. Keyboard, semantic, dialog, reflow and focus fixes are implemented and partly checked in the browser. Full screen-reader and complete 200% zoom journey verification remains open; no compliance claim.
+  - Acceptance: Test create/edit/publish/search/switch/checkout-recovery with keyboard only and clear focus return. Verify field error association, status announcements, dialog traps, expanded states and unique accessible names with a screen reader. Check contrast, 200% zoom/reflow and practical touch targets, recording defects rather than asserting compliance from screenshots.
+  - Evidence: [foundation](improvement-workstreams/foundation.md)
+- [x] **FG-45 — Make Gen contextual, collapsible and out of the way** (enhance; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Assistant opens with context-specific suggestions and requested scope, not a generic mandatory chat. Collapsed/expanded positions avoid sticky footers, forms and mobile navigation across audited breakpoints. Creator can dismiss and later restore help; assistance never changes/publishes/sends without its existing reviewed action.
+  - Evidence: [foundation](improvement-workstreams/foundation.md)
+- [x] **FG-46 — Rename plugin installation and distinguish Hide from Pause** (merge; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Use Add tools / Hide tool for navigation-only actions. Before hide, show active pages/sequences and direct Pause/manage links. Loading failure retains or explicitly marks unknown installed state with Retry, never falsely presenting an empty tool set.
+  - Evidence: [foundation](improvement-workstreams/foundation.md)
+- [x] **FG-47 — Defer a broad third-party app marketplace** (defer; P3)
+  - Status: deferred by approved plan. Approved scope decision retained. No mandatory marketplace, native video suite, open affiliate/ad platform or universal cart was introduced.
+  - Acceptance: Keep existing optional tools; validate repeat demand for specific integrations before building a marketplace. Any future proposal includes installation permissions, ownership, uninstallation effects, support and commercial model. Do not add an empty store to navigation as a substitute for solving launch friction.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-48 — Defer a native generative video production suite** (defer; P3)
+  - Status: deferred by approved plan. Approved scope decision retained. No mandatory marketplace, native video suite, open affiliate/ad platform or universal cart was introduced.
+  - Acceptance: Retain upload and helpful script/creative integrations while keeping creator recording explicit. Only prioritise advanced production after observed creator workflow demand and vendor/cost feasibility. No preview suggests a script has become a real recording or a finished taught course.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-49 — Add a safe buyer-journey simulation and effect summary** (add; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: The simulation creates no real charge, order, contact, booking, email, membership or webhook side effect. The result separately labels simulated effects, verified internal checks and external behavior not tested. It reports price/access timing, expected customer destination and message/automation effects, with direct links to fix warnings.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-50 — Expose transactional access-message readiness and order delivery status** (enhance; P1)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Launch review distinguishes receipt, access, account-recovery and marketing messages. An order timeline shows queued/sent/failed/retrying with a safe recovery route and no duplicate access sends. A creator sees which sender/provider prerequisite they can fix and which requires platform support.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-51 — Make renewal, past-due and access states understandable** (enhance; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Creator and buyer see actual renewal, retry and access-end dates from the configured provider policy. Update-payment recovery is reachable without navigating creator tools. Retry, recovery, cancellation and out-of-order provider events do not create incorrect access or duplicate notifications.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-52 — Show separate consequences for cancel, pause, refund and revoke** (enhance; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Each action states amount, billing effect, access effect/date and customer notification before confirmation. Cancellation remains directly reachable; an optional retention offer does not obscure completion. Partial refunds, term-end cancellation and immediate revocation have separate tested states and clear confirmation.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-53 — Add a lightweight order-linked buyer help path** (add; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: A buyer chooses Access / Billing / Product question from the purchase and sees the responsible recipient. Creator support context includes the correct order/access state while excluding secrets and unrelated private data. The case has an owner, status and response trail; it is not presented as a formal payment dispute or guaranteed refund.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-54 — Add creator collaborator roles with scoped authority** (add; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Owner / Editor / Marketer / Support presets state product scope and allowed actions in plain language. API and AI connector checks enforce edit, publish/send, refund and payout boundaries independently. Invitation, access removal and permission changes have visible audit events; unauthorized actions are denied server-side.
+  - Evidence: [foundation](improvement-workstreams/foundation.md), [operations](improvement-workstreams/operations.md)
+- [x] **FG-55 — Add consent-aware checkout recovery after real checkout intent** (add; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Only an identified eligible checkout-start enters recovery; a generic page visit does not. Delay, frequency cap and audience rules are reviewable, and a completed purchase cancels a pending reminder. The log shows why the reminder sent or was suppressed, with consent/preferences enforced and recovered revenue definition visible.
+  - Evidence: [marketing](improvement-workstreams/marketing.md), [operations](improvement-workstreams/operations.md)
+- [x] **FG-56 — Make tracked sharing a clear part of each launch** (enhance; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Share creates named channel links associated with a product, offer/version and campaign. Attribution model/window and unattributed orders are explained; test/live and refunds remain distinct. Checkout/order reconciliation preserves relevant identifiers without collecting unnecessary private content.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-57 — Make bundles and recommendations aware of existing ownership** (enhance; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Owned content leads with Open/Resume and intentional upgrades state the extra value. Bundle overlap, access duration and any credit policy are explicit before payment. Order/entitlement records avoid duplicate grants; intentional repeat purchase has a clear supported rule.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-58 — Separate interest lists, applications and paid preorders** (enhance; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: No-charge interest collection explicitly says no payment is taken. Application questions show review/access expectations separately from newsletter consent. A paid preorder is deferred or has a separate explicit terms/payment flow; survey preference is never labeled a verified sale.
+  - Evidence: [marketing](improvement-workstreams/marketing.md)
+- [x] **FG-59 — Make source processing health and cost visible** (enhance; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: Each source distinguishes uploading, processing, ready, partial, failed and needs-review as applicable. Timestamp/page references and the usable indexed scope can be inspected; failed content is not silently treated as ready. Transcription/regeneration shows the actual estimated cost before approval and preserves manual transcript options.
+  - Evidence: [marketing](improvement-workstreams/marketing.md)
+- [x] **FG-60 — Consolidate page sections, cover and live draft preview** (enhance; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: One Sales page task owns a bounded section editor and actual desktop/mobile draft preview. Shared brand and intentional overrides are visible; creator identity/links/location and real review controls remain understandable. Publishing preserves protected delivery and states any sales impact; the workbench does not become a mandatory general website builder.
+  - Evidence: [page-template-validation](improvement-workstreams/page-template-validation.md)
+- [x] **FG-61 — Add a shared review queue and important-change history** (add; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: The queue identifies author, source/version, scope, cost and intended publish/send action. Approval is invalidated when relevant inputs change; bulk approval does not bypass individual permissions. History records material actor/action/time/outcome and links to the source object without duplicating secrets or private content.
+  - Evidence: [foundation](improvement-workstreams/foundation.md), [operations](improvement-workstreams/operations.md)
+- [x] **FG-62 — Evaluate and adapt retired referrals for a private partner pilot** (enhance; P3)
+  - Status: evaluation complete activation gated. Persisted private pilot proposal, bounded cohort, policy/ledger evaluation and explicit No-Go gate implemented. Invitations, commissions and payouts remain disabled pending current-commerce ledger compatibility and provider validation.
+  - Acceptance: Inventory retired referral behavior and migrate or reuse it deliberately; no parallel commission ledger is introduced. Commission scope/basis, eligibility and attribution rules are explicit. Statements distinguish pending, approved, reversed, payable and paid, including refunds/disputes. The pilot has a limited invited cohort and a go/no-go review before broad rollout; it never silently enables commissions.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-63 — Add evidence-aware experiments only after tracking is coherent** (add; P3)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: A test declares hypothesis, versions, primary outcome, assignment and attribution/refund scope. Insufficient evidence displays Inconclusive and preserves raw counts. Cross-device/browser limits are explained and qualitative interest is not mislabeled purchase conversion.
+  - Evidence: [marketing](improvement-workstreams/marketing.md)
+- [x] **FG-64 — Provide a coherent creator export and migration package** (enhance; P2)
+  - Status: implemented. Implemented locally; evidence and provider boundaries are recorded in the linked workstream. This status is not a production deployment or live provider certification.
+  - Acceptance: An authorized export packages supported owned content, campaign drafts, source references and permitted customer records with a manifest. The manifest lists omitted/failed items and distinguishes original source from generated output. Export scope respects roles and privacy; it is not advertised as complete restoration or a payment-data migration unless tested.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-65 — Defer an open affiliate network and ad-buying platform** (defer; P3)
+  - Status: deferred by approved plan. Approved scope decision retained. No mandatory marketplace, native video suite, open affiliate/ad platform or universal cart was introduced.
+  - Acceptance: No open marketplace or ad-spend commitment is required for a creator to launch. Any later investment follows demonstrated partner demand, accurate accounting and explicit operational ownership. For now creators can export approved creative and tracked links to tools they already use.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+- [x] **FG-66 — Defer universal carts and complex upsell trees** (defer; P3)
+  - Status: deferred by approved plan. Approved scope decision retained. No mandatory marketplace, native video suite, open affiliate/ad platform or universal cart was introduced.
+  - Acceptance: The direct purchase and simple bundle path remain the default. Cart/upsell investment requires observed multi-product buying demand and a tested money/access model. Any later add-on is optional, ownership-aware and displays complete totals without preselected unwanted items.
+  - Evidence: [operations](improvement-workstreams/operations.md)
+
+## Approved page-editor expansion
+
+- [x] Five selectable templates with a non-saving preview and copy-preserving application.
+- [x] Published pages render saved template/configuration and authoritative offer availability.
+- [x] Editable ordered sections, visibility, copy, CTA, images, public video, layout, typography, branding and links.
+- [x] Desktop/mobile previews, autosave, explicit save/publication, conflict recovery, undo and saved revisions.
+- [x] Actual product outline, creator controls, verified reviews and eligible checkout handoff; paid delivery remains protected.
+- [x] Shared brand/icon/link presets with explicit overrides and validated per-product image copying.
+- [x] Reviewed-source AI copy proposals with stated cost and explicit application.
+- [x] Actual buyer renderers and a no-side-effect journey simulation.
+- [x] Final browser evidence and three-design comparison recorded in [design-qa.md](../design-qa.md). Provider and manual accessibility gates remain open.
+
+## Reproduce verification
+
+Run `node scripts/approved-improvements-test.mjs` with Node 22.13 or later. The suite uses isolated synthetic data. Results are written to `outputs/implementation-2026-10-25/test-results.json`. Run `node scripts/render-build.mjs` for the production bundle.
+
+Provider/manual limits: [operations acceptance audit](improvement-workstreams/acceptance-gaps-operations.md).

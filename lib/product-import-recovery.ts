@@ -1,0 +1,10 @@
+import {z} from 'zod';
+import {sectionSchema} from './product';
+const importAsset=z.object({key:z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/),name:z.string().max(300),mime:z.enum(['image/png','image/jpeg','image/webp']),base64:z.string().max(1_200_000)}).strict();
+export const importRecoverySchema=z.object({version:z.literal(1),productId:z.string().min(1).max(100),savedAt:z.number().int().nonnegative(),file:z.object({name:z.string().max(300),size:z.number().int().nonnegative()}).strict(),mode:z.enum(['append','replace']),preview:z.object({title:z.string().max(300),sections:z.array(sectionSchema).min(1).max(30),warnings:z.array(z.string().max(3000)).max(50),sourceFormat:z.enum(['docx','pdf','epub']),assets:z.array(importAsset).max(20).optional()}).strict(),uploaded:z.record(z.string().uuid()).refine(value=>Object.keys(value).length<=20)}).strict();
+export type ProductImportRecovery=z.infer<typeof importRecoverySchema>;
+export const importRecoveryKey=(productId:string)=>'fivegen:import-review:v1:'+productId;
+/** Private same-tab recovery, never a network-resume protocol or auto-apply operation. */
+export function encodeImportRecovery(value:ProductImportRecovery){const parsed=importRecoverySchema.parse(value),text=JSON.stringify(parsed);if(text.length>1_200_000)throw new Error('This import review is too large for private same-tab recovery. Keep this tab open until you apply it.');return text;}
+export function decodeImportRecovery(text:string|null,productId:string){if(!text||text.length>1_200_000)return null;try{const value=importRecoverySchema.parse(JSON.parse(text));return value.productId===productId?value:null;}catch{return null;}}
+export function manuscriptConstraint(file:{name:string;size:number}){if(!/\.(docx|pdf|epub)$/i.test(file.name))return 'Choose an original DOCX, PDF or EPUB manuscript. Other resources can be attached in Content.';if(file.size<1||file.size>20*1024*1024)return 'Manuscript import supports files between 1 byte and 20 MB. Split larger documents before importing.';return null;}

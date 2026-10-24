@@ -3,7 +3,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ArrowUpRight, BookOpen, Check, FileText, ImagePlus, Link2, Loader2, LockKeyhole, MapPin, MessageSquare, Play, Star, UserRound } from "lucide-react";
 import type { Product } from "@/lib/product";
-import { productReviewSchema, type ProductPageConfig, type ProductReviewSummary } from "@/lib/product-page";
+import { productReviewSchema, type ProductPageConfig, type ProductReviewSummary, type LandingCommerce } from "@/lib/product-page";
+import { SalesLandingPage } from './sales-landing-page';
+import './sales-page-studio.css';
 
 type PageProduct = {
   id: string;
@@ -14,6 +16,7 @@ type PageProduct = {
   sections: { title: string; category?: string }[];
 };
 export type ProductPageViewProps = {
+  pageId?:string;pageVersion?:number;
   product: PageProduct;
   config: ProductPageConfig;
   reviewSummary: ProductReviewSummary;
@@ -23,9 +26,12 @@ export type ProductPageViewProps = {
   memberContent?: Product["content"];
   memberOrderId?: string;
   preview?: boolean;
+  selectedSection?:string;
+  onSelectSection?:(id:string)=>void;
   initialTab?: "home" | "content" | "reviews";
   reviewOrderId?: string;
   onCustomize?: () => void;
+  commerce?: LandingCommerce;
 };
 
 export function productInitials(title: string) {
@@ -33,6 +39,7 @@ export function productInitials(title: string) {
 }
 
 export function ProductPageView(props: ProductPageViewProps) {
+  if ((props.config.templateId !== 'classic'||props.config.sections.some(s=>s.enabled&&(['lead-form','application'].includes(s.type)||s.videoUploadId))) && !props.memberContent && !props.reviewOrderId) return <SalesLandingPage {...props}/>;
   return <ProductPageContent key={props.product.id} {...props}/>;
 }
 

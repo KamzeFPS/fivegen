@@ -95,12 +95,12 @@ console.log('Proposal review: all titles and full bodies visible, long proposals
 for(const [workspace,dirty,label,hasUnpublishedChanges] of [
  [{version:1,selling:false,publication:null},false,'Private draft',false],
  [{version:1,selling:false,publication:null},true,'Private draft',false],
- [{version:4,selling:false,publication:{version:4}},false,'Page published',false],
- [{version:5,selling:false,publication:{version:4}},false,'Unpublished changes',true],
- [{version:4,selling:false,publication:{version:4}},true,'Unpublished changes',true],
- [{version:4,selling:true,publication:{version:4}},false,'Selling',false],
- [{version:4,selling:true,publication:{version:4}},true,'Selling · draft changes',true],
- [{version:5,selling:true,publication:{version:4}},false,'Selling · draft changes',true],
+ [{version:4,selling:false,publication:{version:4}},false,'Delivery published · sales paused',false],
+ [{version:5,selling:false,publication:{version:4}},false,'Delivery has unpublished changes',true],
+ [{version:4,selling:false,publication:{version:4}},true,'Delivery has unpublished changes',true],
+ [{version:4,selling:true,publication:{version:4}},false,'Checkout enabled',false],
+ [{version:4,selling:true,publication:{version:4}},true,'Checkout enabled · delivery draft changes',true],
+ [{version:5,selling:true,publication:{version:4}},false,'Checkout enabled · delivery draft changes',true],
 ]){const before=structuredClone(workspace);assert.deepEqual(builderPublicationStatus(workspace,dirty),{label,hasUnpublishedChanges},'Publication UI uses exact persisted versions and pending local edits without hiding active sales');assert.deepEqual(workspace,before,'Deriving publication status does not alter sales or publication');}
 console.log('Publication status: private drafts, unchanged live pages, saved/unpersisted draft changes and active sales remain distinct.');
 

@@ -21,6 +21,7 @@ const deps={z,ApiError,database:()=>storage.DB,binding:name=>name==='STRIPE_MODE
 async function load(file){const key='qa'+randomUUID().replaceAll('-','');globalThis[key]={...deps};const source=fs.readFileSync(file,'utf8').replace(/^import[\s\S]*?;\r?\n/gm,'');const code=`const {${Object.keys(deps).join(',')}}=globalThis.${key};\n`+ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;const module=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));delete globalThis[key];return module;}
 Object.assign(deps,await load('lib/growth-funnel.ts'));
 Object.assign(deps,await load('lib/offer-lab.ts'));
+Object.assign(deps,await load('lib/offer-launch-brief.ts'));
 Object.assign(deps,await load('lib/offer-lab-server.ts'));
 Object.assign(deps,await load('lib/marketing-plugins.ts'));
 Object.assign(deps,await load('lib/creator-plans.ts'));

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { CreatorContextRefs } from './creator-context-contract';
 
 const answer = z.string().max(4000);
 export const growthBriefSchema = z.object({
@@ -30,7 +31,11 @@ export const growthSaveSchema = z.object({
 });
 export type GrowthBrief = z.infer<typeof growthBriefSchema>;
 export type GrowthAssets = z.infer<typeof growthAssetsSchema>;
-export type Growth = { brief: GrowthBrief; assets: GrowthAssets | null; updatedAt: number };
+export const growthAssetIds=['vsl','landing','followUp'] as const;
+export type GrowthAssetId=typeof growthAssetIds[number];
+export type GrowthAssetProposal={id:string;asset:GrowthAssetId;value:string|GrowthAssets['landing'];baseValue:string|GrowthAssets['landing']|null;expectedUpdatedAt:number;contextRefs:CreatorContextRefs;createdAt:number};
+export type OfferFacts={title:string;description:string;format:string;inclusions:string[];priceCents:number;currency:string;source:'saved-product'|'saved-builder';productRevision:number;builderVersion:number|null;};
+export type Growth = { brief: GrowthBrief; assets: GrowthAssets | null; updatedAt: number; contextRefs?:CreatorContextRefs|null;productFacts?:OfferFacts };
 export function emptyGrowthBrief(audience = ''): GrowthBrief {
   return { icp: audience, problem: '', beliefs: '', story: '', promise: '', proof: '', offer: '', tone: '', cta: '' };
 }

@@ -131,11 +131,16 @@ export async function recordSubscriptionInvoice(parentId:string,invoiceId:string
  }
 }
 
+/** Only provider-returned dates; a missing retry date is unknown, never invented. */
+export function providerSubscriptionState(subscription:Stripe.Subscription){
+ const endsAt=(subscription.items.data[0]?.current_period_end||0)*1000,invoice=subscription.latest_invoice&&typeof subscription.latest_invoice==='object'?subscription.latest_invoice:null,cancelAt=(subscription.cancel_at||0)*1000;
+ return {status:subscription.status,endsAt,cancelAtPeriodEnd:subscription.cancel_at_period_end,cancelAt,nextRetryAt:invoice?.next_payment_attempt?invoice.next_payment_attempt*1000:null,renewsAt:['active','trialing'].includes(subscription.status)&&!subscription.cancel_at_period_end&&!cancelAt?endsAt:null,endedAt:subscription.ended_at?subscription.ended_at*1000:null,checkedAt:Date.now()};
+}
 export async function customerSubscription(req:Request,id:string,manage=false){
  const order=await customerOrder(req,id,false,{purchaserOnly:true}),intent=await database().prepare('SELECT * FROM product_commerce_intents WHERE order_id=?').bind(id).first();
  if(!intent||intent.pricing_model!=='subscription'||!intent.subscription_id)throw new ApiError('This purchase has no recurring subscription.',404);
- const subscription=await commerceStripe().subscriptions.retrieve(String(intent.subscription_id),{}, {stripeAccount:String(order.account_id)});
+ const subscription=await commerceStripe().subscriptions.retrieve(String(intent.subscription_id),{expand:['latest_invoice']}, {stripeAccount:String(order.account_id)});
  if(subscription.metadata.fivegen_order!==id||subscription.livemode!==(order.mode==='live'))throw new ApiError('Membership identity mismatch.',409);
  if(manage){const customer=objectId(subscription.customer);if(!customer)throw new ApiError('The billing customer is unavailable.',409);const portal=await commerceStripe().billingPortal.sessions.create({customer,return_url:`${new URL(req.url).origin}/customer?order=${id}`},{stripeAccount:String(order.account_id)});return {url:portal.url};}
- return {status:subscription.status,endsAt:(subscription.items.data[0]?.current_period_end||0)*1000,cancelAtPeriodEnd:subscription.cancel_at_period_end};
+ return providerSubscriptionState(subscription);
 }

@@ -1,0 +1,19 @@
+import {z} from 'zod';
+import {ApiError,database,ownedProduct} from './server';
+import {landingSnapshotSchema,marketingConsentText} from './growth-funnel';
+import {defaultProductPageConfig,landingSectionSchema} from './product-page';
+import {getOwnedPublicPage,listPublicPages} from './public-pages-server';
+export async function pageMigrationInventory(productId:string,owner:string){
+ await ownedProduct(productId,owner);const db=database(),legacy=await db.prepare('SELECT * FROM growth_funnels WHERE product_id=? AND owner=?').bind(productId,owner).first(),leads=await db.prepare('SELECT COUNT(*) AS count,SUM(marketing) AS consented FROM growth_leads WHERE product_id=? AND owner=?').bind(productId,owner).first(),pages=await listPublicPages(productId,owner);
+ return {legacy:legacy?{path:`/g/${encodeURIComponent(String(legacy.slug))}`,version:Number(legacy.updated_at),publishedVersion:legacy.published_at==null?null:Number(legacy.published_at),landing:landingSnapshotSchema.parse(JSON.parse(String(legacy.landing))),recording:legacy.creator_vsl_upload_id?String(legacy.creator_vsl_upload_id):null,importedPageId:(await db.prepare('SELECT id FROM public_page_records WHERE product_id=? AND owner=? AND legacy_source_version=?').bind(productId,owner,legacy.updated_at).first())?.id??null}:null,pages,retained:{leads:Number(leads?.count||0),consented:Number(leads?.consented||0)},effects:['Creates a new private lead-page draft.','Your existing /g link and published snapshot remain unchanged.','Lead IDs, consent records, notes, suppression and enrolled email snapshots stay in place.','Publishing and changing links are separate reviewed actions.']};
+}
+const importSchema=z.object({expectedSourceVersion:z.number().int().positive(),reviewed:z.literal(true)}).strict();
+export async function importLegacyLeadPage(productId:string,owner:string,input:unknown){
+ const v=importSchema.parse(input),product=await ownedProduct(productId,owner),inventory=await pageMigrationInventory(productId,owner),legacy=inventory.legacy;
+ if(!legacy||legacy.version!==v.expectedSourceVersion)throw new ApiError('The legacy page changed. Review the current copy before importing.',409);
+ if(legacy.importedPageId)return getOwnedPublicPage(productId,owner,String(legacy.importedPageId));
+ const config=defaultProductPageConfig(String(product.format));config.ctaMode='form';config.buttonLabel=legacy.landing.ctaLabel;config.headline=legacy.landing.headline;config.heroDescription=legacy.landing.subheadline;
+ config.sections=[landingSectionSchema.parse({id:'hero',type:'hero',title:legacy.landing.headline,body:legacy.landing.subheadline}),...(legacy.recording?[landingSectionSchema.parse({id:'introduction',type:'video',title:'A note from your creator',videoUploadId:legacy.recording})]:[]),landingSectionSchema.parse({id:'about',type:'text',title:'What’s possible',body:legacy.landing.body,items:legacy.landing.benefits}),landingSectionSchema.parse({id:'signup',type:'lead-form',title:'Take the next step',leadForm:{buttonLabel:legacy.landing.ctaLabel,thankYou:legacy.landing.thankYou,marketingLabel:marketingConsentText}})];
+ const id=crypto.randomUUID(),now=Date.now(),r=await database().prepare(`INSERT OR IGNORE INTO public_page_records(id,product_id,owner,name,purpose,draft,updated_at,legacy_source_version) SELECT ?,?,?,?,'lead',?,?,? WHERE EXISTS(SELECT 1 FROM growth_funnels WHERE product_id=? AND owner=? AND updated_at=?)`).bind(id,productId,owner,'Imported lead page',JSON.stringify(config),now,legacy.version,productId,owner,legacy.version).run();
+ if(!r.meta.changes){const existing=await database().prepare('SELECT id FROM public_page_records WHERE product_id=? AND owner=? AND legacy_source_version=?').bind(productId,owner,legacy.version).first();if(existing)return getOwnedPublicPage(productId,owner,String(existing.id));throw new ApiError('The legacy page changed. Review it before importing.',409);}return getOwnedPublicPage(productId,owner,id);
+}

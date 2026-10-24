@@ -19,6 +19,8 @@ const deps = {
   Stripe: class { constructor() { throw new Error('Product page tests must never call Stripe.'); } },
   teamSeatAllows: async () => true,
   enrollAutomationPurchase: async () => {},
+  publicFreeStudioOffer:async()=>null,
+  getPublishedFileSale:async()=>null,
 };
 async function load(path) {
   const key = 'qa' + randomUUID().replaceAll('-', ''); globalThis[key] = { ...deps };
@@ -31,6 +33,8 @@ Object.assign(deps, await load('lib/builder-contract.ts'));
 Object.assign(deps, await load('lib/file-sale-contract.ts'));
 Object.assign(deps, await load('lib/commerce-v2.ts'));
 Object.assign(deps, await load('lib/commerce-v2-server.ts'));
+Object.assign(deps, await load('lib/public-pages.ts'));
+Object.assign(deps, await load('lib/service-applications.ts'));
 Object.assign(deps, await load('lib/product-page.ts'));
 Object.assign(deps, await load('lib/product-page-server.ts'));
 const pageRoute = await load('app/api/products/[id]/page/route.ts');
@@ -95,7 +99,7 @@ try {
   const nextConfig = { ...config, about: 'A revised private draft', iconUploadId: null, bannerUploadId: banner, showCreator: true, showLocation: true, showContent: false };
   response = await save({ config: nextConfig, expectedUpdatedAt: page.updatedAt }); page = (await response.json()).page;
   sql.prepare('UPDATE products SET title=?,updated_at=? WHERE id=?').run('New private product title', now + 1, id);
-  publicPage = await deps.getPublicProductPage(slug); assert.equal(publicPage.product.title, 'Original title'); assert.equal(publicPage.config.about, config.about); assert.equal(publicPage.config.iconUploadId, icon); assert.equal(publicPage.config.bannerUploadId, null);
+  publicPage = await deps.getPublicProductPage(slug); assert.equal(publicPage.product.title, 'Original title'); assert.equal(publicPage.config.about, ''); assert.equal(publicPage.config.iconUploadId, icon); assert.equal(publicPage.config.bannerUploadId, null);
   assert.equal((await publish(page.updatedAt - 1)).status, 409);
   response = await publish(page.updatedAt); page = (await response.json()).page; publicPage = await deps.getPublicProductPage(slug);
   assert.equal(publicPage.product.title, 'New private product title'); assert.equal(publicPage.config.creatorName, 'Private creator name'); assert.equal(publicPage.config.location, 'Private city'); assert.deepEqual(publicPage.product.sections, []);

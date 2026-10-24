@@ -29,6 +29,7 @@ export type PublishedFunnel = {
   slug: string; title: string; landing: LandingSnapshot;
   creatorVslUploadId: string | null; publishedAt: number | null; updatedAt: number;
 };
+export type FunnelVideoDraft={creatorVslUploadId:string|null;updatedAt:number};
 export function csvCell(value: unknown) {
   let cell = String(value ?? "");
   if (/^[\s]*[=+@-]/.test(cell) || /^[\t\r\n]/.test(cell)) cell = "'" + cell;

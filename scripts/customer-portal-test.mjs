@@ -49,7 +49,7 @@ async function harness(search = '') {
   };
   const dependencies = {
     ...Object.fromEntries(['ArrowDownToLine','ArrowLeft','ArrowRight','BookOpen','CalendarDays','CheckCircle2','ChevronDown','Clock3','FileText','GraduationCap','Layers','LockKeyhole','Play','Users'].map(name=>[name,icons[name]])),...presentation,renderStudioMarkdown,CustomerLearning:()=>null,CustomerCommunity:()=>null,CustomerService:()=>null,PurchasedProductResources:()=>null,ProductReminders:()=>null,ProductPushReminders:()=>null,ProductFulfillment:()=>null,ProductUpdateNotice:()=>null,TeamContent:()=>null,WrittenContent,BuyerSubscription:()=>null,
-    Dialog:()=>null,DialogContent:()=>null,DialogHeader:()=>null,DialogTitle:()=>null,DialogDescription:()=>null,DialogFooter:()=>null,
+    PurchaseRecovery:'purchase-recovery',PurchaseHelp:'purchase-help',Dialog:()=>null,DialogContent:()=>null,DialogHeader:()=>null,DialogTitle:()=>null,DialogDescription:()=>null,DialogFooter:()=>null,
     React, useState, useRef, useCallback, useEffect, Link:'a', Brand:()=>React.createElement('span',null,'FiveGen'), location:browserLocation,
     window:{location:browserLocation,history:{replaceState(_state,_title,url){browserLocation.href=String(url);browserLocation.search=new URL(String(url)).search;}}},
     commerceMoney:amount => `$${(amount / 100).toFixed(2)}`,
@@ -145,13 +145,18 @@ for (const search of ['', '?order=pending-order']) {
   app.dispose();
 }
 
+// Refunded/past-due access must not hide billing cancellation, receipt or help.
+{
+ const app=await harness('?order=revoked-order');await app.respond(0,{orders:[{...paidA,id:'revoked-order',status:'revoked',subscription:true}]});const recover=app.find('purchase-recovery')[0];assert.equal(recover.props.orderId,'revoked-order');assert.equal(recover.props.subscription,true);assert.equal(app.requests.length,1,'Billing recovery does not request revoked paid content');app.dispose();
+}
+
 // Content errors have their own working retry, rather than an empty selection
 // message or a library refresh that never reruns the content effect.
 {
   const app = await harness();
   await app.respond(0,{orders:[paidA]});
   await app.respond(1,{error:'Unable to read the purchased file right now.'},503);
-  assert.match(app.text,/We couldn’t open your product/);
+  assert.match(app.text,/We couldn’t open your product/);assert.equal(app.find('purchase-help')[0].props.orderId,'paid-a','Missing content retains purchaser support and receipt recovery');
   await app.click('Try opening again');
   assert.equal(app.requests[2].url,'/api/commerce/customer/paid-a');
   await app.respond(2,content());

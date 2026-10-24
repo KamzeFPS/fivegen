@@ -35,8 +35,13 @@ async function load(path) {
   const code = `const {${Object.keys(deps).join(',')}}=globalThis.${key};\n` + ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 } }).outputText;
   const result = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64')); delete globalThis[key]; return result;
 }
+Object.assign(deps, await load('lib/creator-context-contract.ts'));
+Object.assign(deps,await load('lib/marketing-destination.ts'));
 Object.assign(deps, await load('lib/automation.ts'));
+Object.assign(deps,await load('lib/reply-template-server.ts'));
+deps.listMarketingDestinations=async()=>[];deps.resolveMarketingDestination=async(_product,_owner,value)=>value;deps.destinationGuard=()=>({sql:'',values:[]});
 Object.assign(deps,await load('lib/purchase-email.ts'));
+Object.assign(deps, await load('lib/checkout-recovery-eligibility.ts'));
 Object.assign(deps, await load('lib/automation-server.ts'));
 const api = await load('app/api/automations/route.ts'), worker = await load('app/api/automations/dispatch/route.ts'), unsubscribe = await load('app/api/automations/unsubscribe/route.ts');
 const base = 'https://fivegen.test';
@@ -51,7 +56,7 @@ const status = (trigger, expectedRevision, action = 'activate') => api.POST(requ
 try {
   product(productId, owner); product(productB, 'creator-b');
   const oldLead = lead('before-activation@example.test'); now += 10;
-  let draft = { ...deps.defaultAutomation('lead', 'Creator'), replyTo: 'creator@example.test', postalAddress: '100 Creator Street', steps: [{ id: randomUUID(), kind: 'welcome', subject: 'Hello {{name}}', body: 'Original approved copy for {{product}}\n{{funnel_url}}', delayHours: 0 }, { id: randomUUID(), kind: 'launch', subject: 'An invitation', body: 'A second approved email', delayHours: 1 }] };
+  let draft = {destination:{pageId:productId,productId,purpose:'sales',version:1,path:'/product/'+productId,title:'Workshop'}, ...deps.defaultAutomation('lead', 'Creator'), replyTo: 'creator@example.test', postalAddress: '100 Creator Street', steps: [{ id: randomUUID(), kind: 'welcome', subject: 'Hello {{name}}', body: 'Original approved copy for {{product}}\n{{funnel_url}}', delayHours: 0 }, { id: randomUUID(), kind: 'launch', subject: 'An invitation', body: 'A second approved email', delayHours: 1 }] };
   let response = await save('lead', draft); assert.equal(response.status, 200, await response.clone().text());
   assert.equal((await save('lead', draft)).status, 409, 'Stale drafts cannot overwrite another revision');
   assert.equal((await save('lead', draft, 1, { origin: 'https://attacker.test' })).status, 403);

@@ -1,17 +1,18 @@
 'use client';
 
 import {useState} from 'react';
-import {ArrowRight,ChevronDown,Coins,CreditCard,Banknote,FolderOpen,History,Link2,LogOut,MessageSquare,Plus,ShieldCheck,TrendingUp,Users,LifeBuoy,Scale,FileText,LockKeyhole,Mail,ExternalLink} from 'lucide-react';
+import {ArrowRight,ChevronDown,CircleAlert,Coins,CreditCard,Banknote,FolderOpen,History,Link2,LogOut,MessageSquare,Plus,ShieldCheck,TrendingUp,Users,LifeBuoy,Scale,FileText,LockKeyhole,Mail,ExternalLink} from 'lucide-react';
 import {DropdownMenu,DropdownMenuContent,DropdownMenuItem,DropdownMenuLabel,DropdownMenuSeparator,DropdownMenuTrigger,DropdownMenuSub,DropdownMenuSubContent,DropdownMenuSubTrigger} from '@/components/ui/dropdown-menu';
 import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
 import {Brand} from './ui-brand';
 import {WorkspaceSearch} from './workspace-search';
 
-type NavigationView='overview'|'library'|'crm'|'credits'|'connections'|'admin';
+type NavigationView='overview'|'library'|'crm'|'credits'|'connections'|'creator-library'|'admin';
 const navigation=[
   {id:'overview' as const,label:'Dashboard',icon:TrendingUp},
   {id:'library' as const,label:'Products',icon:FolderOpen},
   {id:'crm' as const,label:'Customers',icon:Users},
+  {id:'creator-library' as const,label:'Creator library',icon:FolderOpen},
 ];
 type Props={
   user:{name:string;email:string}|null;
@@ -41,16 +42,18 @@ export function WorkspaceNavigation({user,view,label,admin,products,creditsLabel
         <WorkspaceSearch products={products} history={history} admin={admin} onView={onView} onProduct={onProduct} onConversation={onConversation} onCreate={onCreate} onVisit={onVisit}/>
         <div className="workspace-header-actions">
           <button type="button" className="workspace-credit-button" onClick={()=>onView('credits')} aria-label={`AI credits: ${creditsLabel}`} title="AI credits"><Coins size={17}/><span>{creditsLabel}</span></button>
-          <button type="button" className="workspace-help-trigger" onClick={()=>setSupportOpen(true)} aria-label="Help & support" title="Help & support"><LifeBuoy size={20}/></button>
+          <button type="button" className="workspace-help-trigger workspace-attention-trigger" onClick={()=>onVisit('/operations')} aria-label="Attention & support" title="Attention & support"><CircleAlert size={20}/></button>
           {user?<DropdownMenu>
             <DropdownMenuTrigger asChild><button type="button" className="workspace-account-trigger" aria-label="Account menu" title="Account menu"><span className="workspace-avatar" aria-hidden="true">{initials}</span><ChevronDown size={13}/></button></DropdownMenuTrigger>
             <DropdownMenuContent className="workspace-account-menu" align="end" sideOffset={10} collisionPadding={12}>
               <DropdownMenuLabel className="workspace-account-identity"><span className="workspace-avatar" aria-hidden="true">{initials}</span><div><strong>{user.name||'Your account'}</strong><span>{user.email}</span></div></DropdownMenuLabel>
               <DropdownMenuSeparator/>
               <DropdownMenuLabel className="workspace-menu-section">YOUR WORKSPACE</DropdownMenuLabel>
-              <DropdownMenuItem onSelect={()=>onVisit('/account/payments')}><Banknote/><span>Seller payments</span></DropdownMenuItem>
-              <DropdownMenuItem onSelect={()=>onVisit('/account/billing')}><CreditCard/><span>Billing & receipts</span></DropdownMenuItem>
-              <DropdownMenuItem onSelect={()=>onView('credits')}><Coins/><span>Plans & AI credits</span></DropdownMenuItem>
+              <DropdownMenuItem onSelect={()=>onVisit('/operations')}><CircleAlert/><span>Attention & support</span></DropdownMenuItem>
+              <DropdownMenuItem onSelect={()=>onVisit('/account/payments')}><Banknote/><span>Get paid</span></DropdownMenuItem>
+              <DropdownMenuItem onSelect={()=>onVisit('/account/billing')}><CreditCard/><span>My FiveGen plan</span></DropdownMenuItem>
+              <DropdownMenuItem onSelect={()=>onView('credits')}><Coins/><span>AI credits</span></DropdownMenuItem>
+              <DropdownMenuItem onSelect={()=>onVisit('/collaborate')}><Users/><span>Shared with me</span></DropdownMenuItem>
               <DropdownMenuItem onSelect={()=>onView('connections')}><Link2/><span>Connected assistants</span></DropdownMenuItem>
               {admin&&<DropdownMenuItem onSelect={()=>onView('admin')}><ShieldCheck/><span>Platform settings</span></DropdownMenuItem>}
               <DropdownMenuSeparator/>

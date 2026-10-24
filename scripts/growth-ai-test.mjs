@@ -40,7 +40,10 @@ Object.assign(deps, await load('lib/growth.ts'));
 Object.assign(deps, await load('lib/credits.ts'));
 Object.assign(deps, await load('lib/creator-voice.ts'), await load('lib/campaign-run.ts'));
 Object.assign(deps, await load('lib/creator-voice-server.ts'));
+Object.assign(deps,await load('lib/creator-context-contract.ts'));
+Object.assign(deps,await load('lib/creator-context-server.ts'),await load('lib/marketing-versions-server.ts'));
 Object.assign(deps, await load('lib/growth-server.ts'));
+Object.assign(deps, await load('lib/creator-context-request.ts'));
 const route = await load('app/api/products/[id]/growth/route.ts'), generateRoute = await load('app/api/products/[id]/growth/generate/route.ts');
 const id = randomUUID(), otherId = randomUUID();
 const product = productId => storage.sqlite.prepare("INSERT INTO products (id,owner,slug,title,description,audience,format,color,content,created_at,updated_at) VALUES (?,?,?,?,?,?,?,'orange',?,1,1)").run(productId, owner, 'growth-' + productId, 'Illustration handoff', 'A creator-authored illustration offer.', 'Independent illustrators', 'Guide', JSON.stringify({ sections: [], benefits: [], launch: '' }));
@@ -49,7 +52,9 @@ storage.sqlite.prepare('INSERT INTO wallets (owner,purchased) VALUES (?,100)').r
 const params = { params: Promise.resolve({ id }) }, url = `http://localhost/api/products/${id}/growth`;
 const get = () => route.GET(new Request(url), params);
 const patch = (input, headers = {}) => route.PATCH(new Request(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(input) }), params);
-const generate = input => generateRoute.POST(new Request(url + '/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) }), params);
+// Historical internal writer retains its crash/credit regression coverage; the HTTP route only exposes scoped proposals.
+const generate=async input=>{try{return Response.json(await deps.generateGrowth(id,owner,input));}catch(error){return deps.failure(error);}};
+const publicGenerate=input=>generateRoute.POST(new Request(url+'/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input)}),params);
 const balance = () => storage.sqlite.prepare('SELECT purchased FROM wallets WHERE owner=?').get('growth-owner').purchased;
 const brief = { icp: 'Independent illustrators', problem: 'Client handoffs take too long', beliefs: 'A professional process must be complicated', story: 'I simplified my own studio handoffs', promise: 'A repeatable process, without a guaranteed financial outcome', proof: 'No proof yet', offer: 'My recorded lessons and a checklist', tone: 'Plain spoken and warm', cta: 'Request details' };
 try {
@@ -61,6 +66,7 @@ try {
   response = await patch(saveInput); assert.equal(response.status, 200); current = (await response.json()).growth;
   assert.equal((await patch(saveInput)).status, 409, 'A stale revision cannot overwrite saved answers');
   const input = { expectedUpdatedAt: current.updatedAt, requestId: randomUUID(), maxCredits: 0 };
+  assert.equal((await publicGenerate({...input,maxCredits:10})).status,400,'Public HTTP cannot invoke the historical bundled overwrite path');assert.equal(calls,0);assert.equal(balance(),100);
   assert.equal((await generate(input)).status, 402); assert.equal(calls, 0); assert.equal(balance(), 100);
   response = await generate({ ...input, maxCredits: 10 }); assert.equal(response.status, 200); const first = await response.json();
   current = first.growth; assert.equal(first.spent, 10); assert.equal(balance(), 90); assert.equal(calls, 1);

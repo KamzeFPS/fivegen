@@ -1,0 +1,7 @@
+import {z} from 'zod';
+import {creatorContextRefsSchema} from './creator-context-contract';
+export const pageCopySchema=z.object({headline:z.string().trim().min(1).max(300),heroDescription:z.string().trim().min(1).max(3000)}).strict();
+export const pageCopyInput=z.object({action:z.literal('generate').default('generate'),requestId:z.string().uuid(),pageId:z.string().uuid().optional(),expectedPageUpdatedAt:z.number().int().nonnegative(),current:z.object({headline:z.string().max(300),heroDescription:z.string().max(3000)}).strict(),instruction:z.string().trim().min(3).max(1500),maxCredits:z.number().int().min(0).max(30)}).strict();
+const pageCopyFactsSchema=z.object({title:z.string(),description:z.string(),format:z.string(),inclusions:z.array(z.string()),priceCents:z.number(),currency:z.string(),source:z.enum(['saved-product','saved-builder']),productRevision:z.number(),builderVersion:z.number().nullable()});
+export const pageCopyProposalSchema=z.object({id:z.string().uuid(),pageId:z.string().uuid().optional(),copy:pageCopySchema,contextRefs:creatorContextRefsSchema,productFacts:pageCopyFactsSchema.optional(),briefRevision:z.number().int().nonnegative(),expectedPageUpdatedAt:z.number().int().nonnegative(),createdAt:z.number().int().positive()});
+export type PageCopyProposal=z.infer<typeof pageCopyProposalSchema>;

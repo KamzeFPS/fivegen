@@ -97,3 +97,17 @@
 }
 @media(max-width:370px){.workspace-toolbar{padding-left:12px;padding-right:12px;gap:7px}.workspace-brand .brand{font-size:20px}.workspace-brand .brand-symbol{width:25px;height:25px;margin-right:6px}.workspace-primary-nav{gap:8px}.workspace-primary-nav>button{font-size:11px;gap:5px}.workspace-account-identity>div>span{font-size:11px}}
 @media(prefers-reduced-motion:reduce){.workspace-account-menu,.workspace-history-menu{animation:none!important;transition:none!important}}
+/* Shared creator-workspace foundations used by launch, page and growth tasks. */
+:root{--fg-canvas:#111214;--fg-surface:#1b1d21;--fg-primary:#f4f4f5;--fg-secondary:#a6a9b1;--fg-accent:#ff804a;--fg-focus:#ffb48e;--fg-control-height:44px;--fg-space:8px;--fg-radius:10px}
+.workspace-header{background:var(--fg-canvas);color:var(--fg-primary)}
+.workspace-header :is(button,a,input):focus-visible{outline:2px solid var(--fg-focus);outline-offset:3px}
+.workspace-account-menu [data-slot=dropdown-menu-item],.workspace-account-menu [data-slot=dropdown-menu-sub-trigger]{min-height:44px}
+.workspace-create-button{min-height:44px;background:linear-gradient(135deg,#ff985e,#ff804a);color:#23160f}
+.workspace-credit-button,.workspace-help-trigger,.workspace-account-trigger{min-height:44px}
+.library-product-next{display:flex;align-items:center;gap:6px;color:#d3a78d;font-size:12px;line-height:1.6;margin-top:8px}
+.library-status{white-space:normal}.library-status.is-selling{color:#9bd5b0}.library-status.is-selling i{background:#59c883}
+.library-products-list .library-product-next{grid-column:1;grid-row:3;margin-top:2px}
+.library-filters{flex-wrap:wrap}.library-filters>button{min-height:44px}
+.workspace-help-trigger.workspace-attention-trigger{display:grid;min-height:44px;min-width:44px}
+/* Four global destinations remain readable beside the create action on phones. */
+@media(max-width:700px){.workspace-primary-nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;max-width:none}.workspace-primary-nav>button{min-width:0;flex-direction:column;gap:3px;padding:4px 0;font-size:10px;line-height:1.15}.workspace-primary-nav>button>span{white-space:normal;text-align:center}.workspace-secondary-actions{flex:none}}

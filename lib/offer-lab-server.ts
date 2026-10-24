@@ -3,6 +3,7 @@ import { ApiError, database, ownedProduct } from './server';
 import { completeOfferStudy, initialOfferStudy, offerStudySchema, type OfferLab, type OfferResult } from './offer-lab';
 import { limitLeadCapture } from './growth-funnel-server';
 import { getGrowth, saveGrowth } from './growth-server';
+import { offerBriefChanges } from './offer-launch-brief';
 import { csvCell } from './growth-funnel';
 
 export async function getOfferLab(productId: string, owner: string): Promise<OfferLab> {
@@ -29,7 +30,7 @@ export async function changeOfferLab(productId: string, owner: string, input: un
     const selected = current.draft[value.variant];
     if (!completeOfferStudy({ ...current.draft, a: selected, b: selected })) throw new ApiError('Complete the selected offer first.');
     const growth = await getGrowth(productId, owner);
-    await saveGrowth(productId, owner, { expectedUpdatedAt: value.expectedGrowthUpdatedAt, assets: growth.assets, brief: { ...growth.brief, icp: selected.audience, problem: current.draft.problem || growth.brief.problem, promise: selected.outcome, offer: `${selected.title}\n${selected.includes}\nPrice hypothesis: ${selected.currency.toUpperCase()} ${selected.price}` } });
+    await saveGrowth(productId, owner, { expectedUpdatedAt: value.expectedGrowthUpdatedAt, assets: growth.assets, brief: { ...growth.brief, ...offerBriefChanges(current.draft,value.variant,growth.brief) } });
     return current;
   }
   const draft = value.draft || current.draft;
@@ -87,7 +88,7 @@ export async function exportOfferResponses(productId: string, owner: string) {
 export async function publicOfferStudy(slug: string) {
   const row = await database().prepare("SELECT e.* FROM offer_experiments e JOIN products p ON p.id=e.product_id AND p.owner=e.owner WHERE e.slug=? AND e.status='live' AND e.published IS NOT NULL").bind(slug).first();
   if (!row) throw new ApiError('This offer survey is unavailable.', 404);
-  return { productId: String(row.product_id), owner: String(row.owner), slug: String(row.slug), revision: Number(row.published_revision), study: offerStudySchema.parse(JSON.parse(String(row.published))) };
+  return { productId: String(row.product_id), owner: String(row.owner), slug: String(row.slug), revision: Number(row.published_revision), study: (()=>{const study=offerStudySchema.parse(JSON.parse(String(row.published)));return {question:study.question,problem:study.problem,a:study.a,b:study.b};})() };
 }
 const responseSchema = z.object({ slug: z.string().max(120), revision: z.number().int().positive(), visitor: z.string().uuid(), action: z.enum(['visit','respond']), preference: z.enum(['a','b','neither']).optional(), readiness: z.enum(['curious','interested','ready']).optional(), feedback: z.string().trim().max(2000).default(''), email: z.union([z.literal(''),z.string().trim().email().max(254)]).default(''), website: z.string().max(300).default('') });
 export async function respondToOffer(input: unknown) {
@@ -105,3 +106,5 @@ export async function respondToOffer(input: unknown) {
   }
   return { success: true };
 }
+
+export async function offerBriefPreview(productId:string,owner:string,variant:'a'|'b'){const [lab,growth]=await Promise.all([getOfferLab(productId,owner),getGrowth(productId,owner)]),changes=offerBriefChanges(lab.draft,variant,growth.brief);return {variant,expectedRevision:lab.revision,expectedGrowthUpdatedAt:growth.updatedAt,source:JSON.stringify(lab.draft)===JSON.stringify(lab.published)?`Published survey round ${lab.publishedRevision}`:'Saved research draft · not a published survey result',responseCount:lab.responseCount,fields:Object.entries(changes).map(([field,after])=>({field,before:growth.brief[field as keyof typeof growth.brief],after})),retained:['Creator story','Evidence and claim limits','Tone','Call to action','Existing VSL and page draft','Live checkout price','Published pages','Active email snapshots']};}

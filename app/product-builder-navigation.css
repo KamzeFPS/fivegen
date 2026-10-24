@@ -70,3 +70,6 @@
   .pb-workspace-context > div { width:100%; justify-content:flex-end; }
   .pb-workspace-app .pb-builder-heading h1 { font-size:25px; }
 }
+
+/* Product work uses a single global bar; task destinations remain beside the canvas. */
+@media(min-width:901px){.pb-app.pb-workspace-app:has(.workspace-shell.has-product){--workspace-header-height:72px}.pb-workspace-app:has(.workspace-shell.has-product) .workspace-nav-row{display:none}.pb-workspace-app .pb-layout.pb-layout-page{max-width:none;grid-template-columns:minmax(0,1fr);padding:24px 18px 40px}.pb-workspace-app .workspace-product-sidebar{width:208px}.pb-workspace-app .workspace-product-rail{width:64px;padding-left:5px;padding-right:5px}}

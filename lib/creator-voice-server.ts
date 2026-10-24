@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { env } from 'cloudflare:workers';
 import { ApiError, database, ownedProduct } from './server';
 import { providerKey, providerSettings } from './ai';
@@ -58,7 +59,7 @@ export function voiceRevisionGuard(owner: string, references: VoiceReference[]) 
   return { sql: references.map(() => ' AND EXISTS(SELECT 1 FROM creator_voice_sources WHERE id=? AND owner=? AND updated_at=? AND approved=1 AND permission=1)').join(''), values: references.flatMap(source => [source.id, owner, source.updatedAt]) };
 }
 export async function transcribeVoiceSource(id: string, owner: string, value: unknown) {
-  const source = await getVoiceSource(id, owner), input = creatorRunInput.parse(value);
+  const source = await getVoiceSource(id, owner), input = creatorRunInput.extend({mode:z.enum(['append','replace']).default('append')}).parse(value);
   const previous = await previousCreatorRun('transcript', id, owner, input); if (previous) return previous;
   if (!source.permission) throw new ApiError('Confirm you have permission to process this recording before transcription.', 400);
   if (!source.uploadId) throw new ApiError('Attach an audio or video recording first.', 400);
@@ -77,7 +78,7 @@ export async function transcribeVoiceSource(id: string, owner: string, value: un
     if (!response.ok) throw new ApiError('Transcription is temporarily unavailable. Your recording is saved and this attempt was not charged.', 502);
     const result = await response.json() as { text?: unknown };
     if (typeof result.text !== 'string' || !result.text.trim() || result.text.length > 20000) throw new ApiError('The transcript is empty or too long. Try a shorter recording or paste a reviewed transcript.', 502);
-    return { transcript: result.text };
+    const transcript=input.mode==='append'&&source.transcript.trim()?source.transcript+'\n\n'+result.text:result.text;if(transcript.length>20000)throw new ApiError('The combined transcript exceeds 20,000 characters. Your original text is unchanged and this attempt was not charged. Save a shorter excerpt or choose replacement deliberately.',413);return { transcript };
   }, (result, updatedAt) => database().prepare('UPDATE creator_voice_sources SET transcript=?,approved=0,updated_at=?,lease=0 WHERE id=? AND owner=? AND updated_at=? AND lease_id=?')
     .bind(result.transcript, updatedAt, id, owner, input.expectedUpdatedAt, input.requestId));
 }

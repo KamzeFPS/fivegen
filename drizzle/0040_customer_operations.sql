@@ -1,0 +1,15 @@
+CREATE TABLE IF NOT EXISTS audience_segments (id TEXT PRIMARY KEY, owner TEXT NOT NULL, name TEXT NOT NULL, filter TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS audience_segments_owner ON audience_segments(owner,updated_at);
+CREATE TABLE IF NOT EXISTS buyer_help_cases (id TEXT PRIMARY KEY,owner TEXT NOT NULL,order_id TEXT NOT NULL,product_id TEXT NOT NULL,category TEXT NOT NULL,subject TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'open',created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS buyer_help_owner ON buyer_help_cases(owner,status,updated_at);
+CREATE TABLE IF NOT EXISTS buyer_help_messages (id TEXT PRIMARY KEY,case_id TEXT NOT NULL,author TEXT NOT NULL,text TEXT NOT NULL,created_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS buyer_help_message_case ON buyer_help_messages(case_id,created_at);
+CREATE TABLE IF NOT EXISTS product_share_links(id TEXT PRIMARY KEY,owner TEXT NOT NULL,product_id TEXT NOT NULL,name TEXT NOT NULL,channel TEXT NOT NULL,publication_version INTEGER,campaign_id TEXT,campaign_name TEXT,campaign_revision INTEGER,clicks INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS product_share_owner ON product_share_links(owner,product_id,created_at);
+CREATE TABLE IF NOT EXISTS product_journey_events(id TEXT PRIMARY KEY,owner TEXT NOT NULL,product_id TEXT NOT NULL,session_id TEXT NOT NULL,event TEXT NOT NULL,campaign TEXT NOT NULL DEFAULT '',created_at INTEGER NOT NULL,UNIQUE(product_id,session_id,event,campaign));
+CREATE INDEX IF NOT EXISTS product_journey_scope ON product_journey_events(owner,product_id,created_at);
+CREATE TABLE IF NOT EXISTS commerce_order_journeys(order_id TEXT PRIMARY KEY,owner TEXT NOT NULL,product_id TEXT NOT NULL,session_id TEXT NOT NULL,campaign TEXT NOT NULL DEFAULT '',created_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS commerce_order_journey_scope ON commerce_order_journeys(owner,product_id,session_id);
+CREATE TABLE IF NOT EXISTS creator_refund_requests(id TEXT PRIMARY KEY,owner TEXT NOT NULL,order_id TEXT NOT NULL,mode TEXT NOT NULL,amount INTEGER NOT NULL,currency TEXT NOT NULL,charge_id TEXT NOT NULL,charge_amount INTEGER NOT NULL,refunded_at_review INTEGER NOT NULL,status TEXT NOT NULL DEFAULT 'review',version INTEGER NOT NULL DEFAULT 1,expires_at INTEGER NOT NULL,lease INTEGER NOT NULL DEFAULT 0,provider_refund_id TEXT,provider_status TEXT,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS creator_refund_active_order ON creator_refund_requests(order_id) WHERE status IN ('review','confirming','unknown');
+CREATE INDEX IF NOT EXISTS creator_refund_owner ON creator_refund_requests(owner,order_id,created_at);

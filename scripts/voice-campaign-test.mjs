@@ -35,10 +35,14 @@ async function load(path) {
   const code = `const {${Object.keys(deps).join(',')}}=globalThis.${key};\n` + ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 } }).outputText;
   const module = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64')); delete globalThis[key]; return module;
 }
+Object.assign(deps, await load('lib/creator-context-contract.ts'));
+Object.assign(deps,await load('lib/marketing-destination.ts'));
+deps.listMarketingDestinations=async()=>[];deps.resolveMarketingDestination=async()=>{throw new ApiError('No fixture destination',409);};deps.destinationGuard=()=>({sql:'',values:[]});
 Object.assign(deps, await load('lib/creator-voice.ts'), await load('lib/campaign.ts'), await load('lib/growth.ts'));
 Object.assign(deps, await load('lib/credits.ts'));
 Object.assign(deps, await load('lib/campaign-run.ts'));
 Object.assign(deps, await load('lib/creator-voice-server.ts'));
+Object.assign(deps, await load('lib/creator-context-server.ts'),await load('lib/marketing-versions-server.ts'));
 Object.assign(deps, await load('lib/growth-server.ts'));
 Object.assign(deps, await load('lib/campaign-server.ts'));
 const libraryRoute = await load('app/api/voice/route.ts'), sourceRoute = await load('app/api/voice/[id]/route.ts'), transcriptRoute = await load('app/api/voice/[id]/transcribe/route.ts'), campaignRoute = await load('app/api/products/[id]/campaigns/route.ts'), generateRoute = await load('app/api/products/[id]/campaigns/generate/route.ts');
@@ -65,6 +69,7 @@ try {
   assert.equal((await sourceRoute.PATCH(body('/api/voice/' + source.id, sourceInput, 'PATCH'), params(source.id))).status, 409, 'Stale source cannot overwrite edits');
   owner = 'another-owner'; assert.equal((await campaignRoute.GET(new Request('http://localhost' + campaignUrl), params(productId))).status, 404); owner = 'creator-owner';
   assert.equal((await campaignRoute.PATCH(body(campaignUrl, {}, 'PATCH', { Origin: 'https://attacker.test' }), params(productId))).status, 403);
+  await deps.saveCreatorSelection(owner,productId,{useProfile:false,sourceIds:[source.id],expectedUpdatedAt:0});
   let campaign = await getCampaign(); campaign = { ...campaign, goal: 'Invite illustrators to request workshop details', sourceIds: [source.id] };
   response = await saveCampaign(campaign); assert.equal(response.status, 200); campaign = (await response.json()).campaign;
   assert.equal((await saveCampaign({ ...campaign, updatedAt: 0 })).status, 409);
@@ -101,7 +106,7 @@ try {
   const abandonedId = randomUUID(), oldTime = Date.now() - 181000;
   await deps.reserveCredits(owner, abandonedId, 'text', 10);
   storage.sqlite.prepare("INSERT INTO creator_ai_runs (id,owner,kind,target_id,expected_updated_at,state,cost,created_at) VALUES (?,?,'campaign',?,?,'pending',10,?)").run(abandonedId, owner, productId, campaign.updatedAt, oldTime);
-  storage.sqlite.prepare('UPDATE creator_campaigns SET lease=?,lease_id=? WHERE product_id=?').run(oldTime + 180000, abandonedId, productId);
+  storage.sqlite.prepare('UPDATE marketing_campaigns SET lease=?,lease_id=? WHERE product_id=?').run(oldTime + 180000, abandonedId, productId);
   await getCampaign(); assert.equal(balance(), 190); assert.equal(storage.sqlite.prepare('SELECT state FROM creator_ai_runs WHERE id=?').get(abandonedId).state, 'failed'); await getCampaign(); assert.equal(balance(), 190);
   // Real private storage + mocked OpenAI transport, never a live provider call.
   const uploadId = randomUUID(), objectKey = 'voice-fixture/' + uploadId; await storage.BUCKET.put(objectKey, new Uint8Array([1, 2, 3]));
