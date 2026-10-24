@@ -1,6 +1,6 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
-import {ArrowLeft,ArrowRight,Check,CheckCircle2,Eye,EyeOff,FileText,Loader2,LockKeyhole,Mail,ShieldCheck,Sparkles} from 'lucide-react';
+import {ArrowLeft,ArrowRight,Check,CheckCircle2,Eye,EyeOff,Loader2,LockKeyhole,Mail,ShieldCheck,Sparkles} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {Field,FieldGroup,FieldLabel} from '@/components/ui/field';
@@ -100,7 +100,7 @@ export function AuthScreen({mode,returnTo='/',token='',notice=''}:{mode:AuthMode
      {requested&&<p className="auth-google-help">Signed up with Google? <a href={googleLink}>Continue with Google.</a></p>}
     </div>}
    </div>
-  </section><aside className="auth-story" aria-label="Create with FiveGen"><div className="auth-story-copy"><h2>From a spark.<br/>To something<br/>worth sharing.</h2><p>Books, courses and digital products. Create in your own way, with your own voice.</p></div><div className="auth-preview" aria-hidden="true"><div className="auth-preview-sheet"><span>Your ideas</span><span>Your content</span><span>Your next chapter</span></div><div className="auth-preview-book"><span>Made by you.</span><strong>A fresh<br/>perspective.</strong><div className="auth-book-mark"><FileText size={24}/><span>Your next chapter</span></div></div></div><div className="auth-story-bottom"><p><Sparkles size={16} aria-hidden="true"/>Your ideas deserve a place.</p><p><LockKeyhole size={16} aria-hidden="true"/>A private workspace for what comes next.</p></div></aside></div>
+  </section><aside className="auth-story" aria-label="Create with FiveGen"><div className="auth-story-copy"><h2>From a spark.<br/>To something<br/>worth sharing.</h2><p>Books, courses and digital products. Create in your own way, with your own voice.</p></div><div className="auth-preview" aria-hidden="true"><img className="auth-preview-image" src="/brand/creator-book-studio.webp" width={1200} height={800} alt="" decoding="async"/></div><div className="auth-story-bottom"><p><Sparkles size={16} aria-hidden="true"/>Your ideas deserve a place.</p><p><LockKeyhole size={16} aria-hidden="true"/>A private workspace for what comes next.</p></div></aside></div>
   <footer className="auth-footer"><span>© {new Date().getFullYear()} FiveGen</span><nav aria-label="Legal and support"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="mailto:kamzewac@gmail.com">Get help</a></nav></footer>
  </main>;
 }
