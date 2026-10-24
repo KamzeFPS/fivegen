@@ -93,6 +93,21 @@
 .auth-preview-book>span{font-size:13px;margin-bottom:24px}
 .auth-preview-book>strong{font:normal 36px/1.05 var(--auth-book-font);letter-spacing:-.04em;overflow-wrap:break-word;min-width:0}
 .auth-book-mark{display:flex;align-items:center;gap:12px;width:100%;padding-top:16px;margin-top:auto;border-top:1px solid var(--auth-book-lines);font-size:12px}
+/* aagii-skills: one short assembly, then a still illustration. Keep the resting
+ * transforms above as the no-animation fallback; no script or hidden reveal. */
+@media(min-width:801px) and (prefers-reduced-motion:no-preference){
+ .auth-preview{perspective:900px}
+ .auth-preview-sheet{animation:auth-sheet-settle 700ms var(--auth-ease) 100ms backwards}
+ .auth-preview-book{transform-origin:12% 60%;animation:auth-book-settle 900ms var(--auth-ease) backwards}
+}
+@keyframes auth-sheet-settle{
+ from{opacity:.45;transform:translate3d(-16px,24px,0) rotate(1deg)}
+ to{opacity:1;transform:translate3d(0,0,0) rotate(8deg)}
+}
+@keyframes auth-book-settle{
+ from{opacity:.6;transform:translate3d(-12px,28px,0) rotate(-12deg) rotateY(-16deg)}
+ to{opacity:1;transform:translate3d(0,0,0) rotate(-7deg) rotateY(0deg)}
+}
 .auth-story-bottom{padding-top:8px;border-top:1px solid var(--auth-paper-line)}
 .auth-story-bottom p{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--auth-paper-muted);line-height:1.6;margin:8px 0 0}
 .auth-story-bottom svg{flex:none}
