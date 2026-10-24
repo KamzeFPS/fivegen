@@ -6,6 +6,7 @@ export * from './growth-strategy-schema';
 export * from './commerce-v2-schema';
 export * from './automation-schema';
 export * from './creator-voice-schema';
+export * from './product-page-schema';
 
 // Wallet checkout records are permanent, including test-mode records.
 export const walletCustomers = sqliteTable('wallet_customers', {

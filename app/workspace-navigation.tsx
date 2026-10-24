@@ -1,8 +1,11 @@
 'use client';
 
-import {ArrowRight,ChevronDown,ChevronRight,Coins,CreditCard,FolderOpen,History,Link2,LogOut,MessageSquare,Plus,ShieldCheck,TrendingUp,Users} from 'lucide-react';
-import {DropdownMenu,DropdownMenuContent,DropdownMenuItem,DropdownMenuLabel,DropdownMenuSeparator,DropdownMenuTrigger} from '@/components/ui/dropdown-menu';
+import {useState} from 'react';
+import {ArrowRight,ChevronDown,Coins,CreditCard,FolderOpen,History,Link2,LogOut,MessageSquare,Plus,ShieldCheck,TrendingUp,Users,LifeBuoy,Scale,FileText,LockKeyhole,Mail,ExternalLink} from 'lucide-react';
+import {DropdownMenu,DropdownMenuContent,DropdownMenuItem,DropdownMenuLabel,DropdownMenuSeparator,DropdownMenuTrigger,DropdownMenuSub,DropdownMenuSubContent,DropdownMenuSubTrigger} from '@/components/ui/dropdown-menu';
+import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
 import {Brand} from './ui-brand';
+import {WorkspaceSearch} from './workspace-search';
 
 type NavigationView='overview'|'library'|'crm'|'credits'|'connections'|'admin';
 const navigation=[
@@ -15,52 +18,72 @@ type Props={
   view:string;
   label:string;
   admin:boolean;
-  productCount:number;
+  products:{id:string;title:string;format:string}[];
   creditsLabel:string;
   history:{id:string;title:string}[];
   onCreate:()=>void;
   onView:(view:NavigationView)=>void;
+  onProduct:(id:string)=>void;
   onConversation:(id:string)=>void;
   onVisit:(path:string)=>void;
   onSignOut:()=>void;
 };
 
-export function WorkspaceNavigation({user,view,label,admin,productCount,creditsLabel,history,onCreate,onView,onConversation,onVisit,onSignOut}:Props){
+export function WorkspaceNavigation({user,view,label,admin,products,creditsLabel,history,onCreate,onView,onProduct,onConversation,onVisit,onSignOut}:Props){
+  const [supportOpen,setSupportOpen]=useState(false);
+  const initials=(user?.name.trim().split(/\s+/).slice(0,2).map(word=>word[0]).join('')||user?.email[0]||'F').toUpperCase();
   return <>
     <a className="workspace-skip" href="#workspace-content">Skip to content</a>
     <header className="workspace-header">
-      <button type="button" className="workspace-brand" onClick={onCreate} aria-label="FiveGen home"><Brand/></button>
-      <nav className="workspace-primary-nav" aria-label="Main navigation">
-        {navigation.map(({id,label:navLabel,icon:Icon})=><button type="button" key={id} aria-current={view===id?'page':undefined} onClick={()=>onView(id)}><Icon size={17}/><span>{navLabel}</span>{id==='library'&&productCount>0&&<small>{productCount}</small>}</button>)}
-      </nav>
-      <div className="workspace-header-actions">
-        <button type="button" className="workspace-credit-button" onClick={()=>onView('credits')} aria-label={`AI credits: ${creditsLabel}`} title="AI credits"><Coins size={16}/><span>{creditsLabel}</span></button>
-        <button type="button" className="workspace-create-button" onClick={onCreate} aria-label="Create your product" data-active={view==='create'}><Plus size={17}/><span>Create your product</span></button>
-        {user?<DropdownMenu>
-          <DropdownMenuTrigger asChild><button type="button" className="workspace-account-trigger" aria-label="Account menu" title="Account menu"><span className="workspace-avatar" aria-hidden="true">{(user.name.trim()[0]||user.email[0]||'F').toUpperCase()}</span><ChevronDown size={13}/></button></DropdownMenuTrigger>
-          <DropdownMenuContent className="workspace-account-menu" align="end" sideOffset={12} collisionPadding={12}>
-            <DropdownMenuLabel className="workspace-account-identity"><strong>{user.name}</strong><span>{user.email}</span></DropdownMenuLabel>
-            <DropdownMenuSeparator/>
-            <DropdownMenuItem onSelect={()=>onVisit('/account/billing')}><CreditCard/>Account & billing</DropdownMenuItem>
-            <DropdownMenuItem onSelect={()=>onVisit('/pricing')}><Coins/>Plans & credits</DropdownMenuItem>
-            <DropdownMenuItem onSelect={()=>onView('connections')}><Link2/>Connect assistant</DropdownMenuItem>
-            {admin&&<DropdownMenuItem onSelect={()=>onView('admin')}><ShieldCheck/>Platform settings</DropdownMenuItem>}
-            <DropdownMenuSeparator/>
-            <DropdownMenuItem className="workspace-signout" onSelect={onSignOut}><LogOut/>Sign out</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>:<a className="workspace-signin" href="/signin-with-chatgpt?return_to=%2F">Sign in<ArrowRight size={15}/></a>}
+      <div className="workspace-toolbar">
+        <button type="button" className="workspace-brand" onClick={onCreate} aria-label="FiveGen home"><Brand/></button>
+        <WorkspaceSearch products={products} history={history} admin={admin} onView={onView} onProduct={onProduct} onConversation={onConversation} onCreate={onCreate} onVisit={onVisit}/>
+        <div className="workspace-header-actions">
+          <button type="button" className="workspace-credit-button" onClick={()=>onView('credits')} aria-label={`AI credits: ${creditsLabel}`} title="AI credits"><Coins size={17}/><span>{creditsLabel}</span></button>
+          <button type="button" className="workspace-help-trigger" onClick={()=>setSupportOpen(true)} aria-label="Help & support" title="Help & support"><LifeBuoy size={20}/></button>
+          {user?<DropdownMenu>
+            <DropdownMenuTrigger asChild><button type="button" className="workspace-account-trigger" aria-label="Account menu" title="Account menu"><span className="workspace-avatar" aria-hidden="true">{initials}</span><ChevronDown size={13}/></button></DropdownMenuTrigger>
+            <DropdownMenuContent className="workspace-account-menu" align="end" sideOffset={10} collisionPadding={12}>
+              <DropdownMenuLabel className="workspace-account-identity"><span className="workspace-avatar" aria-hidden="true">{initials}</span><div><strong>{user.name||'Your account'}</strong><span>{user.email}</span></div></DropdownMenuLabel>
+              <DropdownMenuSeparator/>
+              <DropdownMenuLabel className="workspace-menu-section">YOUR WORKSPACE</DropdownMenuLabel>
+              <DropdownMenuItem onSelect={()=>onVisit('/account/billing')}><CreditCard/><span>Billing & receipts</span></DropdownMenuItem>
+              <DropdownMenuItem onSelect={()=>onView('credits')}><Coins/><span>Plans & AI credits</span></DropdownMenuItem>
+              <DropdownMenuItem onSelect={()=>onView('connections')}><Link2/><span>Connected assistants</span></DropdownMenuItem>
+              {admin&&<DropdownMenuItem onSelect={()=>onView('admin')}><ShieldCheck/><span>Platform settings</span></DropdownMenuItem>}
+              <DropdownMenuSeparator/>
+              <DropdownMenuItem onSelect={()=>setSupportOpen(true)}><LifeBuoy/><span>Help & support</span></DropdownMenuItem>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger><Scale/><span>Legal & policies</span></DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="workspace-policy-menu" sideOffset={10} collisionPadding={12}>
+                  <DropdownMenuItem onSelect={()=>onVisit('/terms')}><FileText/>Terms & conditions</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={()=>onVisit('/privacy')}><LockKeyhole/>Privacy policy</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={()=>onVisit('/refund')}><CreditCard/>Refund & cancellation</DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSeparator/>
+              <DropdownMenuItem className="workspace-signout" onSelect={onSignOut}><LogOut/><span>Sign out</span><ArrowRight/></DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>:<a className="workspace-signin" href="/signin-with-chatgpt?return_to=%2F">Sign in<ArrowRight size={15}/></a>}
+        </div>
+      </div>
+      <div className="workspace-nav-row">
+        <nav className="workspace-primary-nav" aria-label="Main navigation">
+          {navigation.map(({id,label:navLabel,icon:Icon})=><button type="button" key={id} aria-current={view===id?'page':undefined} onClick={()=>onView(id)}><Icon size={17}/><span>{navLabel}</span>{id==='library'&&products.length>0&&<small>{products.length}</small>}</button>)}
+        </nav>
+        <span className="sr-only">Current workspace: {label}</span>
+        <div className="workspace-secondary-actions">
+          {history.length>0&&<DropdownMenu>
+            <DropdownMenuTrigger asChild><button type="button" className="workspace-history-trigger"><History size={16}/><span>Recent plans</span><ChevronDown size={12}/></button></DropdownMenuTrigger>
+            <DropdownMenuContent className="workspace-history-menu" align="end" sideOffset={10} collisionPadding={12}>
+              <DropdownMenuLabel>Pick up where you left off</DropdownMenuLabel><DropdownMenuSeparator/>
+              {history.slice(0,8).map(item=><DropdownMenuItem key={item.id} onSelect={()=>onConversation(item.id)}><MessageSquare/><span>{item.title}</span></DropdownMenuItem>)}
+            </DropdownMenuContent>
+          </DropdownMenu>}
+          <button type="button" className="workspace-create-button" onClick={onCreate} aria-label="Create your product" data-active={view==='create'}><Plus size={17}/><span>Create product</span></button>
+        </div>
       </div>
     </header>
-    <div className="workspace-context">
-      <div className="workspace-location"><span>Workspace</span><ChevronRight size={13}/><strong>{label}</strong></div>
-      {history.length>0&&<DropdownMenu>
-        <DropdownMenuTrigger asChild><button type="button" className="workspace-history-trigger"><History size={15}/>Recent plans<ChevronDown size={12}/></button></DropdownMenuTrigger>
-        <DropdownMenuContent className="workspace-history-menu" align="end" sideOffset={8} collisionPadding={12}>
-          <DropdownMenuLabel>Pick up where you left off</DropdownMenuLabel>
-          <DropdownMenuSeparator/>
-          {history.slice(0,8).map(item=><DropdownMenuItem key={item.id} onSelect={()=>onConversation(item.id)}><MessageSquare/><span>{item.title}</span></DropdownMenuItem>)}
-        </DropdownMenuContent>
-      </DropdownMenu>}
-    </div>
+    <Dialog open={supportOpen} onOpenChange={setSupportOpen}><DialogContent className="workspace-support-dialog"><DialogHeader><span className="workspace-support-icon"><LifeBuoy size={25}/></span><DialogTitle>A little help, when you need it.</DialogTitle><DialogDescription>Questions about your workspace, billing, or a product? Contact FiveGen support.</DialogDescription></DialogHeader><a className="workspace-support-email" href="mailto:kamzewac@gmail.com?subject=FiveGen%20support"><Mail size={19}/><span><strong>Email support</strong><small>kamzewac@gmail.com</small></span><ExternalLink size={16}/></a><p className="workspace-support-note">Include the product name and what you were trying to do.</p></DialogContent></Dialog>
   </>;
 }

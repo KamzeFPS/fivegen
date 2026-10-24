@@ -66,6 +66,7 @@ export function productFromRow(r: Record<string, unknown>): Product {
     status: r.status as Product["status"],
     commerce: readCommerce(r.commerce),
     experience: readExperience(r.experience),
+    ...(r.page_icon_upload_id!==undefined?{pageIconUploadId:r.page_icon_upload_id?String(r.page_icon_upload_id):null}:{}),
     createdAt: Number(r.created_at),
     updatedAt: Number(r.updated_at),
   };
