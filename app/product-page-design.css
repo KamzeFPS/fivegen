@@ -224,3 +224,9 @@
   .product-page-customizer > header, .product-page-customizer-scroll { padding:20px; }
   .product-page-customizer > footer { padding:16px 20px max(16px,env(safe-area-inset-bottom)); }
 }
+
+/* Full supplied wordmark remains legible on creator page chrome. */
+.product-public-header>a:first-child img{width:132px;height:auto;display:block}
+.product-page-footer>a:first-child{width:110px}
+.product-page-footer>a:first-child img{height:auto;display:block}
+@media(max-width:640px){.product-public-header>a:first-child img{width:110px}}

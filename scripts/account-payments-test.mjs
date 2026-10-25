@@ -23,7 +23,7 @@ const componentPath='app/account/payments/seller-payments-account.tsx';
 const routePath='app/account/payments/page.tsx';
 const account={configured:true,enabled:true,mode:'live',connected:false,ready:false,accountId:null};
 const selectedIcons=Object.fromEntries('ArrowLeft ArrowRight Check CheckCircle2 ChevronRight CreditCard ExternalLink Loader2 RefreshCw ShieldCheck Wallet'.split(' ').map(name=>[name,icons[name]]));
-const deps={React,useCallback:React.useCallback,useEffect:React.useEffect,useState:React.useState,...selectedIcons,Brand:()=>React.createElement('span',null,'FiveGen')};
+const deps={React,useCallback:React.useCallback,useEffect:React.useEffect,useState:React.useState,...selectedIcons,AppearanceControl:()=>null,Brand:()=>React.createElement('span',null,'FiveGen')};
 deps.CreatorSaleFees=(await load('app/creator-sale-fees.tsx',{React})).CreatorSaleFees;
 deps.AccountNavigation=(await load('app/account/account-navigation.tsx',deps)).AccountNavigation;
 const ui=await load(componentPath,deps),id='866cfb4b-b55d-4b76-a339-a69368ab7478';

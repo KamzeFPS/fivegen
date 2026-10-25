@@ -6,6 +6,7 @@ import {Input} from '@/components/ui/input';
 import {Field,FieldGroup,FieldLabel} from '@/components/ui/field';
 import {InputGroup,InputGroupAddon,InputGroupButton,InputGroupInput} from '@/components/ui/input-group';
 import {Brand} from '../ui-brand';
+import {AppearanceControl} from '../appearance';
 import {authPageLink,authReturnPath,authResultReturnPath,AUTH_PASSWORD_MIN_LENGTH,AUTH_PASSWORD_MAX_LENGTH} from './auth-paths';
 import './auth.css';
 
@@ -62,7 +63,7 @@ export function AuthScreen({mode,returnTo='/',token='',notice=''}:{mode:AuthMode
  const errorNotice=error?<p id="auth-error" className="auth-error" ref={errorHeading} tabIndex={-1} role="alert">{error}</p>:null;
  return <main className="auth-page" data-auth-mode={mode}>
   <a className="auth-skip" href="#auth-form">Skip to form</a>
-  <header className="auth-header"><a href="/" aria-label="FiveGen home" translate="no"><Brand/></a><a className="auth-home" href="/"><ArrowLeft size={16} aria-hidden="true"/> Back to FiveGen</a></header>
+  <header className="auth-header"><a href="/" aria-label="FiveGen home" translate="no"><Brand/></a><AppearanceControl className="appearance-route-control"/><a className="auth-home" href="/"><ArrowLeft size={16} aria-hidden="true"/> Back to FiveGen</a></header>
   <div className="auth-layout"><section id="auth-form" tabIndex={-1} className="auth-form-pane" aria-label={signin?'Sign in':signup?'Create account':'Account recovery'}>
    <div className="auth-card">
     {stage==='form'?<>

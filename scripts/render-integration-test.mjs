@@ -82,12 +82,12 @@ try {
   assert.ok(!/Sample data|DEMO WORKSPACE|olivia@example.com|12,845/.test(html), 'Public workspace contains no demonstration metrics');
   assert.equal(home.headers.get('x-frame-options'), 'DENY');
   assert.equal(home.headers.get('x-robots-tag'),null,'Anonymous marketing home remains indexable');
-  assert.match(html,/Your expertise\./,'Visitors and crawlers receive the public explanation, not an empty app shell');
+  assert.match(html,/You know/,'Visitors and crawlers receive the public explanation, not an empty app shell');
   assert.match(html,/https:\/\/www\.fivegen\.ai\//,'The public homepage declares its canonical brand URL');
   assert.match(html,/application\/ld\+json/,'Brand identity is present in the actual rendered document');
   const mainRobots=await fetch(base+'/robots.txt');assert.equal(mainRobots.status,200);assert.match(mainRobots.headers.get('content-type'),/text\/plain/);assert.match(await mainRobots.text(),/Sitemap: https:\/\/www\.fivegen\.ai\/sitemap.xml/);
   const mainSitemap=await fetch(base+'/sitemap.xml');assert.equal(mainSitemap.status,200);assert.match(mainSitemap.headers.get('content-type'),/application\/xml/);const mainXml=await mainSitemap.text();assert.equal([...mainXml.matchAll(/<loc>/g)].length,5);assert.ok([...mainXml.matchAll(/<loc>(.*?)<\/loc>/g)].every(([,value])=>{const url=new URL(value);return !url.search&&!/^\/(?:build|account)(?:\/|$)/.test(url.pathname);}), 'The sitemap contains no workspace or account URLs');
-  const trackingHome=await fetch(base+'/?utm_source=google');assert.equal(trackingHome.headers.get('x-robots-tag'),null);assert.match(await trackingHome.text(),/Your expertise\./);
+  const trackingHome=await fetch(base+'/?utm_source=google');assert.equal(trackingHome.headers.get('x-robots-tag'),null);assert.match(await trackingHome.text(),/You know/);
   const privateView=await fetch(base+'/?view=calendar');assert.equal(privateView.headers.get('x-robots-tag'),'noindex, nofollow');
   const apiIndexing=await fetch(base+'/api/workspace');assert.equal(apiIndexing.status,401);assert.equal(apiIndexing.headers.get('x-robots-tag'),'noindex, nofollow');
   const verificationFile=await fetch(base+'/googleb7396844c362c0a5.html');assert.equal(verificationFile.status,200);assert.equal((await verificationFile.text()).trim(),'google-site-verification: googleb7396844c362c0a5.html');
@@ -152,7 +152,7 @@ try {
   assert.equal((await json('/api/terms')).accepted, false, 'Rejected checkbox or stale-version submissions do not grant access');
   await json('/api/terms','POST',{accepted:true,version:submittedVersion});
   assert.equal((await json('/api/terms')).accepted,true);
-  const privateHome=await fetch(base,{headers:{cookie}});assert.equal(privateHome.headers.get('x-robots-tag'),'noindex, nofollow');assert.ok(!(await privateHome.text()).includes('Your expertise.<br'),'Signed-in creators retain their workspace');
+  const privateHome=await fetch(base,{headers:{cookie}});assert.equal(privateHome.headers.get('x-robots-tag'),'noindex, nofollow');assert.ok(!(await privateHome.text()).includes('You know<br'),'Signed-in creators retain their workspace');
   const acceptedWelcome = await fetch(base + welcomePath, { headers: { cookie }, redirect: 'manual' });
   assert.ok([303,307].includes(acceptedWelcome.status), 'Accepted users continue past onboarding');
   assert.equal(new URL(acceptedWelcome.headers.get('location'), base).href, base + '/?view=overview');

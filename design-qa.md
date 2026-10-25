@@ -1,65 +1,45 @@
-# Funnel Builder and shared Calendar QA
+# FiveGen Creator’s Desk and appearance QA
 
-final result: passed
+Date: 26 October 2026, Asia/Ulaanbaatar. Final result: **passed**.
 
-Reviewed October 25, 2026 in the isolated local production-build preview at http://localhost:5198. This verifies the implemented UI and synthetic service flows. It does not certify a production deployment, live AI responses, social authorization/publication, email delivery, or a full assistive-technology audit. The previous review is preserved in `docs/improvement-workstreams/design-qa-before-funnel-calendar.md`.
+## Visual truth and implementation
 
-## Source and rendered evidence
+- Selected option: first displayed concept, Creator’s Desk, revised with the requested appearance selector. Source: `/Users/kamze/Documents/ChatGPT/fivegen/outputs/sparkle-redesign-2026-10-25/concepts/selected-light-dark-revision.png` (1073 × 1466 pixels).
+- Implementation: `http://localhost:59908/`, anonymous, Light, first example tab. Browser: Chrome, used because the in-app viewport override did not hold a requested size.
+- Final browser screenshot: `/Users/kamze/Documents/ChatGPT/fivegen/outputs/sparkle-redesign-2026-10-25/screenshots/19-home-approved-full.png` (1440 × 4384 pixels), CSS viewport 1440 × 1024. Browser screenshot API emits CSS-size pixels despite the display density. No stretched assets.
+- Combined full comparison: `/Users/kamze/Documents/ChatGPT/fivegen/outputs/sparkle-redesign-2026-10-25/comparison-final.png`. The first 1967 implementation pixels were proportionally reduced to the source’s 1073 × 1466 size, then placed beside the source.
+- Focused hero/brand/type comparison: `/Users/kamze/Documents/ChatGPT/fivegen/outputs/sparkle-redesign-2026-10-25/comparison-hero-focus.png`.
 
-The selected source is the user-attached `codex-clipboard-15f3684f-cc3f-4692-b07c-e7a6c379d4c5.png`, 1489 × 1056 pixels. The original source density and font metrics are unknown. Final desktop captures use 1489 × 1056 CSS/output pixels at devicePixelRatio 1. Final phone captures use 390 × 844 CSS/output pixels at devicePixelRatio 1. No screenshot was resampled to manufacture a match.
+## Comparison history
 
-Evidence is under `outputs/funnel-calendar-2026-10-25/`:
+1. **Blocked, P2 scale and hierarchy.** The initial combined comparison (`comparison-desktop.png`) showed undersized headline, supporting text, logo and launch heading, plus an inset hero illustration that lost the selected composition. Increased those scales and let the real generated artwork occupy the hero’s right region.
+2. **Blocked, P2 collision/crop.** `comparison-iteration-2.png` showed the enlarged hero reaching the headline. A subsequent cover crop cut the planning note. Reduced headline maximum to 96px and used a full contained raster with a soft edge mask. No replacement CSS illustration was used.
+3. **Passed.** Reopened both source and the final combined comparisons. Headline and artwork are distinct, the complete planning note is visible, and the editorial rhythm, warm palette, supplied brand and primary action match the chosen direction. The functioning “Your product” tab intentionally previews lessons; the funnel is in “Your audience” so the tab and content agree.
 
-- `funnel-desktop-final.png`
-- `funnel-comparison-final.png`: source and implementation side by side, opened and reviewed together.
-- `funnel-inspector-comparison-final.png`: source and implementation inspector crops, opened and reviewed together.
-- `funnel-phone-final-fixed.png`
-- `calendar-desktop-final.png`
-- `calendar-phone-final-fixed.png`
-- `build-final.log`, `calendar-test-final.log`, `calendar-ui-test-final.log`
-
-## Intentional adaptations
-
-The existing FiveGen product rail, workspace shell, typography and brand tokens remain consistent with the rest of the app. The source's floating map toolbar overlapped product navigation; advanced controls now live under Edit map inside the canvas. Actual saved strategy content, outline length, graph notes and account data are shown instead of hard-coded mock testimonials, hooks or audience claims.
-
-The subsequent user request adds one workspace-wide Calendar beside Creator library. Schedule video is therefore the main idea action, while Add to map remains available separately. The footer shows actual scheduled items and their account/timezone. Creator interview, strategy generation and editable graph remain a separate Funnel Builder module; Lead capture retains its existing job. Calendar was not duplicated in the product sidebar.
+Additional theme defects fixed before release: dark Docs translucent surfaces were too pale; protected buyer pages needed the white logo; account appearance controls needed real Radix menu-radio keyboard navigation. Final evidence: `screenshots/20-docs-dark-fixed.png` and `21-account-appearance-menu.png` under the output directory above.
 
 ## Required fidelity surfaces
 
-- Typography: clear page, stage, idea and hook hierarchy; consistent existing app font stack. Full audience and long idea context remain accessible in details/disclosures rather than overwhelming the map. Phone text wraps within 390px.
-- Spacing/layout: audience → TOFU → MOFU → BOFU journey, one selected stage and adjacent details match the selected direction. All three stages fit the matched desktop view. Details scroll independently above the schedule footer. The phone inspector is a full-screen Radix dialog. The Calendar has an account rail, date grid and agenda; account controls collapse on phones.
-- Colors/tokens: dark surfaces, restrained borders, orange selected/action states and distinct stage accents follow FiveGen's shared palette. Selection, status and account colors do not replace text labels.
-- Images/assets: existing FiveGen logo and shared Lucide icons render sharply. No new decorative raster asset or invented customer imagery is required. Graph edges are functional relationships.
-- Copy/content: Get discovered, Build trust and Convert explain TOFU/MOFU/BOFU. Calendar labels identify account, product, timezone and source. Manual planning, queue eligibility, provider acceptance, bookings and completed plans are not represented as verified publication or delivery.
+- **Typography:** Inter plus locally served Noto Serif normal/italic. Matched the large sans/italic hierarchy, wrapping, optical weights and line lengths; body and control text remain readable at actual viewport size. The exact uploaded wordmark is an image, not substituted typography.
+- **Spacing/layout:** compared header, hero split, illustration crop, divider, launch heading, three-tab row and example panel in the combined inputs. Verified no document overflow at 1440, 705 and 390 CSS px. Phone content stacks and the appearance selector remains labeled.
+- **Colors:** warm ivory/near-black/orange homepage; actual light and dark application surfaces, readable states and focus rings. Creator-authored sales-page colors, document paper and media are protected from the account appearance override.
+- **Assets:** supplied source preserved byte-for-byte, exact dark/light lockups and sized icons; generated warm desk artwork at its natural ratio, 180 KB WebP. Noto font subsets total about 51 KB. No generic placeholder or fabricated customer proof.
+- **Copy:** original teaching stays the creator’s work; illustrative project is labeled. Calendar demo is a reminder, not an autopublishing claim. Payment availability and email activation remain accurately described.
 
-## Findings and repairs
+## Interaction and runtime checks
 
-| Priority | Finding | Repair and final evidence |
-| --- | --- | --- |
-| P2 | Initial desktop composition clipped the BOFU idea footer and competed with the assistant mascot. | Compact audience summary, remove redundant breadcrumb and hide the mascot on focused Funnel/Calendar surfaces. Complete journey in `funnel-desktop-final.png`. |
-| P2 | Long idea context crowded the hook and recording outline. | Keep the idea title prominent and place long context under Why this idea fits. Independent detail scroll keeps all controls reachable. |
-| P2 | Phone detail surface did not isolate background controls. | Reuse real Radix modal primitives. Browser verified background aria-hidden, body scroll lock, nested scheduling focus and Escape focus restoration. |
-| P2 | Initial phone sheet inherited Tailwind's separate translate property and rendered half offscreen. | Explicitly reset translate and dialog radius. Final measured bounds: x=0, y=0, width=390, height=844; see `funnel-phone-final-fixed.png`. |
-| P2 | Calendar account controls consumed too much phone space. | Accessible collapsed Accounts selector, persistent Add profile, select-and-collapse with focus restored to selector. See `calendar-phone-final-fixed.png`. |
-| P2 | Desktop Calendar month rows extended below the matched viewport. | Responsive row height uses the remaining viewport space; full six-row grid bottom=1039.38 within 1056px. See `calendar-desktop-final.png`. |
-| P1 | datetime-local input could show edited text without updating React state in actual browser input. | Handle input and change consistently. Browser saved Oct 27 10:30–11:00 in Asia/Ulaanbaatar; live preview, persisted event and funnel schedule agree. Component-handler regression covers this path. |
+- Explored lessons, next lesson, both page styles, all funnel stages, Calendar reminder and Undo. Tabs use arrow/Home/End navigation. Primary creation CTA preserves the return destination at sign-in.
+- Switched Light/Dark, reloaded, verified saved preference, automatic wordmark and device/System bootstrap. Account menu Light selection was tested using Left Arrow then Enter; checked state and resulting Light theme were verified.
+- Browser-reviewed workspace Funnel Builder, product overview, shared Calendar, pricing, sign-in and Docs. Checked the 705px navigation and phone homepage. Browser error logs were empty on tested homepage/workspace surfaces.
+- Production build, TypeScript and scoped lint passed (four existing-style image optimization warnings, zero scoped errors). All 76 creator-clarity suites passed across the initial run and the focused rerun of the navigation harness after adding its new appearance dependency. Appearance, public-home, SEO and production Render integration checks passed separately.
+- Payment session creation logic is unchanged; Stripe applies appearance through its supported update API without remounting the session. No real payment, email, AI generation or customer-record edits were performed for these checks.
 
-No actionable P0/P1/P2 remains in the reviewed final states. Independent visual review also found no additional material issue in Funnel desktop/phone or Calendar phone. Phone calendars intentionally scroll through the month. Very small viewport heights use normal vertical scrolling.
+## Remaining limits and polish
 
-## Interactions verified
+- Minor photographic details differ from the concept; the independently generated illustration preserves its subject, palette and composition. This is acceptable asset variation.
+- Theme preferences persist per origin; the Docs subdomain keeps its own selection. This is documented behavior.
+- Live third-party wallet/payment authorization was not exercised; this release changes its appearance only.
 
-- Creator interview and deterministic intercepted strategy generation; private save, failure recovery, credit reservation/refund and editable graph regressions.
-- Stage selection, idea navigation, hook/outline copy controls, editable idea, add-to-map and advanced graph editing.
-- Save current strategy before scheduling; account creation inside scheduling; required account, product and saved funnel references.
-- Create two account profiles in different timezones; schedule a funnel idea for Alex · Instagram; show that item in both Funnel Builder and Calendar.
-- Create a manual task for Studio · YouTube on Oct 28 at 09:00 America/Los_Angeles. The shared Asia/Ulaanbaatar display correctly shows Oct 29 at 00:00 and retains the original schedule.
-- Manual event cancel/restore semantics, title-only exact-UTC preservation, all-day exclusive end and DST handling in meaningful backend/component tests.
-- Account filters isolate schedules. Month and Agenda show source links. Product filter and day deep links preserve context. Extra account/product records created during preview were preserved.
-- Phone detail bounds, no horizontal overflow, modal background isolation, nested schedule close, Escape focus return to Explore Get discovered. Calendar account selector expansion/selection/collapse and focus return.
-- Final desktop Funnel and Calendar browser console error queries were empty.
+Implementation checklist: supplied identity applied; chosen landing page implemented; interactive example works; Light/Dark/System preferences and keyboard choices work; responsive checks pass; no actionable P0/P1/P2 findings remain.
 
-## Validation and boundaries
-
-Repository TypeScript, focused ESLint, git diff whitespace checks and the final Render production build pass. Calendar service tests and actual component-handler tests pass. The broader approved-improvements run passed 53/53 suites, with runtime creator HTTP and Render integration checks; see `outputs/calendar-release-2026-10-25/`. Owner isolation, origin checks, CAS, idempotent saves, references, migrations, source projections, private-data boundaries, AI leases/refunds and safe product deletion use isolated fixtures.
-
-No production records, Stripe settings, email jobs or live provider calls were used for this QA. Scheduling creates persistent plans. Social OAuth and automatic publication are outside this implemented calendar; account profiles are explicitly manual. Imported records remain owned by their original module and are edited there. Bounded date windows and truncation are surfaced rather than presenting partial data as exhaustive.
+final result: passed

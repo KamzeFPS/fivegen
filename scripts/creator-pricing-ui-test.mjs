@@ -13,7 +13,7 @@ async function load(path,deps){
   try{return await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));}finally{delete globalThis[key];}
 }
 const selectedIcons=Object.fromEntries('ArrowLeft ArrowRight ArrowUpRight Check CreditCard Loader2 LockKeyhole LogOut ReceiptText RefreshCw Sparkles Wallet Zap'.split(' ').map(name=>[name,icons[name]]));
-const dependencies={React,...selectedIcons,useState:React.useState,useEffect:React.useEffect,Brand:()=>React.createElement('span',null,'FiveGen'),Button:({children,...props})=>React.createElement('button',props,children),clearWorkspaceDrafts(){}};
+const dependencies={React,...selectedIcons,useState:React.useState,useEffect:React.useEffect,Brand:()=>React.createElement('span',null,'FiveGen'),AppearanceControl:()=>null,Button:({children,...props})=>React.createElement('button',props,children),clearWorkspaceDrafts(){}};
 dependencies.AccountNavigation=(await load('app/account/account-navigation.tsx',dependencies)).AccountNavigation;
 const free={id:'free',name:'Free',commissionBps:500,commissionPercent:5,subscriptionId:null,paidThrough:null,source:'free'};
 const future=Date.UTC(2027,0,1),pro={id:'pro',name:'Creator Pro',commissionBps:300,commissionPercent:3,subscriptionId:'sub_pro',paidThrough:future,source:'stripe'},scale={...pro,id:'scale',name:'Scale',commissionBps:0,commissionPercent:0,subscriptionId:'sub_scale'};

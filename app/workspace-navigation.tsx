@@ -6,6 +6,7 @@ import {DropdownMenu,DropdownMenuContent,DropdownMenuItem,DropdownMenuLabel,Drop
 import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
 import {Brand} from './ui-brand';
 import {WorkspaceSearch} from './workspace-search';
+import {AppearanceMenuItems} from './appearance';
 
 type NavigationView='overview'|'library'|'crm'|'credits'|'connections'|'creator-library'|'calendar'|'admin';
 const navigation=[
@@ -75,6 +76,8 @@ export function WorkspaceNavigation({user,view,label,admin,products,creditsLabel
               </DropdownMenuSub>
               <DropdownMenuSeparator/>
               <DropdownMenuItem className="workspace-signout" onSelect={onSignOut}><LogOut/><span>Sign out</span><ArrowRight/></DropdownMenuItem>
+              <DropdownMenuSeparator/>
+              <AppearanceMenuItems/>
             </DropdownMenuContent>
           </DropdownMenu>:<a className="workspace-signin" href="/signin-with-chatgpt?return_to=%2F">Sign in<ArrowRight size={15}/></a>}
         </div>

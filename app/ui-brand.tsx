@@ -1,12 +1,10 @@
 import { ArrowUpRight } from "lucide-react";
 import type { Brief } from "@/lib/product";
-export function Brand() {
+/** The supplied lockup, including its original lettering and orange mark. */
+export function Brand({tone = 'auto'}: {tone?: 'auto' | 'dark' | 'light'} = {}) {
   return (
-    <span className="brand">
-      <span className="brand-symbol">
-        <img src="/brand/fivegen-transparent.webp" alt="" width="1254" height="1254" />
-      </span>
-      FiveGen
+    <span className="brand" data-brand-tone={tone} role="img" aria-label="FiveGen">
+      {(tone === 'auto' ? ['dark', 'light'] : [tone]).map(variant => <img key={variant} className={`brand-lockup brand-lockup-${variant}`} src={`/brand/fivegen-sparkle-${variant}.webp`} alt="" aria-hidden="true" width="1494" height="330" decoding="async" />)}
     </span>
   );
 }

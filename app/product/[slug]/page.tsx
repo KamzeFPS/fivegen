@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ApiError } from "@/lib/server";
 import { getPublicProductPage } from "@/lib/product-page-server";
+import {Brand} from '@/app/ui-brand';
 import {ProductPageExperiment} from "@/app/product-page-experiment";
 import {publicPageMetadata} from '@/lib/seo';
 
@@ -29,7 +30,7 @@ export default async function PublicProductPage({ params, searchParams }: Produc
   const query = await searchParams;
   const reviewOrderId = typeof query.order === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(query.order) ? query.order : undefined;
   return <main className="product-public-shell">
-    <header className="product-public-header"><a href="/" aria-label="FiveGen home"><img src="/brand/fivegen-transparent.webp" alt="FiveGen"/></a><nav aria-label="Product access"><a href="/customer">My purchases</a><a href={`mailto:kamzewac@gmail.com?subject=${encodeURIComponent(`Product page report: ${page.product.title}`)}`}>Report product</a></nav></header>
+    <header className="product-public-header"><a href="/" aria-label="FiveGen home"><Brand/></a><nav aria-label="Product access"><a href="/customer">My purchases</a><a href={`mailto:kamzewac@gmail.com?subject=${encodeURIComponent(`Product page report: ${page.product.title}`)}`}>Report product</a></nav></header>
     <ProductPageExperiment pageId={page.pageId} pageVersion={page.publishedAt} publishedAt={page.publishedAt} product={page.product} config={page.config} commerce={page.commerce} reviewSummary={page.reviewSummary} iconUrl={page.config.iconUploadId ? `/api/product-pages/${encodeURIComponent(slug)}/image/icon` : null} bannerUrl={page.config.bannerUploadId ? `/api/product-pages/${encodeURIComponent(slug)}/image/banner` : null} funnelPath={page.funnelPath} reviewOrderId={reviewOrderId}/>
   </main>;
 }

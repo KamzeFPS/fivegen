@@ -50,7 +50,7 @@ async function harness(search = '') {
   const dependencies = {
     ...Object.fromEntries(['ArrowDownToLine','ArrowLeft','ArrowRight','BookOpen','CalendarDays','CheckCircle2','ChevronDown','Clock3','FileText','GraduationCap','Layers','LockKeyhole','Play','Users'].map(name=>[name,icons[name]])),...presentation,renderStudioMarkdown,CustomerLearning:()=>null,CustomerCommunity:()=>null,CustomerService:()=>null,PurchasedProductResources:()=>null,ProductReminders:()=>null,ProductPushReminders:()=>null,ProductFulfillment:()=>null,ProductUpdateNotice:()=>null,TeamContent:()=>null,WrittenContent,BuyerSubscription:()=>null,
     WorkspaceExample:'workspace-example',PurchaseRecovery:'purchase-recovery',PurchaseHelp:'purchase-help',Dialog:()=>null,DialogContent:()=>null,DialogHeader:()=>null,DialogTitle:()=>null,DialogDescription:()=>null,DialogFooter:()=>null,
-    React, useState, useRef, useCallback, useEffect, Link:'a', Brand:()=>React.createElement('span',null,'FiveGen'), location:browserLocation,
+    React, useState, useRef, useCallback, useEffect, Link:'a', AppearanceControl:()=>null,Brand:()=>React.createElement('span',null,'FiveGen'), location:browserLocation,
     window:{location:browserLocation,history:{replaceState(_state,_title,url){browserLocation.href=String(url);browserLocation.search=new URL(String(url)).search;}}},
     commerceMoney:amount => `$${(amount / 100).toFixed(2)}`,
     isConsulting:format => format === 'Coaching session',

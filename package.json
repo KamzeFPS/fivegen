@@ -52,7 +52,8 @@
     "test:clarity": "node scripts/creator-clarity-preflight.mjs",
     "test:seo": "node scripts/seo-metadata-test.mjs && node scripts/public-home-test.mjs && node scripts/search-indexing-boundary-test.mjs",
     "test:funnel-builder": "node scripts/funnel-builder-test.mjs && node scripts/funnel-builder-navigation-test.mjs",
-    "test:calendar": "node scripts/workspace-calendar-test.mjs && node scripts/workspace-calendar-ui-test.mjs"
+    "test:calendar": "node scripts/workspace-calendar-test.mjs && node scripts/workspace-calendar-ui-test.mjs",
+    "test:appearance": "node scripts/appearance-test.mjs && node scripts/generate-appearance-surfaces.cjs --check"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

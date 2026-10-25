@@ -2,9 +2,10 @@
 import {useEffect,useMemo,useRef,useState,type FormEvent} from 'react';
 import {loadStripe} from '@stripe/stripe-js/pure';
 import {CheckoutElementsProvider,CurrencySelectorElement,ExpressCheckoutElement,PaymentElement,useCheckoutElements} from '@stripe/react-stripe-js/checkout';
-import type {StripeExpressCheckoutElementConfirmEvent} from '@stripe/stripe-js';
+import type {Appearance,StripeExpressCheckoutElementConfirmEvent} from '@stripe/stripe-js';
 import {ArrowLeft,Check,CreditCard,Loader2,LockKeyhole} from 'lucide-react';
 import {Brand} from '../ui-brand';
+import {AppearanceControl,useAppearance} from '../appearance';
 import type {WalletOffer} from '@/lib/wallet-catalog';
 import type {walletPublicConfig} from '@/lib/wallet-stripe';
 import {cardCheckoutOptions,expressCheckoutOptions} from '@/lib/wallet-checkout-options';
@@ -58,6 +59,10 @@ function CardPaymentForm({setConfirming,subscription,onPriceChange,offerId}:{set
 }
 
 export function WalletCheckout({config,offer,email}:{config:ReturnType<typeof walletPublicConfig>;offer:WalletOffer;email:string}) {
+  const {resolvedAppearance}=useAppearance();
+  // Stripe's provider applies appearance changes through changeAppearance;
+  // the session key stays stable so entered payment details are retained.
+  const stripeAppearance=useMemo<Appearance>(()=>({theme:resolvedAppearance==='light'?'stripe':'night',variables:{colorPrimary:resolvedAppearance==='light'?'#d95a18':'#ff8b42',colorBackground:resolvedAppearance==='light'?'#fffdf9':'#19191c',colorText:resolvedAppearance==='light'?'#24221e':'#f5f2ef',colorTextSecondary:resolvedAppearance==='light'?'#686259':'#b2ada7',colorTextPlaceholder:resolvedAppearance==='light'?'#797168':'#a19a94',borderRadius:'12px',fontFamily:'Inter, system-ui, sans-serif'}}),[resolvedAppearance]);
   const [session,setSession]=useState<{clientSecret:string;sessionId:string;offerId:string}|null>(null),[error,setError]=useState(''),[retry,setRetry]=useState(0),[closing,setClosing]=useState(false),[confirming,setConfirming]=useState(false),[price,setPrice]=useState<CheckoutPrice|null>(null);
   const activeSession=session?.offerId===offer.id?session:null,currentPrice=price?.offerId===offer.id?price:null;
   const stripe=useMemo(()=>config?.enabled?loadStripe(config.publishableKey):null,[config?.publishableKey,config?.enabled]);
@@ -81,11 +86,11 @@ export function WalletCheckout({config,offer,email}:{config:ReturnType<typeof wa
       location.assign(`/pricing${offer.interval?'':'?type=packs'}`);
     }catch(e){setError(e instanceof Error?e.message:'Could not close checkout.');setClosing(false);}
   }
-  return <main className="paddle-pricing"><nav className="paddle-nav"><a href="/" aria-label="FiveGen home"><Brand/></a><button className="paddle-back" disabled={closing||confirming} onClick={back}><ArrowLeft size={16}/> {closing?'Closing checkout…':'Back to plans & credits'}</button></nav>
+  return <main className="paddle-pricing"><nav className="paddle-nav"><a href="/" aria-label="FiveGen home"><Brand/></a><AppearanceControl className="appearance-route-control"/><button className="paddle-back" disabled={closing||confirming} onClick={back}><ArrowLeft size={16}/> {closing?'Closing checkout…':'Back to plans & credits'}</button></nav>
     <div className="wallet-checkout-layout"><section className="wallet-order"><span className="paddle-eyebrow">YOUR NEXT CREATION</span><h1>{offer.name}{offer.interval?' plan':''}</h1><p>{offer.description}</p><div className="wallet-order-price" aria-live="polite">{currentPrice?<>{currentPrice.amount}<span> {currentPrice.currency.toUpperCase()}{offer.interval?` / ${offer.interval}`:' · one time'}</span></>:<span>Your total will appear when checkout is ready.</span>}</div><ul>{offer.features.map(f=><li key={f}><Check size={17}/>{f}</li>)}</ul><p className="wallet-fine-print">{offer.interval?`Billed ${offer.interval==='year'?'annually':'monthly'}, with ${offer.credits.toLocaleString()} credits released each month. Automatically renews until canceled. Manage renewal in Billing & receipts. Unused monthly credits do not roll over.`:'One payment. No subscription. Your top-up credits never expire and never change your creator plan or selling fee.'}</p></section>
       <section className="wallet-payment-panel"><span className="wallet-secure"><LockKeyhole size={16}/> SECURE STRIPE CHECKOUT</span><h2>Your next idea starts here.</h2><p className="wallet-account-email">Credits will be added to <strong>{email}</strong></p>
         {config?.environment==='sandbox'&&<p className="wallet-test-note">Test mode · No real charge or production credits</p>}
-        {!config?.enabled?<div className="wallet-unavailable"><CreditCard size={28}/><h3>Payments are temporarily unavailable.</h3><p>Please try again later. You can keep creating with your free allowance.</p><a href="/">Return to your studio</a></div>:activeSession?<CheckoutElementsProvider key={activeSession.sessionId} stripe={stripe} options={{clientSecret:activeSession.clientSecret,adaptivePricing:{allowed:true},elementsOptions:{appearance:{theme:'night',variables:{colorPrimary:'#ff8b42',borderRadius:'12px',fontFamily:'Inter, system-ui, sans-serif'}}}}}><CardPaymentForm setConfirming={setConfirming} subscription={Boolean(offer.interval)} onPriceChange={setPrice} offerId={offer.id}/></CheckoutElementsProvider>:!error&&<p className="wallet-loading" role="status"><Loader2 className="animate-spin" size={18}/> Preparing your secure checkout…</p>}
+        {!config?.enabled?<div className="wallet-unavailable"><CreditCard size={28}/><h3>Payments are temporarily unavailable.</h3><p>Please try again later. You can keep creating with your free allowance.</p><a href="/">Return to your studio</a></div>:activeSession?<CheckoutElementsProvider key={activeSession.sessionId} stripe={stripe} options={{clientSecret:activeSession.clientSecret,adaptivePricing:{allowed:true},elementsOptions:{appearance:stripeAppearance}}}><CardPaymentForm setConfirming={setConfirming} subscription={Boolean(offer.interval)} onPriceChange={setPrice} offerId={offer.id}/></CheckoutElementsProvider>:!error&&<p className="wallet-loading" role="status"><Loader2 className="animate-spin" size={18}/> Preparing your secure checkout…</p>}
         {error&&<div className="wallet-error" role="alert"><p>{error}</p>{!activeSession&&<button onClick={()=>{setError('');setRetry(v=>v+1);}}>Try again</button>}<a href="/account/billing">View Billing & receipts</a></div>}
         <p className="wallet-fine-print">By authorizing payment, you agree to the <a href="/terms" target="_blank" rel="noreferrer">Terms</a> and <a href="/refund" target="_blank" rel="noreferrer">Refund Policy</a>. Payment is securely processed by Stripe. FiveGen never receives your full card details.</p>
       </section>

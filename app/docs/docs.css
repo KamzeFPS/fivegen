@@ -8,3 +8,7 @@
 
 .docs-logo .docs-brand-mark{display:block;position:relative;overflow:hidden;width:35px;height:35px;flex:none}.docs-logo .docs-brand-mark img{position:absolute;width:78.375px;height:78.375px;max-width:none;left:-22.25px;top:-15px;object-fit:contain}
 @media(max-width:560px){.docs-search-field button,.docs-mobile-dialog>header button{width:44px;height:44px}.docs-code figcaption button{min-height:44px}.docs-mobile-toc summary{min-height:28px}}
+
+/* Shared supplied logo; no monogram crop or separate replacement lettering. */
+.docs-logo>.brand{display:inline-flex;font-size:25px;padding:0;border:0;margin:0}
+.docs-logo>.brand>img{position:static;max-width:none;width:auto;height:1.22em;object-fit:contain}

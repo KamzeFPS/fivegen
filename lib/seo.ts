@@ -6,7 +6,7 @@ export const DOCS_SEO_ORIGIN = 'https://docs.fivegen.ai';
 export const SEO_SITE_NAME = 'FiveGen';
 export const SEO_HOME_TITLE = 'FiveGen — AI Growth Workspace for Creators';
 export const SEO_DESCRIPTION = 'Create and sell your own courses and digital products with FiveGen. Build a sales page, plan your content funnel, organize campaigns and manage customers in one workspace.';
-export const SEO_LOGO = SEO_ORIGIN + '/brand/fivegen-mark.png';
+export const SEO_LOGO = SEO_ORIGIN + '/brand/fivegen-sparkle-mark.png';
 
 export type SearchQuery = Record<string, string | string[] | undefined>;
 

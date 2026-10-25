@@ -10,7 +10,7 @@ export function FileSalePageView({snapshot,preview=false,children,coverUrl}:{sna
  const included=snapshot.modules.filter(m=>m.included);
  const Container=preview?'div':'main';
  return <div className="fs-public">
-  <nav className="fs-public-nav"><a href="/" aria-label="FiveGen home"><Brand/></a><span>{preview?'Buyer preview · not published':'Sandbox product · test purchases only'}</span></nav>
+  <nav className="fs-public-nav"><a href="/" aria-label="FiveGen home"><Brand tone="dark"/></a><span>{preview?'Buyer preview · not published':'Sandbox product · test purchases only'}</span></nav>
   <Container className="fs-public-main">
    <section className="fs-public-intro"><div className="fs-eyebrow">DIRECT FROM THE CREATOR</div><h1>{snapshot.title||'Your product title'}</h1><p className="fs-public-description">{snapshot.description||'Describe the result your customer will get.'}</p>
    <div className="fs-public-includes"><h2>Included with your purchase</h2>{included.length?included.map(m=><div key={m.kind}><Check size={17}/><span><strong>{m.name}</strong><small>{m.kind==='downloads'?`${m.uploadIds.length} private file${m.uploadIds.length===1?'':'s'}`:`${m.sections.length} lesson${m.sections.length===1?'':'s'} · self-paced`}</small></span></div>):<p>Select the features included in your offer.</p>}</div>

@@ -2,7 +2,8 @@
 
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {Banknote,Megaphone,TrendingUp,ArrowDownToLine,ArrowLeft,ArrowRight,BookOpen,Check,FileText,ImagePlus,Loader2,Plus,ShieldCheck,Sparkles,Upload,Users,X} from 'lucide-react';
-import {Toaster,toast} from 'sonner';
+import {toast} from 'sonner';
+import {Toaster} from '@/components/ui/sonner';
 import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
 import {AIProviders,MediaStudio} from './ai-components';
 import {CreditsPanel} from './credits-panel';
@@ -184,7 +185,7 @@ function GeneratorWorkspace({user}:{user:{name:string;email:string}|null}){
   const costs=workspace?.textCost||10,unlimited=!!workspace?.credits.unlimited;
   const label=product?product.title:{create:'Create your product',overview:'Dashboard',library:'My products',crm:'Your CRM',credits:'AI credits',connections:'Connected assistants','creator-library':'Creator library',calendar:'Calendar',admin:'Platform settings'}[view];
   return <div onClick={event=>{if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;const anchor=(event.target as HTMLElement).closest?.('a[href]') as HTMLAnchorElement|null;if(!anchor||anchor.target==='_blank'||anchor.hasAttribute('download')||anchor.getAttribute('href')?.startsWith('#'))return;const url=new URL(anchor.href,location.href);if(url.origin!==location.origin||(!dirty&&!childDirty&&!editorSaves?.registry.hasDirty()&&!editorSaves?.registry.isBusy()))return;event.preventDefault();leaveWorkspace(url.pathname+url.search+url.hash);}} className={`gen-app growth-app ${view==='create'&&!product&&(conversation||sent)?'gen-chat-active':''}`}>
-    <Toaster position="bottom-right" theme="dark" richColors/>
+    <Toaster position="bottom-right" richColors/>
     {user&&view!=='calendar'&&!(product&&editorTab==='funnel-builder')&&<GenCompanion defaultMinimized={!!product} mood={busy==='planning'||childBusy?'thinking':busy?'helping':error?'concerned':view==='create'&&message.trim()?'curious':'idle'} status={busy==='planning'?'Thinking through your next step…':busy==='create'?'Getting your workspace ready…':''} onOpen={()=>{const composer=view==='create'?document.querySelector<HTMLTextAreaElement>('.chat-composer textarea, #creation-idea'):null;if(composer){composer.focus();composer.scrollIntoView({behavior:'auto',block:'center'});}else leaveWorkspace('/?view=create&planning=1');}}/>}
     <div className="gen-main">
       <WorkspaceNavigation user={user} view={view} label={label} admin={!!workspace?.admin} products={(workspace?.products||[]).filter(item=>!item.archivedAt)} creditsLabel={unlimited?'Unlimited':workspace?`${workspace.credits.total.toLocaleString()} credits`:'AI credits'} history={history} onCreate={newIdea} onHome={()=>leaveWorkspace('/')} onView={changeView} onProduct={openProductId} onConversation={openConversation} onVisit={path=>leaveWorkspace(path)} onSignOut={()=>leaveWorkspace('/signout-with-chatgpt',true)}/>

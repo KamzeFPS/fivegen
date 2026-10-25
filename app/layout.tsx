@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import {SEO_ORIGIN} from '@/lib/seo';
+import {AppearanceProvider} from './appearance';
 import "./globals.css";
 import "./studio-design.css";
 import "./flow-design.css";
@@ -22,6 +23,9 @@ import "./workspace-product-navigation.css";
 import "./product-page-design.css";
 import "./product-builder-navigation.css";
 import "./file-sale-navigation.css";
+import "./brand.css";
+import "./appearance.css";
+import "./appearance-surfaces.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SEO_ORIGIN),
@@ -33,9 +37,9 @@ export const metadata: Metadata = {
   // of search even before they receive their own route-specific metadata.
   robots: {index: false, follow: false},
   icons: {
-    icon: [{url: "/brand/favicon-96.png", type: 'image/png', sizes: '96x96'}],
-    shortcut: "/brand/favicon-96.png",
-    apple: [{url: '/brand/apple-touch-icon.png', type: 'image/png', sizes: '180x180'}],
+    icon: [{url: "/brand/fivegen-sparkle-favicon-96.png", type: 'image/png', sizes: '96x96'}],
+    shortcut: "/brand/fivegen-sparkle-favicon-96.png",
+    apple: [{url: '/brand/fivegen-sparkle-apple-180.png', type: 'image/png', sizes: '180x180'}],
   },
 };
 
@@ -45,11 +49,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" data-appearance="dark" suppressHydrationWarning>
       <head>
         <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
       </head>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased"><AppearanceProvider>{children}</AppearanceProvider></body>
     </html>
   );
 }

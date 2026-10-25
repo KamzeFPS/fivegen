@@ -28,8 +28,8 @@ assert.match(homeHtml,/property="og:url" content="https:\/\/www\.fivegen\.ai\/?"
 assert.ok(homeHtml.includes('property="og:site_name" content="FiveGen"'));
 assert.ok(homeHtml.includes('name="twitter:card" content="summary"'));
 assert.ok(homeHtml.includes(SEO_LOGO));
-assert.ok(homeHtml.includes('/brand/favicon-96.png'));
-assert.ok(homeHtml.includes('/brand/apple-touch-icon.png'));
+assert.ok(homeHtml.includes('/brand/fivegen-sparkle-favicon-96.png'));
+assert.ok(homeHtml.includes('/brand/fivegen-sparkle-apple-180.png'));
 const privateHtml = renderMetadataToHtml(mergeMetadata([rootMetadata,privatePageMetadata()]));
 assert.match(privateHtml, /name="robots" content="noindex, nofollow"/);
 assert.doesNotMatch(privateHtml, /rel="canonical"|property="og:url"/, 'Private workspace does not inherit the public homepage canonical or social URL');
@@ -97,7 +97,7 @@ assert.doesNotMatch(JSON.stringify(schema),/aggregateRating|reviewCount|ratingVa
 const dangerous={description:'</script><script>alert("x")</script>&\u2028\u2029'};
 assert.doesNotMatch(jsonLd(dangerous),/<|>|&|\u2028|\u2029/);
 assert.deepEqual(JSON.parse(jsonLd(dangerous)),dangerous);
-for (const [name,size] of [['fivegen-mark.png',512],['favicon-96.png',96],['apple-touch-icon.png',180]]) {
+for (const [name,size] of [['fivegen-sparkle-mark.png',512],['fivegen-sparkle-favicon-96.png',96],['fivegen-sparkle-apple-180.png',180]]) {
   const png=readFileSync('public/brand/'+name);
   assert.equal(png.readUInt32BE(16),size);
   assert.equal(png.readUInt32BE(20),size);

@@ -1,0 +1,72 @@
+.appearance-control {
+  --appearance-ink: var(--foreground, #f3f3f5);
+  --appearance-muted: var(--muted-foreground, #a5a5b0);
+  --appearance-surface: var(--card, #151517);
+  --appearance-border: var(--border, #2a2a2f);
+  color: var(--appearance-ink);
+  font-family: inherit;
+}
+.appearance-compact {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 38px;
+  border: 1px solid var(--appearance-border);
+  border-radius: 9px;
+  background: var(--appearance-surface);
+}
+.appearance-compact > svg {
+  position: absolute;
+  left: 11px;
+  pointer-events: none;
+}
+.appearance-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.appearance-compact select {
+  min-width: 110px;
+  min-height: 38px;
+  margin: 0;
+  border: 0;
+  border-radius: inherit;
+  padding: 7px 26px 7px 36px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.appearance-compact option { background: var(--appearance-surface); color: var(--appearance-ink); }
+.appearance-segmented { min-width: 0; margin: 0; border: 0; padding: 10px 8px 5px; }
+.appearance-segmented legend { float: left; width: 100%; margin-bottom: 10px; padding: 0; font-size: 11px; font-weight: 500; color: var(--appearance-muted); }
+.appearance-segmented > div { display: flex; clear: both; gap: 3px; padding: 3px; border: 1px solid var(--appearance-border); border-radius: 9px; background: var(--appearance-surface); }
+.appearance-segmented button { display: flex; align-items: center; justify-content: center; gap: 6px; flex: 1; min-width: 0; min-height: 36px; padding: 7px 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--appearance-muted); font: inherit; font-size: 11px; cursor: pointer; }
+.appearance-segmented button[aria-pressed=true] { border-color: var(--appearance-border); background: var(--accent, #29292d); color: var(--appearance-ink); }
+.appearance-control :is(button, select):focus-visible { outline: 2px solid #e76e25; outline-offset: 3px; }
+.appearance-menu { padding: 6px 8px 5px; }
+.appearance-menu-label { padding: 2px 0 9px; font-size: 11px; font-weight: 500; color: var(--appearance-muted); }
+.appearance-menu-options { display: flex; gap: 3px; padding: 3px; border: 1px solid var(--appearance-border); border-radius: 9px; background: var(--appearance-surface); }
+.appearance-menu-option { display: flex; align-items: center; justify-content: center; gap: 6px; flex: 1; min-width: 0; min-height: 36px; padding: 7px 8px; border: 1px solid transparent; border-radius: 6px; color: var(--appearance-muted); font-size: 11px; cursor: pointer; }
+.appearance-menu-option > span:first-child { display: none; }
+.appearance-menu-option[data-state="checked"] { border-color: var(--appearance-border); background: var(--accent, #29292d); color: var(--appearance-ink); }
+.appearance-menu-option[data-highlighted] { outline: 2px solid #e76e25; outline-offset: -2px; color: var(--appearance-ink); }
+@media (prefers-reduced-motion: reduce) { .appearance-control * { transition: none; } }
+.auth-header > .appearance-route-control, .paddle-nav > .appearance-route-control { margin-left: auto; }
+.paddle-nav > .appearance-route-control + .paddle-nav-links { margin-left: 0; }
+.account-navigation-top > .appearance-route-control { margin-left: auto; }
+.account-navigation-top > .appearance-route-control + .account-workspace-link { margin-left: 0; }
+@media (max-width: 640px) {
+  .appearance-route-control.appearance-compact { width: 44px; min-width: 44px; min-height: 44px; }
+  .appearance-route-control.appearance-compact select { width: 44px; min-width: 44px; min-height: 44px; padding: 0; appearance: none; font-size: 0; }
+  .appearance-route-control.appearance-compact option { font-size: 13px; }
+  .auth-header:has(> .appearance-route-control), .paddle-nav:has(> .appearance-route-control) { gap: 12px; }
+  .docs-header > div:has(> .appearance-route-control) { gap: 10px; }
+  .customer-portal.buyer-library > header > .appearance-route-control { margin-left: auto; }
+  .customer-portal.buyer-library > header > .appearance-route-control + a { margin-left: 0; }
+}

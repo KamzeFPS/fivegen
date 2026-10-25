@@ -2,6 +2,7 @@
 import {useEffect,useState} from 'react';
 import {ArrowLeft,ArrowRight,Check,CreditCard,LockKeyhole,Sparkles,Zap} from 'lucide-react';
 import {Brand} from '../ui-brand';
+import {AppearanceControl} from '../appearance';
 import type {WalletOffer} from '@/lib/wallet-catalog';
 import type {walletPublicConfig} from '@/lib/wallet-stripe';
 import type {CreatorPlanState} from '@/lib/creator-plans';
@@ -13,7 +14,7 @@ export function Pricing({config,offers,email,currentPlan}:{config:ReturnType<typ
   const tiers=offers.filter(offer=>type==='packs'?!offer.interval:offer.interval==='month');
   const hasPaidPlan=!!currentPlan&&currentPlan.source!=='free';
   return <main className="paddle-pricing">
-    <nav className="paddle-nav" aria-label="Pricing navigation"><a href="/" aria-label="FiveGen home"><Brand/></a><div className="paddle-nav-links">{email&&<a href="/account/billing">My plan & billing</a>}<a href="/" className="paddle-back"><ArrowLeft size={16}/> Back to studio</a></div></nav>
+    <nav className="paddle-nav" aria-label="Pricing navigation"><a href="/" aria-label="FiveGen home"><Brand/></a><AppearanceControl className="appearance-route-control"/><div className="paddle-nav-links">{email&&<a href="/account/billing">My plan & billing</a>}<a href="/" className="paddle-back"><ArrowLeft size={16}/> Back to studio</a></div></nav>
     <div className="paddle-content">
       <header className="paddle-heading"><h1>Plans & credits</h1><p>{type==='plans'?'Create for free. Upgrade for more AI credits and a lower selling fee.':'Add AI credits whenever you need them. Keep your current plan.'}</p>
         <div className="paddle-purchase-tabs" role="group" aria-label="Purchase type">{(['plans','packs'] as const).map(value=><button key={value} aria-pressed={type===value} onClick={()=>chooseType(value)}>{value==='plans'?'Creator plans':'Credit top-ups'}</button>)}</div>

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {Brand} from '@/app/ui-brand';
+import {AppearanceControl} from '@/app/appearance';
 import { commerceMoney, commerceResponse } from '@/lib/commerce-v2';
 import type { ProductContent } from '@/lib/product';
 import type {PublicProductPage} from '@/lib/product-page';
@@ -125,7 +126,7 @@ export function CustomerPortal() {
   const returnTo='/customer'+(selected||requestedOrder?'?order='+encodeURIComponent(selected||requestedOrder):''),signInHref='/signin-with-chatgpt?return_to='+encodeURIComponent(returnTo);
   function choosePurchase(id:string){if(id!==selected)setSelected(id);else if(contentError)setContentRetry(value=>value+1);if(typeof window!=='undefined'){const url=new URL(window.location.href);url.searchParams.set('order',id);window.history.replaceState(null,'',url);}}
   return <main className="customer-portal buyer-library">
-    <header><Link href="/" aria-label="FiveGen home"><Brand/></Link><Link className="buyer-library-home" href="/customer"><BookOpen size={15}/> Your library</Link><Link href={signInHref}>Sign in with purchase email <ArrowRight size={14}/></Link></header>
+    <header><Link href="/" aria-label="FiveGen home"><Brand/></Link><Link className="buyer-library-home" href="/customer"><BookOpen size={15}/> Your library</Link><AppearanceControl className="appearance-route-control"/><Link href={signInHref}>Sign in with purchase email <ArrowRight size={14}/></Link></header>
     <section className="customer-heading buyer-page-heading"><div><h1>Your purchases</h1><p>Read, learn and access everything you’ve purchased.</p></div><span className="buyer-private-label"><LockKeyhole size={14}/> Private customer library</span></section>
     {orderError && <div className="buyer-notice" role="alert"><p>{orderError}</p><button className="buyer-button secondary" disabled={refreshing} onClick={() => void load(false,paymentCheckRef.current||undefined)}>{refreshing ? 'Checking…' : 'Retry payment status'}</button></div>}
     {loading ? <div className="buyer-loading" role="status"><span className="buyer-loading-cover"/><div><h2>Getting your library ready…</h2><p>Checking your purchases securely.</p></div></div> : !orders.length ? !orderError && <div className="buyer-empty"><BookOpen size={32}/><h2>Your library is waiting</h2><p>Open the checkout return link in the browser where you purchased, or sign in with your purchase email.</p><Link className="buyer-button primary" href={signInHref}>Find my purchases <ArrowRight size={16}/></Link><WorkspaceExample kind="library"/></div> : <div className="customer-layout buyer-layout">

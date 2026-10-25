@@ -8,9 +8,27 @@ Original assets generated with the built-in image generation tool for the FiveGe
 
 Font: locally served Inter variable Latin, distributed under the SIL Open Font License in `public/fonts/OFL.txt`. Source: Google Fonts (`fonts.googleapis.com` / `fonts.gstatic.com`). Non-Latin text uses the system font fallback.
 
-Brand: the user supplied the FiveGen logo on September 11, 2026. `public/brand/fivegen-original.png` preserves the initial source, and `fivegen-logo.webp` is its lossless format conversion. The user subsequently supplied a transparent PNG; `public/brand/fivegen-transparent.webp` preserves its pixels and alpha channel through lossless format conversion. The interface now displays that orange monogram directly on the page background using CSS framing, alongside the readable FiveGen name.
+Brand: the current identity is the creator-supplied **orange four-point mark and FiveGen wordmark**, approved on 25 October 2026. `assets/brand/fivegen-sparkle-source.png` retains the supplied PNG byte-for-byte (SHA-256 `78b605ba443992877f1459afc2733d4fc22589ba54a1b1c6e7a9b6d33894fa73`). `scripts/normalize-brand-assets.py` crops transparent margins, preserves the original lettering geometry and alpha, creates a white-lettered dark-surface variant, and sizes the mark for browser, touch and search icons. It does not redraw the mark or use a replacement font.
+
+- `/brand/fivegen-sparkle-dark.webp`: original orange mark with white lettering for dark UI; PNG also available.
+- `/brand/fivegen-sparkle-light.webp`: original orange mark and black lettering for light surfaces; PNG also available.
+- `/brand/fivegen-sparkle-mark.png`: transparent 512 px mark used for OAuth, attribution and search identity.
+- `/brand/fivegen-sparkle-favicon-96.png`: 96 px browser/search icon.
+- `/brand/fivegen-sparkle-apple-180.png`: 180 px touch icon on an opaque dark background.
+- `/brand/fivegen-sparkle-social.png`: 512 px dark-background mark for social sharing.
+
+The shared `Brand` component uses the exact lockup; pass `tone="light"` on a light background. Previously published tracked logo/icon URLs and root favicon fallbacks now serve the new identity too. Earlier source artwork remains in `public/brand/fivegen-original.png` as an archive and is not used in the interface. The pre-existing local `fivegen-icon.png` and `fivegen-logo.png` are intentionally unchanged.
 
 
 ## Page Studio template artwork — 25 October 2026
 
 `public/templates/eclipse.webp` is original artwork generated with the built-in image-generation tool for the approved Cinematic sales-page template: an orange eclipse above a cinematic rocky desert, without text, logos or people. The generated source is retained under the current chat's generated-images directory. It is decorative artwork, not evidence of a customer's result or a real course recording. The other templates reuse the inspected `public/studio/dunes.webp`, `blue.webp` and `chrome.webp` assets listed above. Template application does not insert invented testimonials, creator identities or buyer outcomes.
+
+## Public homepage — Creator’s Desk
+
+The creator selected the warm editorial direction on 25 October 2026 and requested application-wide Light, Dark and System appearance. The supplied mark and wordmark remain the brand source in both themes.
+
+- `public/landing/creators-desk.webp` is an original generated editorial product illustration: a fictional Confidence Reset course preview on a warm desk, with a video planning note. It is explicitly labeled as an example.
+- The public walkthrough uses real HTML controls to explore sample lessons, two page styles, funnel stages and a planning reminder. It does not create records or claim automatic social publishing.
+- `public/fonts/noto-serif-latin-regular.woff2` and `noto-serif-latin-italic.woff2` are Latin subsets of the existing Noto Serif fonts, covered by `public/fonts/NOTO-OFL.txt`. The two subsets total approximately 51 KB.
+- Appearance follows the device until the visitor chooses Light or Dark. The preference persists per origin; the documentation subdomain retains its own choice. Creator-authored public page palettes, document paper and artwork preserve their configured appearance.

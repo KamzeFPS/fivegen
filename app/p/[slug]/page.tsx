@@ -44,7 +44,7 @@ export default async function ProductPage({
     <div className="storefront">
       <nav className="store-nav">
         <a href="/">
-          <Brand />
+          <Brand tone="dark"/>
         </a>
         <span>{String(row.seller_name || "Independent creator")}</span>
       </nav>

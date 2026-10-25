@@ -1709,7 +1709,7 @@ export default function Studio({
           )}
           <footer className="workspace-footer">
             <span>
-              <span className="footer-logo">✳</span> A little idea can go a long
+              <img className="footer-logo" src="/brand/fivegen-sparkle-mark.png" alt="" aria-hidden="true" width="20" height="20" style={{display:"inline-block",width:20,height:20,verticalAlign:"middle"}}/> A little idea can go a long
               way.
             </span>
             <nav className="legal-links" aria-label="FiveGen information"><a href="/pricing">AI credit pricing</a><a href="/privacy">Privacy Policy</a><a href="/terms">Terms & Conditions</a><a href="/refund">Refund policy</a><a href="mailto:kamzewac@gmail.com">Contact support</a></nav>
@@ -1823,7 +1823,7 @@ export default function Studio({
           </button>
         </DialogContent>
       </Dialog>
-      <Toaster theme="dark" position="bottom-right" richColors closeButton />
+      <Toaster position="bottom-right" richColors closeButton />
     </SidebarProvider>
   );
 }

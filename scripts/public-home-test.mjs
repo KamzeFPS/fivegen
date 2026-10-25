@@ -15,15 +15,20 @@ function load(path,deps={}) {
 }
 
 const seo=load('lib/seo.ts');
-const iconDeps=Object.fromEntries(['ArrowRight','ArrowUpRight','BookOpen','CalendarDays','Check','FileText','Globe','MessagesSquare','Route','Sparkles','Users'].map(name=>[name,icons[name]]));
+const iconDeps=Object.fromEntries(['ArrowRight','ArrowUpRight','BookOpen','CalendarDays','Check','ChevronRight','FileText','Globe','Heart','Megaphone','Target'].map(name=>[name,icons[name]]));
 const {Brand}=load('app/ui-brand.tsx',iconDeps);
 const Link=({children,...props})=>React.createElement('a',props,children);
-const {PublicHome}=load('app/public-home.tsx',{...iconDeps,Brand,Link});
+const {PublicLaunchExample}=load('app/public-launch-example.tsx',{...iconDeps,useState:React.useState});
+const AppearanceControl=()=>React.createElement('select',{'aria-label':'Appearance'},React.createElement('option',null,'System'));
+const {PublicHome}=load('app/public-home.tsx',{...iconDeps,Brand,Link,AppearanceControl,PublicLaunchExample});
 const html=renderToStaticMarkup(React.createElement(PublicHome));
 assert.equal((html.match(/<h1(?:\s|>)/g)||[]).length,1,'One clear public page heading');
 assert.ok(html.includes('FiveGen helps you create, publish and sell digital products'));
-assert.ok(html.includes('An AI growth operator for creators'));
-for(const phrase of ['Create your product','Publish your sales page','Map a visual funnel','Prepare your marketing','Know who to follow up with','See the plan in Calendar'])assert.ok(html.includes(phrase));
+assert.ok(html.includes('An AI growth workspace for creators'));
+assert.match(html,/You know<br\/>your subject/);
+for(const phrase of ['Create your product','Your product','Your page','Your audience','Example project','The Confidence Reset'])assert.ok(html.includes(phrase),'Initial public explanation: '+phrase);
+assert.ok(html.includes('role="tablist"')&&html.includes('role="tabpanel"'),'A real interactive example is server-rendered before hydration');
+assert.ok(html.includes('aria-label="Appearance"'),'Appearance is reachable before signing in');
 for(const href of ['/pricing','https://docs.fivegen.ai','/terms','/privacy','/refund'])assert.ok(html.includes('href="'+href+'"'),'Public navigation exposes '+href+' before hydration');
 const docs=load('lib/docs.ts');
 for(const match of html.matchAll(/href="https:\/\/docs\.fivegen\.ai\/([^"#]+)"/g))assert.ok(docs.docsArticles.some(article=>article.slug===match[1]),'Guide link resolves: '+match[1]);
@@ -40,7 +45,7 @@ const home=async query=>page.default({searchParams:Promise.resolve(query)});
 const metadata=async query=>page.generateMetadata({searchParams:Promise.resolve(query)});
 for(const query of [{},{utm_source:'newsletter',utm_campaign:'creator-launch',gclid:'tracking-token'},{utm_source:['one','two'],fbclid:'tracking-token'}]){
   const content=await home(query),rendered=renderToStaticMarkup(content);
-  assert.ok(rendered.includes('Your expertise.'));
+  assert.ok(rendered.includes('You know'));
   assert.ok(rendered.includes('application/ld+json'));
   assert.ok(!rendered.includes('tracking-token'),'Tracking data never enters visible content or JSON-LD');
   const meta=await metadata(query);assert.equal(meta.robots.index,true);assert.equal(meta.alternates.canonical,'https://www.fivegen.ai/');

@@ -1,0 +1,14 @@
+/* The approved artwork is already cropped. Never frame or rotate this lockup. */
+.brand > .brand-lockup {
+  position: static;
+  display: block;
+  width: auto;
+  height: 1.22em;
+  max-width: none;
+  flex: none;
+  object-fit: contain;
+  transform: none;
+}
+.brand[data-brand-tone="auto"] > .brand-lockup-light { display: none; }
+html[data-appearance="light"] .brand[data-brand-tone="auto"] > .brand-lockup-dark { display: none; }
+html[data-appearance="light"] .brand[data-brand-tone="auto"] > .brand-lockup-light { display: block; }

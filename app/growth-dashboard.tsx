@@ -17,7 +17,7 @@ const date = (day: string, includeYear = false, monthly = false) => new Intl.Dat
   month: 'short', ...(!monthly ? {day: 'numeric' as const} : {}), ...(includeYear || monthly ? { year: 'numeric' as const } : {}), timeZone: 'UTC',
 }).format(new Date(`${day}T00:00:00Z`));
 
-const chartColors = {sales:'#ff995b',net:'#9bd0b2',orders:'#b7a5f5',visits:'#8cbbf5',contacts:'#ffbb73',plays:'#8cbbf5',clicks:'#b7a5f5',bookings:'#9bd0b2'};
+const chartColors = {sales:'var(--fg-chart-sales,#ff995b)',net:'var(--fg-chart-net,#9bd0b2)',orders:'var(--fg-chart-orders,#b7a5f5)',visits:'var(--fg-chart-visits,#8cbbf5)',contacts:'var(--fg-chart-contacts,#ffbb73)',plays:'var(--fg-chart-plays,#8cbbf5)',clicks:'var(--fg-chart-clicks,#b7a5f5)',bookings:'var(--fg-chart-bookings,#9bd0b2)'};
 type ChartSeries = {label:string;color:string;values:(number|null)[];format?:(value:number)=>string};
 
 function ActivityChart({id,days,series,monthly=false,compact=false,emptyText='No activity recorded in this period.'}:{id:string;days:string[];series:ChartSeries[];monthly?:boolean;compact?:boolean;emptyText?:string}){
