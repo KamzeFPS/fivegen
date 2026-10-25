@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import {SEO_ORIGIN} from '@/lib/seo';
 import "./globals.css";
 import "./studio-design.css";
 import "./flow-design.css";
@@ -23,12 +24,18 @@ import "./product-builder-navigation.css";
 import "./file-sale-navigation.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SEO_ORIGIN),
+  applicationName: 'FiveGen',
   title: "FiveGen — Create, publish and sell digital products",
   description:
     "Turn your expertise into books, courses and digital products. Build with AI or your own content, publish your page, and manage sales from one workspace.",
+  // Public routes explicitly opt in. New account and workspace routes stay out
+  // of search even before they receive their own route-specific metadata.
+  robots: {index: false, follow: false},
   icons: {
-    icon: "/brand/fivegen-transparent.webp",
-    shortcut: "/brand/fivegen-transparent.webp",
+    icon: [{url: "/brand/favicon-96.png", type: 'image/png', sizes: '96x96'}],
+    shortcut: "/brand/favicon-96.png",
+    apple: [{url: '/brand/apple-touch-icon.png', type: 'image/png', sizes: '180x180'}],
   },
 };
 

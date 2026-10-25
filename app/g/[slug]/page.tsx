@@ -7,12 +7,13 @@ import { CommerceCheckout } from "@/app/commerce-checkout";
 import {getProductPage} from '@/lib/product-page-server';
 import { publicCommerceOffer } from "@/lib/commerce-v2-server";
 import { GrowthTracker } from "@/app/growth-tracker";
+import {publicPageMetadata,privatePageMetadata} from '@/lib/seo';
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
-  try { const { slug } = await params, funnel = await getPublicFunnel(slug); return { title: `${funnel.landing.headline} | ${funnel.title}`, description: funnel.landing.subheadline }; }
-  catch (error) { if (error instanceof ApiError && error.status === 404) return { title: "Page unavailable", robots: { index: false } }; throw error; }
+  try { const { slug } = await params, funnel = await getPublicFunnel(slug); return publicPageMetadata({ title: `${funnel.landing.headline} | ${funnel.title}`, description: funnel.landing.subheadline, path:'/g/'+encodeURIComponent(slug) }); }
+  catch (error) { if (error instanceof ApiError && error.status === 404) return privatePageMetadata('Page unavailable'); throw error; }
 }
 export default async function GrowthLandingPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;

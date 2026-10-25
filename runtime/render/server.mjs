@@ -11,6 +11,7 @@ import {loopbackRequest} from './loopback-http.mjs';
 import {readDocsOrigin,docsHostRequest} from './docs-host.mjs';
 import {catalogHostRequest} from './catalog-host.mjs';
 import {initializeAutomationDispatchSecret,startAutomationWorker} from './automation-worker.mjs';
+import {privateSearchResponse} from './search-indexing.mjs';
 
 export function readConfig(source = process.env) {
   const origin = new URL(source.APP_ORIGIN || source.RENDER_EXTERNAL_URL || '');
@@ -114,6 +115,7 @@ export async function start() {
       let routePath;
       try { routePath = decodeURIComponent(url.pathname).replace(/\/+$/, ''); }
       catch { res.writeHead(400); res.end(); return; }
+      if(privateSearchResponse(routePath,url.searchParams))res.setHeader('X-Robots-Tag','noindex, nofollow');
       if(['/signin','/signup','/forgot-password','/verify-email','/reset-password'].includes(routePath)||routePath.startsWith('/api/auth/')){res.setHeader('Cache-Control','private, no-store');res.setHeader('Referrer-Policy','no-referrer');}
       const fileSalePage=process.env.FIVEGEN_FILE_SALES_ENABLED==='true'&&process.env.STRIPE_MODE==='test'&&/^\/p\/[^/]+$/.test(routePath);
       if ((productHost && host !== authority.host && !['www','app'].includes(host.slice(0,-domain.length-1))) || (!fileSalePage&&/^\/(?:p|f|r|invite|partners)(?:\/|$)/.test(routePath)) || /^\/api\/(?:checkout|quote|connect\/stripe|referrals|invite|leads|visits|crm)(?:\/|$)/.test(routePath) || /^\/api\/products\/[^/]+\/slots(?:\/|$)/.test(routePath)) { res.writeHead(410,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:'FiveGen is a private AI creation studio. Storefronts, seller payments, referrals and payouts are no longer available.'}));return; }
@@ -126,7 +128,7 @@ export async function start() {
       }
       if (await auth.handle(req, res, url)) return;
       // Authenticated responses must never enter an intermediary shared cache.
-      if (req.headers['oai-authenticated-user-id']) res.setHeader('Cache-Control', 'private, no-store');
+      if (req.headers['oai-authenticated-user-id']) {res.setHeader('Cache-Control', 'private, no-store');res.setHeader('X-Robots-Tag','noindex, nofollow');}
       // Revoked landing pages and VSLs must disappear immediately, including for
       // anonymous visitors. Never cache a previously published snapshot.
       if (/^\/(?:b|g|o|customer|unsubscribe)(?:\/|$)/.test(routePath) || /^\/api\/(?:builder|builder-cover|builder-preview|growth|commerce|automations|offer-lab)(?:\/|$)/.test(routePath)) {

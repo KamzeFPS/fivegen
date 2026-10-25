@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { ApiError } from "@/lib/server";
 import { getPublicProductPage } from "@/lib/product-page-server";
 import {ProductPageExperiment} from "@/app/product-page-experiment";
+import {publicPageMetadata} from '@/lib/seo';
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -15,7 +16,7 @@ export async function generateMetadata({ params }: Pick<ProductPageRouteProps, "
   try {
     const { slug } = await params;
     const page = await getPublicProductPage(slug);
-    return { title: `${page.config.seoTitle || page.product.title} | FiveGen`, description: page.config.seoDescription || page.product.description.slice(0, 300) };
+    return publicPageMetadata({title: `${page.config.seoTitle || page.product.title} | FiveGen`, description: page.config.seoDescription || page.product.description.slice(0, 300), path: '/product/' + encodeURIComponent(slug)});
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return { title: "Product page unavailable | FiveGen", robots: { index: false, follow: false } };
     throw error;

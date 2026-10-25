@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
 import { Brand } from '../ui-brand';
+import {publicPageMetadata} from '@/lib/seo';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = publicPageMetadata({
   title: 'Refund & Cancellation Policy · FiveGen',
   description: 'Refund requests, credit delivery, and cancellation information for FiveGen AI credits.',
-  alternates: { canonical: 'https://www.fivegen.ai/refund' },
-};
+  path: '/refund',
+});
 
 export default function RefundPolicy() {
   return <main className="terms-page">
