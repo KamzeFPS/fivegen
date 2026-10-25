@@ -89,13 +89,13 @@ const navTree=nav.WorkspaceNavigation(navProps);
 function descendants(node,predicate,found=[]){if(Array.isArray(node))node.forEach(value=>descendants(value,predicate,found));else if(React.isValidElement(node)){if(predicate(node))found.push(node);descendants(node.props.children,predicate,found);}return found;}
 function nodeText(node){if(Array.isArray(node))return node.map(nodeText).join('');if(React.isValidElement(node))return nodeText(node.props.children);return typeof node==='string'||typeof node==='number'?String(node):'';}
 const primaryNav=descendants(navTree,node=>node.type==='nav'&&node.props['aria-label']==='Main navigation')[0];assert.ok(primaryNav);
-const primaryButtons=descendants(primaryNav,node=>node.type==='button');assert.equal(primaryButtons.length,4);
-for(const [label,destination] of [['Dashboard','overview'],['Products','library'],['Customers','crm'],['Creator library','creator-library']]){const button=primaryButtons.find(node=>nodeText(node).startsWith(label));assert.ok(button,`${label} is a primary destination`);button.props.onClick();assert.equal(navViews.at(-1),destination);}
+const primaryButtons=descendants(primaryNav,node=>node.type==='button');assert.equal(primaryButtons.length,5);
+for(const [label,destination] of [['Dashboard','overview'],['Products','library'],['Customers','crm'],['Creator library','creator-library'],['Calendar','calendar']]){const button=primaryButtons.find(node=>nodeText(node).startsWith(label));assert.ok(button,`${label} is a primary destination`);button.props.onClick();assert.equal(navViews.at(-1),destination);}
 assert.equal(primaryButtons.find(node=>nodeText(node).startsWith('Products')).props['aria-current'],'page');
 const account=descendants(navTree,node=>node.props.className==='workspace-account-menu')[0];assert.ok(account);
 const accountItems=descendants(account,node=>typeof node.props.onSelect==='function');
 for(const [label,path] of [['Get paid','/account/payments'],['My FiveGen plan','/account/billing'],['Terms & conditions','/terms'],['Privacy policy','/privacy'],['Refund & cancellation','/refund']]){const item=accountItems.find(node=>nodeText(node)===label);assert.ok(item,`${label} remains available`);item.props.onSelect();assert.equal(navVisits.at(-1),path);}
-for(const [label,destination] of [['AI credits','credits'],['Connected assistants','connections']]){const item=accountItems.find(node=>nodeText(node)===label);assert.ok(item);item.props.onSelect();assert.equal(navViews.at(-1),destination);}
+for(const [label,destination] of [['AI credits','credits'],['Connected assistants','connections'],['Calendar','calendar']]){const item=accountItems.find(node=>nodeText(node)===label);assert.ok(item);item.props.onSelect();assert.equal(navViews.at(-1),destination);}
 assert.equal(accountItems.some(node=>nodeText(node)==='Platform settings'),false,'Administrative controls stay hidden for ordinary creators');
 accountItems.find(node=>nodeText(node)==='Help & support').props.onSelect();assert.equal(supportChanges.at(-1),true);
 accountItems.find(node=>nodeText(node)==='Sign out').props.onSelect();assert.equal(navSignouts.length,1,'Sign out uses the parent’s guarded exit callback');

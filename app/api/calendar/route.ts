@@ -1,0 +1,3 @@
+import {failure,identity} from '@/lib/server';
+import {getWorkspaceCalendar} from '@/lib/workspace-calendar-server';
+export async function GET(request:Request){try{const user=await identity(),query=new URL(request.url).searchParams,value=query.has('startAt')||query.has('endAt')?{startAt:query.get('startAt'),endAt:query.get('endAt'),...(query.has('calendarCampaign')?{campaignId:query.get('calendarCampaign')}:{})}:undefined;return Response.json(await getWorkspaceCalendar(user.userId,value),{headers:{'Cache-Control':'private, no-store'}});}catch(error){const response=failure(error);response.headers.set('Cache-Control','private, no-store');return response;}}

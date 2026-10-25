@@ -11,12 +11,12 @@ async function load(path,dependencies){const key='genUi'+randomUUID().replaceAll
 const {GenMascot}=await load('app/gen-mascot.tsx',{React});
 class TextInput{constructor(type='text'){this.type=type;}get value(){throw new Error('Gen must never inspect a typed value.');}}
 class TextArea{get value(){throw new Error('Gen must never inspect a manuscript value.');}}
-async function harness({stored=new Map(),props:initial={},viewport={width:1000,height:800},defaultBottom=24}={}){
-  const hooks=[],effects=[],timers=new Map(),frames=new Map(),listeners=new Map(),windowListeners=new Map(),visualListeners=new Map(),salesBindings=[],positions=[],captures=[],releases=[],focusCalls=[],storageReads=[];let index=0,clock=0,sequence=0,dirty=true,tree,disposed=false,lateUpdates=0,opened=0;
+async function harness({stored=new Map(),props:initial={},viewport={width:1000,height:800},defaultBottom=24,dock=false}={}){
+  const hooks=[],effects=[],timers=new Map(),frames=new Map(),listeners=new Map(),windowListeners=new Map(),visualListeners=new Map(),salesBindings=[],positions=[],captures=[],releases=[],focusCalls=[],storageReads=[],portals=[],dockElement={id:'workspace-gen-slot'};let index=0,clock=0,sequence=0,dirty=true,tree,disposed=false,lateUpdates=0,opened=0;
   let props={onOpen:()=>opened++,onPositionChange:value=>positions.push(value),...initial};
   const window={innerWidth:viewport.width,innerHeight:viewport.height,addEventListener(name,callback){if(!windowListeners.has(name))windowListeners.set(name,new Set());windowListeners.get(name).add(callback);},removeEventListener:(name,callback)=>windowListeners.get(name)?.delete(callback)};
   window.visualViewport={width:viewport.width,height:viewport.height,offsetLeft:0,offsetTop:0,addEventListener(name,callback){if(!visualListeners.has(name))visualListeners.set(name,new Set());visualListeners.get(name).add(callback);},removeEventListener:(name,callback)=>visualListeners.get(name)?.delete(callback)};
-  const rectangle=()=>{const width=window.innerWidth<=700?88:104,height=window.innerWidth<=700?100:112;return {left:tree?.props.style?.left??window.innerWidth-width-24,top:tree?.props.style?.top??window.innerHeight-height-defaultBottom,width,height};};
+  const rectangle=()=>{if(tree?.props.className.includes('is-docked'))return {left:760,top:20,width:100,height:40};const width=window.innerWidth<=700?88:104,height=window.innerWidth<=700?100:112;return {left:tree?.props.style?.left??window.innerWidth-width-24,top:tree?.props.style?.top??window.innerHeight-height-defaultBottom,width,height};};
   const rootElement={getBoundingClientRect:rectangle},activePointers=new Set(),buttonElement={focus:options=>focusCalls.push(options),setPointerCapture:id=>{captures.push(id);activePointers.add(id);},hasPointerCapture:id=>activePointers.has(id),releasePointerCapture:id=>{releases.push(id);activePointers.delete(id);}};
   const useRef=initial=>hooks[index++]||=({current:initial});
   const useState=initial=>{const position=index++;hooks[position]||=({value:typeof initial==='function'?initial():initial});return [hooks[position].value,next=>{if(disposed)lateUpdates++;const value=typeof next==='function'?next(hooks[position].value):next;if(!Object.is(value,hooks[position].value)){hooks[position].value=value;dirty=true;}}];};
@@ -25,16 +25,17 @@ async function harness({stored=new Map(),props:initial={},viewport={width:1000,h
   const dependencies={React,GenMascot,useRef,useState,useCallback,useEffect,HTMLInputElement:TextInput,HTMLTextAreaElement:TextArea,window,
     useMascotSales:binding=>{salesBindings.push(binding);return {configured:true,mode:'test',paidSales:1};},
     localStorage:{getItem:key=>{storageReads.push(key);return stored.get(key)||null;},setItem:(key,value)=>stored.set(key,value),removeItem:key=>stored.delete(key)},
-    document:{addEventListener(name,callback){if(!listeners.has(name))listeners.set(name,new Set());listeners.get(name).add(callback);},removeEventListener:(name,callback)=>listeners.get(name)?.delete(callback)},
+    createPortal:(child,target)=>{portals.push(target);return child;},queueMicrotask:callback=>effects.push(callback),
+    document:{getElementById:id=>id==='workspace-gen-slot'&&dock?dockElement:null,addEventListener(name,callback){if(!listeners.has(name))listeners.set(name,new Set());listeners.get(name).add(callback);},removeEventListener:(name,callback)=>listeners.get(name)?.delete(callback)},
     requestAnimationFrame:callback=>{const id=++sequence;frames.set(id,callback);return id;},cancelAnimationFrame:id=>frames.delete(id),
     setTimeout:(callback,delay)=>{const id=++sequence;timers.set(id,{callback,due:clock+delay});return id;},clearTimeout:id=>timers.delete(id),
     fetch:()=>{throw new Error('GenCompanion must obtain sales through its dedicated hook.');},
   };
   const {GenCompanion}=await load('app/gen-companion.tsx',dependencies);
-  function render(){for(let turn=0;dirty&&turn<20;turn++){dirty=false;index=0;tree=GenCompanion(props);tree.props.ref.current=rootElement;for(const effect of effects.splice(0))effect();}assert.equal(dirty,false,'Companion effects settle');}
+  function render(){for(let turn=0;(dirty||effects.length)&&turn<20;turn++){dirty=false;index=0;tree=GenCompanion(props);if(tree)tree.props.ref.current=rootElement;for(const effect of effects.splice(0))effect();}assert.equal(dirty,false,'Companion effects settle');}
   function framesNow(){for(const [id,callback] of [...frames]){frames.delete(id);callback();}render();}
   render();framesNow();
-  return {stored,timers,listeners,salesBindings,positions,captures,releases,focusCalls,storageReads,get rect(){return rectangle();},get tree(){return tree;},get mood(){return tree.props['data-mood'];},get opened(){return opened;},get lateUpdates(){return lateUpdates;},get key(){return nodes(tree).find(node=>node.type===GenMascot).key;},
+  return {stored,timers,listeners,portals,dockElement,salesBindings,positions,captures,releases,focusCalls,storageReads,get rect(){return rectangle();},get tree(){return tree;},get mood(){return tree.props['data-mood'];},get opened(){return opened;},get lateUpdates(){return lateUpdates;},get key(){return nodes(tree).find(node=>node.type===GenMascot).key;},
     get speech(){return text(nodes(tree).find(node=>node.props.className?.startsWith('gen-companion-speech')));},get announcement(){return nodes(tree).find(node=>node.props.role==='status');},
     button(label){const button=nodes(tree).find(node=>node.type==='button'&&node.props['aria-label']===label);assert.ok(button,'Accessible button exists: '+label);return button;},
     click(label,detail=1){let prevented=false,stopped=false;this.button(label).props.onClick({detail,preventDefault(){prevented=true;},stopPropagation(){stopped=true;}});render();return {prevented,stopped};},update(next){props={...props,...next};dirty=true;render();framesNow();},
@@ -79,6 +80,12 @@ async function harness({stored=new Map(),props:initial={},viewport={width:1000,h
 {
  const compact=await harness({props:{defaultMinimized:true}});assert.match(compact.tree.props.className,/is-minimized/,'Product work starts with a compact help launcher');compact.dispose();
  const chosen=await harness({props:{defaultMinimized:true},stored:new Map([['fivegen:gen-minimized:v1','false']])});chosen.update({});assert.doesNotMatch(chosen.tree.props.className,/is-minimized/,'An explicit creator presentation preference takes precedence');chosen.dispose();
+}
+{
+ const stale=new Map([['fivegen:gen-position:v1',JSON.stringify({left:15,top:400})]]),docked=await harness({dock:true,stored:stale});
+ assert.match(docked.tree.props.className,/is-docked/);assert.equal(docked.tree.props.style,undefined,'Header docking ignores an old floating position');assert.ok(docked.portals.every(target=>target===docked.dockElement));assert.equal(docked.button('Ask Gen, your product assistant').props['aria-describedby'],undefined);assert.equal(docked.button('Ask Gen, your product assistant').props['aria-keyshortcuts'],undefined);assert.equal(nodes(docked.tree).filter(node=>node.type==='button').length,1,'Docked Gen has one help action and no floating decoration controls');
+ const originalStored=stale.get('fivegen:gen-position:v1');docked.pointer('Down',{clientX:200,clientY:300});docked.pointer('Move',{clientX:800,clientY:800});docked.pointer('Up');docked.keyMove('ArrowLeft');assert.equal(stale.get('fivegen:gen-position:v1'),originalStored,'Drag and arrow movement cannot reposition the header help control');docked.click('Ask Gen, your product assistant');assert.equal(docked.opened,1);assert.deepEqual(docked.positions.at(-1),{left:760,top:20,width:100,height:40},'Assistant cloud anchors to the measured header control');docked.dispose();
+ const fallback=await harness({stored:new Map([['fivegen:gen-position:v1',JSON.stringify({left:300,top:240})]])});assert.doesNotMatch(fallback.tree.props.className,/is-docked/);assert.equal(fallback.portals.length,0);assert.equal(fallback.tree.props.style.left,300,'Screens without a header slot retain a reachable clamped launcher');fallback.dispose();
 }
 const css=readFileSync('app/gen-companion.css','utf8'),mascotCss=readFileSync('app/gen-mascot.css','utf8'),agent=readFileSync('app/builder-agent.tsx','utf8');
 assert.match(css,/\.gen-companion\.is-hidden\s*\{\s*display\s*:\s*none\s*\}/);assert.match(css,/@media\s*\(max-width:\s*700px\)/);assert.match(css,/safe-area-inset-bottom/);assert.match(css,/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[^]*?animation\s*:\s*none!important[^]*?transition\s*:\s*none!important/);assert.match(mascotCss,/@media\s*\(prefers-reduced-motion:\s*reduce\)/);assert.match(css,/touch-action:none/);assert.doesNotMatch(css,/gen-companion-motion|motion-paused/);

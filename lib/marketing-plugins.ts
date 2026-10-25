@@ -1,9 +1,12 @@
 import { z } from 'zod';
 
-// The product sales dashboard is the permanent marketing home. These tools appear only after the
-// product owner explicitly adds them; existing content is not an installation.
-export const marketingPluginIds = ['voice', 'vsl', 'funnel', 'campaigns', 'automations', 'offer'] as const;
+// Growth plan and Results are permanent. Funnel Builder is a default shortcut only
+// when no preference has been saved; saved visibility choices remain authoritative.
+export const marketingPluginIds = ['voice', 'vsl', 'funnel-builder', 'funnel', 'campaigns', 'automations', 'offer'] as const;
 export type MarketingPluginId = typeof marketingPluginIds[number];
+export const defaultMarketingPluginIds:MarketingPluginId[]=['funnel-builder'];
+export const marketingWorkspaceAreas=['dashboard','results',...marketingPluginIds] as const;
+export function isMarketingWorkspaceArea(value:unknown):value is typeof marketingWorkspaceAreas[number]{return typeof value==='string'&&(marketingWorkspaceAreas as readonly string[]).includes(value);}
 export interface MarketingPluginState {
   installed: MarketingPluginId[];
   updatedAt: number;

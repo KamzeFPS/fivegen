@@ -3,26 +3,30 @@
 /* eslint-disable @next/next/no-html-link-for-pages */
 
 import {useCallback,useEffect,useId,useRef,useState} from 'react';
-import {ArrowRight,BarChart3,Brain,Check,FlaskConical,Layers3,Loader2,Mail,Megaphone,Plus,Puzzle,Video} from 'lucide-react';
+import {ArrowRight,Brain,Check,FlaskConical,Layers3,Loader2,Mail,Megaphone,Plus,Puzzle,Video} from 'lucide-react';
 import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
 import type {MarketingPluginId,MarketingPluginState} from '@/lib/marketing-plugins';
 import type {Product} from '@/lib/product';
+import {marketingGroups,marketingGroupFor,type MarketingDestination} from '@/lib/marketing-navigation';
 import {GrowthDashboard} from './growth-dashboard';
 import {JourneyReport} from './journey-report';
 import {ShareLinkResults} from './tracked-share-links';
 import {GrowthVSL} from './growth-vsl';
 import {LeadCaptureWorkspace} from './lead-capture-workspace';
+import {FunnelBuilder} from './funnel-builder';
 import {CreatorContextPicker} from './creator-context-picker';
 import {CampaignStudio} from './campaign-studio';
 import {AutomationStudio} from './automation-studio';
 import {OfferLab} from './offer-lab';
 import {ConnectedLaunch} from './connected-launch';
+import {SharedMarketingBrief} from './shared-marketing-brief';
 import './marketing-workspace.css';
 import {useEditorSaveRegistry} from './editor-save-registry';
 
-export type MarketingTab='dashboard'|'results'|MarketingPluginId;
+export type MarketingTab=MarketingDestination;
 const plugins: {id:MarketingPluginId;name:string;icon:typeof Video;description:string;detail:string}[]=[
   {id:'vsl',name:'Sales video',icon:Video,description:'Prepare your sales video script and creator recording.',detail:'Use your own message; choose AI assistance only when needed.'},
+  {id:'funnel-builder',name:'Funnel Builder',icon:Layers3,description:'Map the strategy from first interest to the next customer action.',detail:'Plan a private journey and hand work to Sales page, Lead capture, Campaigns or Emails. The graph does not publish or send.'},
   {id:'funnel',name:'Lead capture',icon:Layers3,description:'Collect requests, interest or applications.',detail:'Use a purpose-aware page and separate optional marketing consent.'},
   {id:'campaigns',name:'Campaigns',icon:Megaphone,description:'Prepare promotional assets and manual publishing reminders.',detail:'Review email copy here; activate delivery separately in Emails.'},
   {id:'automations',name:'Emails',icon:Mail,description:'Create email follow-up sequences.',detail:'Review and activate messages for opted-in leads or verified buyers.'},
@@ -78,26 +82,33 @@ function MarketingProductWorkspace({product,tab,aiReady,cost,unlimited,onTab,onR
   if(loadError||!state)return <div className="marketing-load-error" role="alert"><p>{loadError||'Could not load your marketing workspace.'}</p><button className="button secondary" onClick={load}>Try again</button></div>;
   const selectedCampaign=typeof window==='undefined'?undefined:new URLSearchParams(location.search).get('campaign')||undefined;
   const selected=plugins.find(p=>p.id===active);
+  const group=marketingGroupFor(active),groupInfo=marketingGroups.find(item=>item.id===group)!;
+  const toolOptions=[{id:'dashboard' as const,name:'Growth plan'},...plugins].filter(tool=>marketingGroupFor(tool.id)===group&&(tool.id==='dashboard'||tool.id===active||state.installed.includes(tool.id)));
   return <section className="marketing-workspace" aria-label="Product marketing">
     <div className="marketing-toolbar">
-      <div className="marketing-tabs" role="tablist" aria-label="Marketing tools" onKeyDown={event=>{
+      <div className="marketing-tabs" role="tablist" aria-label="Marketing workflow" onKeyDown={event=>{
         if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)||busy)return;
-        const keys:MarketingTab[]=['dashboard','results',...plugins.filter(p=>state.installed.includes(p.id)||p.id===active).map(p=>p.id)],index=keys.indexOf(active);
+        const keys=marketingGroups,index=keys.findIndex(item=>item.id===group);
         const next=event.key==='Home'?0:event.key==='End'?keys.length-1:(index+(event.key==='ArrowRight'?1:-1)+keys.length)%keys.length;
-        event.preventDefault();onTab(keys[next]);event.currentTarget.querySelectorAll<HTMLButtonElement>('[role=tab]')[next]?.focus();
+        event.preventDefault();onTab(keys[next].defaultTab);event.currentTarget.querySelectorAll<HTMLButtonElement>('[role=tab]')[next]?.focus();
       }}>
-        {[{id:'dashboard' as const,name:'Growth plan',icon:BarChart3},{id:'results' as const,name:'Results',icon:BarChart3},...plugins.filter(p=>state.installed.includes(p.id)||p.id===active)].map(({id,name,icon:Icon})=><button type="button" key={id} id={`${panelId}-${id}`} role="tab" aria-selected={active===id} aria-controls={panelId} tabIndex={active===id?0:-1} disabled={busy} onClick={()=>onTab(id)}><Icon size={16}/>{name}</button>)}
+        {marketingGroups.map(({id,label,defaultTab})=><button type="button" key={id} id={`${panelId}-group-${id}`} role="tab" aria-selected={group===id} aria-controls={panelId} tabIndex={group===id?0:-1} disabled={busy} onClick={()=>{if(group!==id)onTab(defaultTab);}}>{label}</button>)}
       </div>
-      <button type="button" className="button secondary marketing-add" disabled={busy} onClick={openManager}><Plus size={15}/>Visible tools{state.installed.length>0&&<span>{state.installed.length}</span>}</button>
+      <button type="button" className="button secondary marketing-add" disabled={busy} onClick={openManager}><Puzzle size={15}/>All tools</button>
+    </div>
+    <div className="marketing-context-row">
+      {toolOptions.length>1?<label>Workspace<select aria-label={`${groupInfo.label} workspace`} value={active} disabled={busy} onChange={event=>onTab(event.target.value as MarketingTab)}>{toolOptions.map(tool=><option key={tool.id} value={tool.id}>{tool.name}</option>)}</select></label>:<strong>{active==='results'?'Your results':selected?.name}</strong>}
+      <p>{groupInfo.description}</p>
     </div>
     {notice&&!manager&&<p className="marketing-notice" role="status">{notice}</p>}
-    <div id={panelId} role="tabpanel" aria-labelledby={`${panelId}-${active}`} className="marketing-panel">
-      {active==='results'?<><JourneyReport productId={product.id} campaignId={selectedCampaign}/><ShareLinkResults productId={product.id} campaignId={selectedCampaign}/><details className="growth-plan-checklist"><summary>Business metrics & earnings for this product</summary><p>This separate report shows sales, net earnings and older marketing-page activity. Its own date, payment mode and currency labels apply; it is not a conversion funnel.</p><GrowthDashboard productId={product.id}/></details></>:active==='dashboard'?<>
+    <div id={panelId} role="tabpanel" aria-labelledby={`${panelId}-group-${group}`} className="marketing-panel">
+      {active==='results'?<><JourneyReport productId={product.id} campaignId={selectedCampaign}/><details className="growth-plan-checklist"><summary>Share-link performance</summary><ShareLinkResults productId={product.id} campaignId={selectedCampaign}/></details><details className="growth-plan-checklist"><summary>Business metrics & earnings for this product</summary><p>This separate report shows sales, net earnings and older marketing-page activity. Its own date, payment mode and currency labels apply; it is not a conversion funnel.</p><GrowthDashboard productId={product.id}/></details></>:active==='dashboard'?<>
+        <SharedMarketingBrief productId={product.id}/>
         <ConnectedLaunch productId={product.id} onBusyChange={setPanelBusy} onDirtyChange={setPanelDirty} onResults={()=>onTab('results')} onOpen={tool=>onTab(tool)} onToolsChanged={()=>{void settings(product.id).then(next=>{setState(next);window.dispatchEvent(new CustomEvent('fivegen:marketing-plugins-updated',{detail:{productId:product.id,installed:next.installed}}));}).catch(e=>setError(e.message));}}/>
       </>:<>
-        <div className="marketing-active-tool"><span><Puzzle size={13}/>{selected?.name} workspace{selected&&!state.installed.includes(selected.id)?' · shortcut hidden':''}</span><button type="button" onClick={openManager} disabled={busy}>Customize shortcuts</button></div>
         <div key={active}>
           {active==='vsl'&&<GrowthVSL product={product} aiReady={aiReady} cost={cost} unlimited={unlimited} onUpdate={onUpdate} onDirtyChange={setPanelDirty} onBusyChange={setPanelBusy}/>}
+          {active==='funnel-builder'&&<FunnelBuilder product={product} aiReady={aiReady} cost={cost} unlimited={unlimited} onUpdate={onUpdate} onDirtyChange={setPanelDirty} onBusyChange={setPanelBusy}/>}
           {active==='funnel'&&<LeadCaptureWorkspace product={product} onDirtyChange={setPanelDirty} onBusyChange={setPanelBusy}/>}
           {active==='voice'&&<section className="creator-marketing"><h2>This product’s creator references</h2><p>Choose only the reviewed private profile and sources relevant to {product.title}. Manage reusable sources in your global Creator library. Source approval is AI-use permission and never makes a private recording publicly playable.</p><CreatorContextPicker productId={product.id} onDirtyChange={setPanelDirty} onBusyChange={setPanelBusy}/><a className="button secondary" href="/?view=creator-library">Open Creator library</a></section>}
           {active==='campaigns'&&<CampaignStudio product={product} aiReady={aiReady} cost={cost} unlimited={unlimited} onUpdate={onUpdate} onDirtyChange={setPanelDirty} onBusyChange={setPanelBusy} onOpenAutomations={()=>onTab('automations')}/>}

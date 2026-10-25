@@ -4,7 +4,7 @@ import {resolveMarketingDestination,listMarketingDestinations,destinationGuard} 
 import { providerSettings, textGeneration } from './ai';
 import { textCredits } from './credit-policy';
 import { hasUnlimitedGeneration } from './generation-access';
-import { getGrowth } from './growth-server';
+import { getGrowth,reviewedOfferFacts } from './growth-server';
 import { missingGrowthAnswers } from './growth';
 import { campaignSaveSchema, generatedCampaignSchema, emptyCampaign, type Campaign, type CampaignItem, campaignGenerationSchema, mergeCampaignDrafts } from './campaign';
 import { creatorVoiceContext, assertVoiceRevisions, voiceRevisionGuard, listVoiceSources } from './creator-voice-server';
@@ -13,7 +13,7 @@ import { marketingVersionStatement } from './marketing-versions-server';
 import { previousCreatorRun, recoverCreatorRuns, runCreatorAI } from './campaign-run';
 
 function campaignRow(row: Record<string, unknown>): Campaign {
-  return { id:String(row.id),destination:row.destination?JSON.parse(String(row.destination)):null,createdAt:Number(row.created_at),isDefault:row.id===row.product_id,title: String(row.title), goal: String(row.goal), sourceIds: JSON.parse(String(row.source_ids)), items: JSON.parse(String(row.items)), sourceRevisions: JSON.parse(String(row.source_revisions)), updatedAt: Number(row.updated_at), contextRefs:row.context_refs?JSON.parse(String(row.context_refs)):null,briefRevision:Number(row.brief_revision||0) };
+  return { id:String(row.id),destination:row.destination?JSON.parse(String(row.destination)):null,createdAt:Number(row.created_at),isDefault:row.id===row.product_id,title: String(row.title), goal: String(row.goal), sourceIds: JSON.parse(String(row.source_ids)), items: (JSON.parse(String(row.items)) as CampaignItem[]).map(item=>({...item,accountId:item.accountId??null,scheduleTimezone:item.scheduleTimezone??null})), sourceRevisions: JSON.parse(String(row.source_revisions)), updatedAt: Number(row.updated_at), contextRefs:row.context_refs?JSON.parse(String(row.context_refs)):null,briefRevision:Number(row.brief_revision||0) };
 }
 export async function getCampaign(productId:string,owner:string,campaignId?:string):Promise<Campaign>{
  const product=await ownedProduct(productId,owner),db=database();
@@ -38,6 +38,17 @@ export async function saveCampaign(productId: string, owner: string, value: unkn
   const destination=input.destination===undefined?current.destination:input.destination;if(destination)await resolveMarketingDestination(productId,owner,destination);let briefRevision=current.briefRevision||0;if(input.items.every(item=>item.status==='draft')&&briefRevision)briefRevision=brief.updatedAt;
   if(current.updatedAt)await marketingVersionStatement(owner,productId,'campaign',current.updatedAt,'Previous campaign draft',current,undefined,current.id).run();
   if (new Set(input.items.map(item => item.id)).size !== input.items.length || new Set(input.sourceIds).size !== input.sourceIds.length) throw new ApiError('Campaign items and source choices must be unique.', 400);
+  const accountGuard:{sql:string;values:(string|number)[]}={sql:'',values:[]};
+  // Account identity belongs to the creator, independently of the social app.
+  // Retaining an archived profile preserves history; assigning one requires an active profile.
+  for(const accountId of new Set(input.items.flatMap(item=>item.accountId?[item.accountId]:[]))){
+    const account=await database().prepare('SELECT id,archived,updated_at FROM calendar_accounts WHERE id=? AND owner=?').bind(accountId,owner).first();
+    if(!account)throw new ApiError('Choose an account profile that belongs to you.',404);
+    const newlyAssigned=input.items.some(item=>item.accountId===accountId&&!current.items.some(previous=>previous.id===item.id&&previous.accountId===accountId));
+    const newlyScheduled=input.items.some(item=>item.accountId===accountId&&item.status==='scheduled'&&!current.items.some(previous=>previous.id===item.id&&previous.accountId===accountId&&previous.status==='scheduled'&&previous.scheduledAt===item.scheduledAt));
+    if(account.archived&&(newlyAssigned||newlyScheduled))throw new ApiError('Restore this account profile or choose an active one before assigning a new reminder.',409);
+    accountGuard.sql+=' AND EXISTS(SELECT 1 FROM calendar_accounts WHERE id=? AND owner=? AND updated_at=?)';accountGuard.values.push(accountId,owner,Number(account.updated_at));
+  }
   // Drafts can retain a removed reference so creators can repair them without
   // losing their work. Approved copy must still point to permitted originals.
   for (const item of input.items) {
@@ -67,7 +78,7 @@ export async function saveCampaign(productId: string, owner: string, value: unkn
   let contextRefs=current.contextRefs||null;
   if(input.items.every(item=>item.status==='draft')&&contextRefs){try{const selected=await loadCreatorContext(owner,productId);contextRefs=JSON.stringify([...selected.refs.sources.map(s=>s.id)].sort())===JSON.stringify([...input.sourceIds].sort())?selected.refs:null;}catch{contextRefs=null;}}
   const updatedAt = Math.max(Date.now(), input.expectedUpdatedAt + 1), db = database();
-  const approvedReferences = sourceRevisions.filter(source => input.items.some(item => item.status !== 'draft' && item.sourceIds.includes(source.id))), voiceGuard = voiceRevisionGuard(owner, approvedReferences),contextGuard=input.items.some(item=>item.status!=='draft')&&contextRefs?creatorContextGuard(owner,productId,contextRefs):{sql:'',values:[] as (string|number)[]},briefGuard=input.items.some(item=>item.status!=='draft')&&briefRevision?{sql:' AND EXISTS(SELECT 1 FROM growth_workspaces WHERE product_id=? AND owner=? AND updated_at=?)',values:[productId,owner,briefRevision]}:{sql:'',values:[] as (string|number)[]},pageGuard=destination?destinationGuard(destination,owner):{sql:'',values:[] as (string|number)[]},guard={sql:voiceGuard.sql+contextGuard.sql+briefGuard.sql+actorGuard.sql+pageGuard.sql,values:[...voiceGuard.values,...contextGuard.values,...briefGuard.values,...actorGuard.values,...pageGuard.values]};
+  const approvedReferences = sourceRevisions.filter(source => input.items.some(item => item.status !== 'draft' && item.sourceIds.includes(source.id))), voiceGuard = voiceRevisionGuard(owner, approvedReferences),contextGuard=input.items.some(item=>item.status!=='draft')&&contextRefs?creatorContextGuard(owner,productId,contextRefs):{sql:'',values:[] as (string|number)[]},briefGuard=input.items.some(item=>item.status!=='draft')&&briefRevision?{sql:' AND EXISTS(SELECT 1 FROM growth_workspaces WHERE product_id=? AND owner=? AND updated_at=?)',values:[productId,owner,briefRevision]}:{sql:'',values:[] as (string|number)[]},pageGuard=destination?destinationGuard(destination,owner):{sql:'',values:[] as (string|number)[]},guard={sql:voiceGuard.sql+contextGuard.sql+briefGuard.sql+actorGuard.sql+pageGuard.sql+accountGuard.sql,values:[...voiceGuard.values,...contextGuard.values,...briefGuard.values,...actorGuard.values,...pageGuard.values,...accountGuard.values]};
   const result = await db.batch([db.prepare(`INSERT INTO marketing_campaigns(id,product_id,owner,title,goal,source_ids,items,source_revisions,updated_at,context_refs,brief_revision,destination,created_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,? WHERE (?=0 OR EXISTS(SELECT 1 FROM marketing_campaigns WHERE id=? AND product_id=? AND owner=?)) AND EXISTS(SELECT 1 FROM products WHERE id=? AND owner=?)${guard.sql}
     ON CONFLICT(id) DO UPDATE SET title=excluded.title,goal=excluded.goal,source_ids=excluded.source_ids,items=excluded.items,source_revisions=excluded.source_revisions,updated_at=excluded.updated_at,lease=0,lease_id=NULL,context_refs=excluded.context_refs,brief_revision=excluded.brief_revision,destination=excluded.destination WHERE marketing_campaigns.owner=excluded.owner AND marketing_campaigns.product_id=excluded.product_id AND marketing_campaigns.updated_at=? AND marketing_campaigns.lease<?`)
     .bind(current.id,productId,owner,input.title,input.goal,JSON.stringify(input.sourceIds),JSON.stringify(input.items),JSON.stringify(sourceRevisions),updatedAt,JSON.stringify(contextRefs),briefRevision,JSON.stringify(destination),current.createdAt||updatedAt,input.expectedUpdatedAt,current.id,productId,owner,productId,owner,...guard.values,input.expectedUpdatedAt,Date.now()),marketingVersionStatement(owner,productId,'campaign',updatedAt,'Saved campaign draft',{...input,id:current.id,destination,updatedAt,sourceRevisions,contextRefs,briefRevision},undefined,current.id)]);
@@ -78,9 +89,11 @@ export async function generateCampaign(productId: string, owner: string, value: 
   await ownedProduct(productId, owner); const input = campaignGenerationSchema.parse(value);
   const campaign=await getCampaign(productId,owner,input.campaignId);
   const previous=await previousCreatorRun('campaign',campaign.id,owner,input);if(previous)return previous;
-  const growth = await getGrowth(productId, owner);
+  const growth = await getGrowth(productId, owner),factsSnapshot=await reviewedOfferFacts(productId,owner);
+  if(JSON.stringify(growth.productFacts)!==JSON.stringify(factsSnapshot.facts))throw new ApiError('The product details changed. Review the current shared brief before generating this campaign.',409);
+  const briefGuard=growth.updatedAt?{sql:' AND EXISTS(SELECT 1 FROM growth_workspaces WHERE product_id=? AND owner=? AND updated_at=?)',values:[productId,owner,growth.updatedAt]}:{sql:' AND NOT EXISTS(SELECT 1 FROM growth_workspaces WHERE product_id=? AND owner=?)',values:[productId,owner]};
   if (campaign.updatedAt !== input.expectedUpdatedAt) throw new ApiError('The campaign changed. Reload it first.', 409);
-  if (missingGrowthAnswers(growth.brief).length) throw new ApiError('Complete and save the nine questions in VSL before generating a campaign.', 400);
+  if (missingGrowthAnswers(growth.brief).length) throw new ApiError('Add your audience, useful outcome and offer inclusions to the shared product brief before generating a campaign. Story and evidence are optional.', 400);
   if (!campaign.sourceIds.length || !campaign.goal.trim()) throw new ApiError('Choose at least one approved source and describe the campaign goal.', 400);
   const selectedContext=await loadCreatorContext(owner,productId);
   if(JSON.stringify([...selectedContext.refs.sources.map(s=>s.id)].sort())!==JSON.stringify([...campaign.sourceIds].sort()))throw new ApiError('Save the same reviewed product context for this campaign before generating. Source overrides must be selected explicitly in the shared context.',409);
@@ -100,12 +113,12 @@ export async function generateCampaign(productId: string, owner: string, value: 
     if (!result.success) throw new ApiError('AI returned an incomplete campaign. This attempt was not charged.', 502);
     if (['social', 'short_video', 'email'].some(channel => !result.data.items.some(item => item.channel === channel))) throw new ApiError('AI did not produce every campaign format. This attempt was not charged.', 502);
     if (result.data.items.some(item => item.sourceIds.some(id => !sources.some(source => source.id === id)) || (item.channel === 'email' && !item.subject.trim()))) throw new ApiError('AI returned invalid references or an incomplete email. This attempt was not charged.', 502);
-    const items: CampaignItem[] = result.data.items.map(item => ({ ...item, id: crypto.randomUUID(), status: 'draft', scheduledAt: null }));
+    const items: CampaignItem[] = result.data.items.map(item => ({ ...item, id: crypto.randomUUID(), status: 'draft', scheduledAt: null, accountId:null, scheduleTimezone:null }));
     let merged:CampaignItem[];try{merged=mergeCampaignDrafts(campaign.items,items,input.mode);}catch(e){throw new ApiError((e as Error).message,400);}
-    return { items:merged, sourceRevisions: references,contextRefs:selectedContext.refs,briefRevision:growth.updatedAt };
+    return { items:merged, sourceRevisions: references,contextRefs:selectedContext.refs,briefRevision:growth.updatedAt,productFacts:factsSnapshot.facts };
   }, (result, updatedAt) => {
     const guard = selectedContext.guard;
-    return [database().prepare(`UPDATE marketing_campaigns SET items=?,source_revisions=?,context_refs=?,brief_revision=?,updated_at=?,lease=0 WHERE id=? AND product_id=? AND owner=? AND updated_at=? AND lease_id=?${guard.sql} AND EXISTS(SELECT 1 FROM growth_workspaces WHERE product_id=? AND owner=? AND updated_at=?)`)
-      .bind(JSON.stringify(result.items), JSON.stringify(result.sourceRevisions),JSON.stringify(result.contextRefs),result.briefRevision, updatedAt,campaign.id,productId,owner,input.expectedUpdatedAt,input.requestId, ...guard.values, productId, owner, growth.updatedAt),marketingVersionStatement(owner,productId,'campaign',updatedAt,`Generated campaign · ${input.mode==='append'?'appended drafts':'replaced unapproved drafts'}`,{...campaign,items:result.items,sourceRevisions:result.sourceRevisions,contextRefs:result.contextRefs,briefRevision:result.briefRevision,updatedAt},input.requestId,campaign.id)];
+    return [database().prepare(`UPDATE marketing_campaigns SET items=?,source_revisions=?,context_refs=?,brief_revision=?,updated_at=?,lease=0 WHERE id=? AND product_id=? AND owner=? AND updated_at=? AND lease_id=?${guard.sql}${briefGuard.sql}${factsSnapshot.guard.sql}`)
+      .bind(JSON.stringify(result.items), JSON.stringify(result.sourceRevisions),JSON.stringify(result.contextRefs),result.briefRevision, updatedAt,campaign.id,productId,owner,input.expectedUpdatedAt,input.requestId, ...guard.values,...briefGuard.values,...factsSnapshot.guard.values),marketingVersionStatement(owner,productId,'campaign',updatedAt,`Generated campaign · ${input.mode==='append'?'appended drafts':'replaced unapproved drafts'}`,{...campaign,items:result.items,sourceRevisions:result.sourceRevisions,contextRefs:result.contextRefs,briefRevision:result.briefRevision,productFacts:result.productFacts,updatedAt},input.requestId,campaign.id)];
   });
 }

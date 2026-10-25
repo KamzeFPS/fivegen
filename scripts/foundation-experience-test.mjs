@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import ts from 'typescript';
 import React from 'react';
+import {z} from 'zod';
 import {renderToStaticMarkup} from 'react-dom/server';
 import * as allIcons from 'lucide-react';
 const icons=Object.fromEntries(['Search','Pin','PanelLeftClose','PanelLeftOpen','ArrowRight','Banknote','BarChart3','BookOpen','Brain','CalendarDays','ChevronDown','ChevronRight','Copy','Eye','FileText','FlaskConical','FolderOpen','Globe','GraduationCap','Home','ImagePlus','Layers3','LifeBuoy','Loader2','Mail','Megaphone','Palette','Plus','Rocket','Settings2','Share2','Sparkles','Star','Upload','Users'].map(name=>[name,allIcons[name]]));
@@ -18,9 +19,10 @@ const passthrough=({children})=>React.createElement('div',null,children),menus=O
 function descendants(node,predicate,found=[]){if(Array.isArray(node))node.forEach(value=>descendants(value,predicate,found));else if(React.isValidElement(node)){if(predicate(node))found.push(node);descendants(node.props.children,predicate,found);}return found;}
 function text(node){return Array.isArray(node)?node.map(text).join(''):React.isValidElement(node)?text(node.props.children):typeof node==='string'?node:'';}
 const hooks=[];let hookIndex=0;const useState=initial=>{const index=hookIndex++;if(!(index in hooks))hooks[index]=initial;return [hooks[index],value=>{hooks[index]=typeof value==='function'?value(hooks[index]):value;}];};
-const nav=load('app/workspace-product-navigation.tsx',{React,...icons,...menus,useState,useEffect:()=>{},fetch:()=>{throw new Error('Primary navigation must not depend on an optional tool lookup.');}});
+const {isMarketingWorkspaceArea}=load('lib/marketing-plugins.ts',{z});
+const nav=load('app/workspace-product-navigation.tsx',{React,isMarketingWorkspaceArea,...icons,...menus,useState,useEffect:()=>{},fetch:()=>{throw new Error('Primary navigation must not depend on an optional tool lookup.');}});
 const product={id:'product-fixture',title:'My original course',color:'orange'},chosen=[];
-for(const tab of ['page','content','commerce','dashboard','voice','automations']){
+for(const tab of ['page','content','commerce','dashboard','results','voice','automations','funnel-builder']){
  hookIndex=0;const tree=nav.WorkspaceProductSidebar({product,products:[product],tab,mode:'creator',onProduct(){},onTab(){},onMode(){},onCustomize(){},onReviews(){},onDestination:destination=>chosen.push(destination)});
  const primary=descendants(tree,node=>node.type==='nav'&&node.props['aria-label']==='Product navigation')[0];const buttons=descendants(primary,node=>node.type==='button');assert.deepEqual(buttons.map(button=>text(button)),['Overview','Content','Sales page','Price & access','Marketing','Customers','Settings'],'Every selected-product tool has the same primary destinations');assert.equal(buttons.filter(button=>button.props['aria-current']==='page').length,1);buttons.forEach(button=>button.props.onClick());assert.deepEqual(chosen.splice(0),['overview','content','sales-page','commerce','marketing','customers','settings']);
 }

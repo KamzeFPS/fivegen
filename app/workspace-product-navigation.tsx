@@ -5,10 +5,11 @@ import {Banknote,BookOpen,ChevronDown,ChevronRight,Copy,Eye,FolderOpen,Globe,Hom
 import {DropdownMenu,DropdownMenuContent,DropdownMenuItem,DropdownMenuLabel,DropdownMenuSeparator,DropdownMenuTrigger} from '@/components/ui/dropdown-menu';
 import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
 import type {Product} from '@/lib/product';
+import {isMarketingWorkspaceArea} from '@/lib/marketing-plugins';
 import {searchProductNavigation,visibleProductPins} from '@/lib/product-navigation';
 
 type ProductSummary=Pick<Product,'id'|'title'|'slug'|'color'|'format'|'pageIconUploadId'>&{archivedAt?:number|null};
-export type ProductArea='page'|'content'|'dashboard'|'offer'|'commerce'|'voice'|'vsl'|'funnel'|'campaigns'|'automations'|'files'|'media';
+export type ProductArea='page'|'content'|'dashboard'|'offer'|'commerce'|'voice'|'vsl'|'funnel-builder'|'funnel'|'campaigns'|'automations'|'files'|'media';
 export type ProductExtraTool={id:string;label:string;onSelect:()=>void};
 export type ProductDestination='overview'|'content'|'sales-page'|'commerce'|'marketing'|'customers'|'settings';
 export const productDestinations=[
@@ -50,7 +51,7 @@ export function WorkspaceProductSidebar({product,products,tab,mode,onProduct,onT
   useEffect(()=>{if(!sharing)return;let active=true;queueMicrotask(()=>{if(!active)return;setPageLink('');setError('');setCopied(false);setLookupFailed(false);setLinkLoading(true);});fetch(`/api/products/${product.id}/page`,{cache:'no-store'}).then(async response=>{const data=await response.json() as {error?:string;page:{publishedAt:number|null;publicPath:string}};if(!response.ok)throw new Error(data.error||'Could not load your page link.');if(active&&data.page.publishedAt)setPageLink(location.origin+data.page.publicPath);}).catch(e=>{if(active){setError(e.message);setLookupFailed(true);}}).finally(()=>{if(active)setLinkLoading(false);});return()=>{active=false;};},[sharing,product.id,lookupAttempt]);
   async function copy(){try{await navigator.clipboard.writeText(pageLink);setCopied(true);setError('');}catch{setError('Copy the page link from the field above. Your browser could not copy it automatically.');}}
   function select(area:ProductArea){setToolsOpen(false);onTab(area);}
-  const currentDestination:ProductDestination=activeDestination||(activeExtra==='launch'?'overview':activeExtra==='people'?'customers':activeExtra==='details'?'settings':activeExtra==='appearance'||tab==='page'?'sales-page':['dashboard','offer','voice','vsl','funnel','campaigns','automations'].includes(tab)?'marketing':tab==='commerce'?'commerce':'content');
+  const currentDestination:ProductDestination=activeDestination||(activeExtra==='launch'?'overview':activeExtra==='people'?'customers':activeExtra==='details'?'settings':activeExtra==='appearance'||tab==='page'?'sales-page':isMarketingWorkspaceArea(tab)?'marketing':tab==='commerce'?'commerce':'content');
   function go(destination:ProductDestination){
     setToolsOpen(false);
     if(onDestination){onDestination(destination);return;}

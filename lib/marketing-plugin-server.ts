@@ -1,12 +1,12 @@
 import { ApiError, database, ownedProduct } from './server';
-import { marketingPluginIds, marketingPluginUpdateSchema, readMarketingPluginIds, type MarketingPluginState } from './marketing-plugins';
+import { defaultMarketingPluginIds, marketingPluginIds, marketingPluginUpdateSchema, readMarketingPluginIds, type MarketingPluginState } from './marketing-plugins';
 
 export const marketingPluginHeaders = { 'Cache-Control': 'private, no-store' };
 
 export async function getMarketingPlugins(productId: string, owner: string): Promise<MarketingPluginState> {
   await ownedProduct(productId, owner);
   const row = await database().prepare('SELECT installed,updated_at FROM product_marketing_plugins WHERE product_id=? AND owner=?').bind(productId, owner).first();
-  return row ? { installed: readMarketingPluginIds(row.installed), updatedAt: Number(row.updated_at) } : { installed: [], updatedAt: 0 };
+  return row ? { installed: readMarketingPluginIds(row.installed), updatedAt: Number(row.updated_at) } : { installed: [...defaultMarketingPluginIds], updatedAt: 0 };
 }
 
 export async function updateMarketingPlugin(productId: string, owner: string, value: unknown): Promise<MarketingPluginState> {

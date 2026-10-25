@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type {GrowthBrief,OfferFacts} from './growth';
 export const offerVariantSchema = z.object({
   title: z.string().trim().max(120), audience: z.string().trim().max(500), outcome: z.string().trim().max(1000),
   includes: z.string().trim().max(3000), price: z.number().min(0).max(100000),
@@ -12,11 +13,12 @@ export const offerStudySchema = z.object({
 export type OfferVariant = z.infer<typeof offerVariantSchema>;
 export type OfferStudy = z.infer<typeof offerStudySchema>;
 export type OfferResult = { id: string; revision: number; preference: 'a'|'b'|'neither'; readiness: string; feedback: string; email: string|null; createdAt: number };
-export type OfferLab = { draft: OfferStudy; slug: string; status: 'draft'|'live'|'closed'; revision: number; publishedRevision: number|null; published: OfferStudy|null; visitors: number; responseCount: number; totalResponses: number; preferenceCounts: Record<'a'|'b'|'neither', number>; responses: OfferResult[] };
+export type OfferLab = { draft: OfferStudy; slug: string; status: 'draft'|'live'|'closed'; revision: number; publishedRevision: number|null; published: OfferStudy|null; visitors: number; responseCount: number; totalResponses: number; preferenceCounts: Record<'a'|'b'|'neither', number>; responses: OfferResult[];sharedBrief?:{brief:GrowthBrief;updatedAt:number} };
 export const offerReadiness = { curious: 'Just exploring', interested: 'Interested, but I have questions', ready: 'I would consider buying at this price' } as const;
-export function initialOfferStudy(title: string, audience: string): OfferStudy {
-  const variant = { title, audience, outcome: '', includes: '', price: 0, currency: 'usd' as const };
-  return { question: 'Which of these offers would be more useful to you?', problem: '', a: variant, b: { ...variant, title: `${title} — alternative` } };
+export function initialOfferStudy(title: string, audience: string,brief?:Partial<GrowthBrief>,facts?:OfferFacts): OfferStudy {
+  const currency=facts&&['usd','eur','gbp'].includes(facts.currency)?facts.currency as 'usd'|'eur'|'gbp':'usd';
+  const variant = { title:title.slice(0,120), audience:(brief?.icp||audience).slice(0,500), outcome:(brief?.promise||'').slice(0,1000), includes:(brief?.offer||'').slice(0,3000), price:Math.min(100000,Math.max(0,(facts?.priceCents||0)/100)), currency };
+  return { question: 'Which of these offers would be more useful to you?', problem:(brief?.problem||'').slice(0,1000), a: variant, b: { ...variant, title: `${title} — alternative`.slice(0,120) } };
 }
 export function offerPrice(variant: OfferVariant) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: variant.currency.toUpperCase(), maximumFractionDigits: 2 }).format(variant.price);

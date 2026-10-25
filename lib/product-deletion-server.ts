@@ -17,6 +17,7 @@ const revisionTables = [
   ['product_pages', ['draft', 'published', 'updated_at'], 'product_id'],
   ['public_page_records', ['id', 'draft', 'published', 'updated_at'], 'id'],
   ['growth_workspaces', ['brief', 'assets', 'context_refs', 'updated_at'], 'product_id'],
+  ['funnel_builder_workspaces', ['brief', 'graph', 'strategy', 'strategy_brief', 'updated_at'], 'product_id'],
   ['growth_funnel_drafts', ['creator_vsl_upload_id', 'updated_at'], 'product_id'],
   ['growth_funnels', ['landing', 'creator_vsl_upload_id', 'published_at', 'updated_at'], 'product_id'],
   ['marketing_campaigns', ['id', 'title', 'goal', 'items', 'destination', 'updated_at'], 'id'],
@@ -50,6 +51,8 @@ const blockers: Blocker[] = [
       OR ${any('uploads', "status NOT IN ('completed','failed')")}
       OR ${any('growth_generation_runs', "state='pending'")}
       OR ${any('growth_workspaces', 'lease>?1')}
+      OR ${any('funnel_builder_workspaces', 'lease>?1')}
+      OR ${any('funnel_builder_runs', "state='pending'")}
       OR ${any('creator_campaigns', 'lease>?1')}
       OR ${any('marketing_campaigns', 'lease>?1')}
       OR ${any('page_copy_proposals', 'lease>?1')}
@@ -63,6 +66,7 @@ const blockers: Blocker[] = [
       OR EXISTS(SELECT 1 FROM credit_usage c WHERE c.state='reserved' AND (
         c.id IN(SELECT id FROM assets WHERE product_id=p.id)
         OR c.id IN(SELECT id FROM growth_generation_runs WHERE product_id=p.id)
+        OR c.id IN(SELECT 'funnel-builder:'||id FROM funnel_builder_runs WHERE product_id=p.id)
         OR c.id IN(SELECT id FROM ai_product_runs WHERE product_id=p.id)
         OR c.id IN(SELECT r.id FROM creator_ai_runs r WHERE r.target_id=p.id
           OR r.target_id IN(SELECT id FROM marketing_campaigns WHERE product_id=p.id)
@@ -124,6 +128,7 @@ const deleteTables = [
   'page_copy_proposals', 'connected_marketing_launches', 'creator_launch_journeys',
   'growth_plan_reviews', 'growth_asset_proposals', 'creator_product_context', 'creator_context_proposals',
   'growth_funnel_drafts', 'growth_funnels', 'growth_workspaces', 'growth_events', 'growth_leads',
+  'funnel_builder_runs', 'funnel_builder_workspaces',
   'offer_responses', 'offer_visitors', 'offer_rounds', 'offer_experiments',
   'product_share_links', 'product_journey_events', 'creator_reply_templates', 'product_marketing_plugins',
   'product_editorial_reviews', 'product_builder_revisions', 'product_builder_publications', 'product_builder_workspaces',

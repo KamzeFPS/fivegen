@@ -7,16 +7,16 @@ import { offerBriefChanges } from './offer-launch-brief';
 import { csvCell } from './growth-funnel';
 
 export async function getOfferLab(productId: string, owner: string): Promise<OfferLab> {
-  const product = await ownedProduct(productId, owner), db = database();
+  const product = await ownedProduct(productId, owner), db = database(),growth=await getGrowth(productId,owner),sharedBrief={brief:growth.brief,updatedAt:growth.updatedAt};
   const row = await db.prepare('SELECT * FROM offer_experiments WHERE product_id=? AND owner=?').bind(productId, owner).first();
-  if (!row) return { draft: initialOfferStudy(String(product.title), String(product.audience)), slug: '', status: 'draft', revision: 0, publishedRevision: null, published: null, visitors: 0, responseCount: 0, totalResponses: 0, preferenceCounts: { a: 0, b: 0, neither: 0 }, responses: [] };
+  if (!row) return { draft: initialOfferStudy(growth.productFacts?.title||String(product.title), String(product.audience),growth.brief,growth.productFacts), slug: '', status: 'draft', revision: 0, publishedRevision: null, published: null, visitors: 0, responseCount: 0, totalResponses: 0, preferenceCounts: { a: 0, b: 0, neither: 0 }, responses: [],sharedBrief };
   const responses = await db.prepare('SELECT * FROM offer_responses WHERE product_id=? AND owner=? ORDER BY created_at DESC,id DESC LIMIT 20').bind(productId, owner).all();
   const totals = await db.prepare('SELECT revision,preference,COUNT(*) AS count FROM offer_responses WHERE product_id=? AND owner=? GROUP BY revision,preference').bind(productId, owner).all();
   const currentTotals = totals.results.filter(r => Number(r.revision) === Number(row.published_revision));
   const preferenceCounts = { a: 0, b: 0, neither: 0 };
   for (const total of currentTotals) preferenceCounts[total.preference as 'a'|'b'|'neither'] = Number(total.count);
   const visitors = await db.prepare('SELECT COUNT(*) n FROM offer_visitors WHERE product_id=? AND owner=? AND revision=?').bind(productId, owner, row.published_revision ?? 0).first();
-  return { draft: offerStudySchema.parse(JSON.parse(String(row.draft))), slug: String(row.slug), status: row.status as OfferLab['status'], revision: Number(row.revision),
+  return { draft: offerStudySchema.parse(JSON.parse(String(row.draft))), sharedBrief,slug: String(row.slug), status: row.status as OfferLab['status'], revision: Number(row.revision),
     publishedRevision: row.published_revision == null ? null : Number(row.published_revision), published: row.published ? offerStudySchema.parse(JSON.parse(String(row.published))) : null,
     visitors: Number(visitors?.n ?? 0), responseCount: currentTotals.reduce((n, r) => n + Number(r.count), 0), totalResponses: totals.results.reduce((n, r) => n + Number(r.count), 0), preferenceCounts, responses: responses.results.map(r => ({ id: String(r.id), revision: Number(r.revision), preference: r.preference as OfferResult['preference'], readiness: String(r.readiness), feedback: String(r.feedback), email: r.email == null ? null : String(r.email), createdAt: Number(r.created_at) })) };
 }

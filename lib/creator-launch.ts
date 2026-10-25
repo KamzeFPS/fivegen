@@ -1,12 +1,12 @@
 import type {ProductLaunchFacts} from './product-launch-state';
-export type CreatorLaunchNavigation='details'|'content'|'review'|'payments'|'preview'|'publish'|'sales-page';
+export type CreatorLaunchNavigation='details'|'content'|'review'|'payments'|'preview'|'publish'|'sales-page'|'price';
 export type CreatorLaunchAction={kind:'navigate';navigate:CreatorLaunchNavigation;label:string}|{kind:'feedback'|'share'|'refresh';label:string};
 export type CreatorLaunchFeedback={id:string;source:'conversation'|'email'|'survey'|'other';audience:'potential-buyer'|'customer';summary:string;recordedAt:number;provenance:'creator-entered'};
 export type CreatorLaunchStep={id:string;title:string;status:'complete'|'current'|'upcoming';detail:string;action?:CreatorLaunchAction};
 export type CreatorLaunchState={
  summary?:ProductLaunchFacts&{title:string;format:string;coverUrl:string|null;pagePublishedAt:number|null;lastSavedAt:number|null};
  productId:string;updatedAt:number;draftVersion:number;path:'paid'|'free'|'mixed';phase:'first-sale'|'free-access'|'improve';
- steps:CreatorLaunchStep[];nextAction:CreatorLaunchAction;nextTitle:string;nextDetail:string;
+ steps:CreatorLaunchStep[];checkoutAction?:CreatorLaunchAction;nextAction:CreatorLaunchAction;nextTitle:string;nextDetail:string;
  feedback:CreatorLaunchFeedback[];
  sharing:{publicationVersion:number;sharedAt:number|null;channel:string;publicUrl:string|null;current:boolean}|null;
  sales:{livePaidCount:number;firstLivePaidAt:number|null;testPaidCount:number;freeAccessCount:number};

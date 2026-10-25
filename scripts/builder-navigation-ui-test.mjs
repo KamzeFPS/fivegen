@@ -12,6 +12,7 @@ const empty={source:'manual',sections:[],files:[],uploadIds:[]};
 assert.equal(initialBuilderPanel(empty),'details','A new manual product starts with its brief');
 assert.equal(initialBuilderPanel({...empty,source:'ai'}),'details','A new AI product starts with its brief');
 assert.equal(initialBuilderPanel({...empty,source:'upload'}),'resources','Choosing existing content opens the upload surface immediately');
+for(const type of ['mini-course','video-course'])for(const source of ['manual','upload','ai'])assert.equal(initialBuilderPanel({...empty,type,source}),'content','Every new course starts with its first useful lesson, including recordings and writing');
 for(const content of [{sections:[{title:'A chapter',body:'Existing work'}]}]){
  assert.equal(initialBuilderPanel({...empty,...content}),'content','Opening an existing authored product goes directly to the work');
 }
@@ -28,7 +29,7 @@ for(const [location,family,stage,panel,field] of [
  [{step:'review',field:'coverUploadId'},'document',1,'appearance','coverUploadId'],
  [{step:'review'},'service',1,'details','meetingUrl'],
  [{step:'review'},'community',1,'details','communityUrl'],
- [{step:'review'},'document',2,'content',undefined],
+ [{step:'review'},'document',1,'review',undefined],
 ]){
  const before=structuredClone(location),next=builderNavigationForLocation(location,family);
  assert.equal(next.stage,stage,`${JSON.stringify(location)} opens the right creation step`);
@@ -55,18 +56,20 @@ const toolCalls=[],openTool=componentHandler('app/product-builder.tsx','openTool
 openTool('media');assert.deepEqual(toolCalls.pop(),['editor','appearance'],'Creative assets opens the builder’s actual Design & cover panel without redirecting to a product home');
 openTool('files');assert.deepEqual(toolCalls.pop(),['editor','resources'],'Resources retains its native builder panel');
 openTool('commerce');assert.deepEqual(toolCalls.pop(),['editor','details',2],'Checkout retains the native publishing and selling stage');
+openTool('funnel-builder');assert.deepEqual(toolCalls.pop(),['leave','/?project=builder-course&area=funnel-builder'],'Strategy opens its own selected-product marketing workspace through the save guard');
 openTool('vsl');assert.deepEqual(toolCalls.pop(),['leave','/?project=builder-course&area=vsl'],'Marketing still opens the selected product’s installed-tool workspace');
 const tabCalls=[],switchTab=componentHandler('app/generator-studio.tsx','switchTab',{
- product:{id:'legacy-file-sale'},workspace:{builders:[]},isFileSale:()=>true,marketingTabs:['dashboard','voice','vsl','funnel','campaigns','automations','offer'],
+ product:{id:'legacy-file-sale'},workspace:{builders:[]},isFileSale:()=>true,marketingTabs:['dashboard','results','voice','vsl','funnel-builder','funnel','campaigns','automations','offer'],
  openPage:(...args)=>tabCalls.push(['profile',...args]),leaveWorkspace:path=>tabCalls.push(['leave',path]),navigate:action=>action(),setEditorTab:tab=>tabCalls.push(['tab',tab]),setView:()=>{},replaceRoute:()=>{},
 });
 switchTab('page');assert.deepEqual(tabCalls.pop(),['profile','creator'],'Product home for a legacy file sale opens its branded profile rather than the file editor');
 switchTab('content');assert.deepEqual(tabCalls.pop(),['leave','/sell/legacy-file-sale'],'File-sale editing still opens its native editor');
 switchTab('commerce');assert.deepEqual(tabCalls.pop(),['leave','/sell/legacy-file-sale?stage=1'],'File-sale checkout opens its pricing stage instead of returning to content editing');
+switchTab('funnel-builder');assert.deepEqual(tabCalls.pop(),['tab','funnel-builder'],'File-sale strategy stays in the correct marketing context');
 switchTab('dashboard');assert.deepEqual(tabCalls.pop(),['tab','dashboard'],'File-sale marketing remains in the selected product’s marketing workspace');
 const fileProduct={id:'legacy-file-sale'},openProduct=componentHandler('app/generator-studio.tsx','openProduct',{
  navigate:action=>action(),workspace:{builders:[],fileSales:[{productId:fileProduct.id}]},workspaceProductDestination:()=>'/sell/'+fileProduct.id,isFileSale:()=>true,
- marketingTabs:['dashboard','voice','vsl','funnel','campaigns','automations','offer'],leavingWorkspace:{current:false},location:{assign:path=>tabCalls.push(['leave',path])},
+ marketingTabs:['dashboard','results','voice','vsl','funnel-builder','funnel','campaigns','automations','offer'],leavingWorkspace:{current:false},location:{assign:path=>tabCalls.push(['leave',path])},
  receiveProduct:()=>{},setEditorTab:()=>{},setPageMode:()=>{},setPageTab:()=>{},setEditingPage:()=>{},setView:()=>{},setError:()=>{},replaceRoute:()=>{},
 });
 openProduct(fileProduct,'commerce');assert.deepEqual(tabCalls.pop(),['leave','/sell/legacy-file-sale?stage=1'],'Library checkout actions preserve the file-sale pricing destination');

@@ -5,3 +5,25 @@
 .automation-reply-template{grid-template-columns:minmax(0,1fr)}.automation-reply-template h3{margin:0}.automation-reply-template .creator-actions{display:flex;gap:10px;flex-wrap:wrap}.automation-trigger-tabs .selected{background:#ff79301c;border-color:#ff7930;color:#ff9b66}
 
 .automation-journey-map{list-style:none!important;padding:0!important;display:grid;gap:14px;margin:20px 0!important}.automation-journey-map>.automation-journey-node{position:relative;display:grid;gap:8px;border:1px solid var(--border,#3c3c43);border-radius:12px;padding:16px!important;background:var(--surface,#1b1c20);margin:0!important;max-width:720px}.automation-journey-node:has(+li):after{content:'↓';position:absolute;bottom:-17px;left:24px;color:#ffac83;line-height:18px}.automation-journey-node>span{font-size:11px!important;text-transform:uppercase;letter-spacing:.7px;color:var(--muted-foreground,#b7b7bf)}.automation-journey-node>small{font-size:12px;line-height:1.6;color:var(--muted-foreground,#b7b7bf)}.automation-journey-node>ul{padding-left:18px;margin:0;font-size:13px;line-height:1.7}.automation-journey-node>ul>li{display:list-item!important;padding:0!important;margin:0!important;border:0!important}.automation-journey-node.is-trigger{border-color:#ff804a66}.automation-journey-node.is-exit{border-color:#8ebca955}.automation-lifecycle-coverage{border:1px solid var(--border,#3c3c43);border-radius:12px;padding:16px;margin-block:20px}.automation-lifecycle-coverage>summary{min-height:44px;cursor:pointer;display:flex;align-items:center}.automation-lifecycle-links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:14px}.automation-lifecycle-links p{font-size:13px;line-height:1.7;color:var(--muted-foreground,#b7b7bf)}.automation-lifecycle-links a{color:#ffba94;font-size:13px;min-height:44px;display:inline-flex;align-items:center}@media(max-width:700px){.automation-lifecycle-links{grid-template-columns:1fr}.automation-journey-map>.automation-journey-node{padding:14px!important}}
+
+/* Keep drafting visible; setup and detailed policies stay available on demand. */
+.automation-sequence-choice{display:flex!important;align-items:center;gap:14px;max-width:520px}
+.automation-sequence-choice select{flex:1;min-height:44px}
+.automation-status-count{font-size:12px;color:#b0b1bc;margin-left:14px}
+.automation-status details{margin-top:8px;font-size:12px;color:#a6a9b1}
+.automation-status details>summary{min-height:32px;cursor:pointer}
+.automation-setup-details,.automation-blueprints{border:1px solid #ffffff22;border-radius:12px;background:#ffffff02}
+.automation-setup-details>summary,.automation-blueprints>summary{display:flex;align-items:center;justify-content:space-between;gap:14px;min-height:52px;padding:14px 18px;font-size:14px;cursor:pointer}
+.automation-setup-details>summary>span{font-size:11px;color:#e9b590;text-align:right}
+.automation-setup-body,.automation-blueprint-body{display:grid;gap:18px;padding:0 18px 18px}
+.automation-setup-body .automation-readiness{margin:0}
+.automation-readable-timeline{padding:20px;border:1px solid #ffffff20;border-radius:12px}
+.automation-readable-timeline>p{font-size:13px;color:#a6a9b1}
+.automation-readable-timeline .marketing-details{margin-top:10px;font-size:12px}
+.automation-readable-timeline .marketing-details>summary{min-height:36px;cursor:pointer}
+.automation-journey-map{margin:16px 0;gap:10px}
+.automation-journey-node{min-width:0;padding:12px!important}
+.automation-journey-node>span{font-size:11px}
+.automation-journey-node strong,.automation-journey-node button{font-size:13px!important;line-height:1.5}
+.automation-preview:focus{outline:2px solid #ffb48e;outline-offset:4px}
+@media(max-width:650px){.automation-sequence-choice{display:grid!important;gap:8px}.automation-status-count{display:block;margin:5px 0 0}.automation-setup-details>summary{align-items:flex-start;font-size:13px}.automation-studio{gap:18px}.automation-readable-timeline{padding:16px}}

@@ -58,6 +58,8 @@ function seedDraft(p){
  for(const table of ['visits','growth_events','offer_responses','offer_visitors','offer_rounds','leads','growth_leads','booking_slots','commerce_slots','product_share_links','product_journey_events','file_sale_events'])insert(table,scope);
  insert('generation',{...scope,status:'completed',lease:0});
  insert('growth_workspaces',{...scope,brief:'{}',assets:'{}',lease:0});
+ insert('funnel_builder_workspaces',{...scope,brief:'{}',graph:'{}',strategy:'{}',strategy_brief:'{}',lease:0});
+ insert('funnel_builder_runs',{...scope,state:'completed',cost:10});
  insert('creator_campaigns',{...scope,title:'Legacy campaign',lease:0});
  insert('studio_conversations',{...scope,title:'Archived planning',messages:'[]',lease:0});
  insert('automation_sequences',{...scope,status:'draft',trigger:'lead',draft:'{}'});
@@ -96,6 +98,7 @@ try{
  assert.equal(sql.prepare('SELECT updated_at FROM products WHERE id=?').get(edited.id).updated_at,edited.updated_at,'Builder revisions need not update the root product timestamp');
  await assert.rejects(()=>deps.deleteProduct(edited.id,owner,{title:edited.title,expectedUpdatedAt:edited.updated_at,revision:oldReview.revision}),error=>error.status===409,'A changed builder draft invalidates a previously reviewed inventory');
  assert.equal(count('product_builder_workspaces',edited.id),1);
+ const strategyEdited=product('Funnel strategy edited after delete review');insert('funnel_builder_workspaces',{product_id:strategyEdited.id,owner,brief:'{}',graph:'{}',lease:0});const strategyReview=await deps.getProductDeletion(strategyEdited.id,owner);sql.prepare('UPDATE funnel_builder_workspaces SET graph=?,updated_at=updated_at+1 WHERE product_id=?').run('{"nodes":[{"title":"Keep this new plan"}]}',strategyEdited.id);await assert.rejects(()=>deps.deleteProduct(strategyEdited.id,owner,{title:strategyEdited.title,expectedUpdatedAt:strategyEdited.updated_at,revision:strategyReview.revision}),error=>error.status===409,'A private graph edit invalidates an existing delete confirmation');assert.equal(count('funnel_builder_workspaces',strategyEdited.id),1);
 
  // The product and every draft remain unchanged when a protected relationship exists.
  const protectedCases=[
@@ -126,6 +129,8 @@ try{
   ['queued email','automation_jobs',{status:'pending'}],
   ['growth writer','growth_workspaces',{lease:now+600000}],
   ['pending growth attempt','growth_generation_runs',{state:'pending'}],
+  ['funnel strategy writer','funnel_builder_workspaces',{brief:'{}',graph:'{}',lease:now+600000}],
+  ['pending funnel strategy','funnel_builder_runs',{state:'pending',cost:10}],
   ['campaign writer','marketing_campaigns',{title:'Generating campaign',lease:now+600000}],
   ['page-copy writer','page_copy_proposals',{lease:now+600000}],
   ['planning writer','studio_conversations',{lease:now+600000}],
@@ -139,6 +144,7 @@ try{
  assert.equal(unsettledReview.canDelete,false,'A failed creator attempt still blocks deletion while its credits await settlement');
  await assert.rejects(()=>deps.deleteProduct(unsettled.id,owner,{title:unsettled.title,expectedUpdatedAt:unsettled.updated_at,revision:unsettledReview.revision}),error=>error.status===409);
  assert.equal(count('marketing_campaigns',unsettled.id),1,'The target needed to settle an interrupted attempt remains intact');
+ const unsettledFunnel=product('Failed funnel strategy awaiting refund'),funnelRun=insert('funnel_builder_runs',{product_id:unsettledFunnel.id,owner,state:'failed',cost:10});insert('credit_usage',{id:'funnel-builder:'+funnelRun.id,owner,operation:'text',cost:10,state:'reserved'});const unsettledFunnelReview=await deps.getProductDeletion(unsettledFunnel.id,owner);assert.equal(unsettledFunnelReview.canDelete,false,'Namespaced reserved strategy credits must settle before their recovery target is removed');await assert.rejects(()=>deps.deleteProduct(unsettledFunnel.id,owner,{title:unsettledFunnel.title,expectedUpdatedAt:unsettledFunnel.updated_at,revision:unsettledFunnelReview.revision}),error=>error.status===409);assert.equal(count('funnel_builder_runs',unsettledFunnel.id),1);sql.prepare("UPDATE credit_usage SET state='refunded' WHERE id=?").run('funnel-builder:'+funnelRun.id);assert.equal((await deps.getProductDeletion(unsettledFunnel.id,owner)).canDelete,true,'Settled failed strategy history does not permanently block deletion');
 
  const stopped=product('Stopped product run'),stoppedRun=insert('ai_product_runs',{owner,product_id:stopped.id,state:'active',mode:'paid'});
  const stoppedReview=await deps.getProductDeletion(stopped.id,owner);
@@ -147,11 +153,11 @@ try{
  assert.ok(sql.prepare('SELECT id FROM ai_product_runs WHERE id=?').get(stoppedRun.id),'Historical usage stays charged after removing stopped product content');
 
  // Changes arriving after the read-only review must abort the entire batch.
- for(const label of ['new checkout','new work lease','renamed product']){
+ for(const label of ['new checkout','new work lease','new funnel lease','renamed product']){
   const p=product('Race: '+label),draft=seedDraft(p);
   const state=await deps.getProductDeletion(p.id,owner);
   const contentBefore=JSON.stringify(sql.prepare('SELECT * FROM product_builder_workspaces WHERE product_id=?').get(p.id));
-  beforeBatch=()=>{if(label==='new checkout')insert('commerce_orders',{product_id:p.id,owner,status:'pending',mode:'live',email:'late-buyer@example.test',amount:4900,currency:'usd',title:p.title});else if(label==='new work lease')sql.prepare('UPDATE growth_workspaces SET lease=? WHERE product_id=?').run(Date.now()+600000,p.id);else sql.prepare('UPDATE products SET title=?,updated_at=updated_at+1 WHERE id=?').run('Renamed in another tab',p.id);};
+  beforeBatch=()=>{if(label==='new checkout')insert('commerce_orders',{product_id:p.id,owner,status:'pending',mode:'live',email:'late-buyer@example.test',amount:4900,currency:'usd',title:p.title});else if(label==='new work lease')sql.prepare('UPDATE growth_workspaces SET lease=? WHERE product_id=?').run(Date.now()+600000,p.id);else if(label==='new funnel lease')sql.prepare('UPDATE funnel_builder_workspaces SET lease=? WHERE product_id=?').run(Date.now()+600000,p.id);else sql.prepare('UPDATE products SET title=?,updated_at=updated_at+1 WHERE id=?').run('Renamed in another tab',p.id);};
   await assert.rejects(()=>deps.deleteProduct(p.id,owner,{title:p.title,expectedUpdatedAt:p.updated_at,revision:state.revision}),error=>error.status===409,label+' must reject an obsolete confirmation');
   assert.ok(sql.prepare('SELECT id FROM products WHERE id=?').get(p.id));
   assert.equal(JSON.stringify(sql.prepare('SELECT * FROM product_builder_workspaces WHERE product_id=?').get(p.id)),contentBefore,label+' cannot partially delete teaching content');

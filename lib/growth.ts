@@ -34,8 +34,9 @@ export type GrowthAssets = z.infer<typeof growthAssetsSchema>;
 export const growthAssetIds=['vsl','landing','followUp'] as const;
 export type GrowthAssetId=typeof growthAssetIds[number];
 export type GrowthAssetProposal={id:string;asset:GrowthAssetId;value:string|GrowthAssets['landing'];baseValue:string|GrowthAssets['landing']|null;expectedUpdatedAt:number;contextRefs:CreatorContextRefs;createdAt:number};
-export type OfferFacts={title:string;description:string;format:string;inclusions:string[];priceCents:number;currency:string;source:'saved-product'|'saved-builder';productRevision:number;builderVersion:number|null;};
-export type Growth = { brief: GrowthBrief; assets: GrowthAssets | null; updatedAt: number; contextRefs?:CreatorContextRefs|null;productFacts?:OfferFacts };
+export type OfferFacts={title:string;description:string;audience?:string;outcome?:string;tone?:string;format:string;inclusions:string[];priceCents:number;currency:string;source:'saved-product'|'saved-builder';productRevision:number;builderVersion:number|null;};
+export type GrowthBriefSource='product'|'shared'|'empty';
+export type Growth = { brief: GrowthBrief; assets: GrowthAssets | null; updatedAt: number; contextRefs?:CreatorContextRefs|null;productFacts?:OfferFacts;briefSources?:Record<keyof GrowthBrief,GrowthBriefSource>;inheritedKeys?:(keyof GrowthBrief)[] };
 export function emptyGrowthBrief(audience = ''): GrowthBrief {
   return { icp: audience, problem: '', beliefs: '', story: '', promise: '', proof: '', offer: '', tone: '', cta: '' };
 }
@@ -59,8 +60,21 @@ export function missingGrowthAnswers(brief: GrowthBrief) {
 }
 export function proposeGrowthBrief(brief: GrowthBrief, facts: OfferFacts | undefined, audience = ''): GrowthBrief {
   return {...brief,
-    icp: brief.icp.trim() ? brief.icp : audience.slice(0,4000),
-    promise: brief.promise.trim() ? brief.promise : facts?.description.slice(0,4000) || '',
+    icp: brief.icp.trim() ? brief.icp : (facts?.audience||audience).slice(0,4000),
+    promise: brief.promise.trim() ? brief.promise : facts?.outcome?.slice(0,4000) || '',
     offer: brief.offer.trim() ? brief.offer : facts ? [facts.title, facts.format, ...facts.inclusions].filter(Boolean).join('\n').slice(0, 4000) : '',
+    tone: brief.tone.trim() ? brief.tone : facts?.tone?.slice(0,4000) || '',
   };
+}
+/** Product defaults are a read-only starting point until the creator saves.
+ * Never infer a responsible outcome from the marketing description. */
+export function withProductBrief(growth:Growth,facts:OfferFacts,audience=''):Growth {
+  const brief=proposeGrowthBrief(growth.brief,facts,audience),inheritedKeys=(Object.keys(brief) as (keyof GrowthBrief)[]).filter(key=>!growth.brief[key].trim()&&!!brief[key].trim());
+  const briefSources=Object.fromEntries((Object.keys(brief) as (keyof GrowthBrief)[]).map(key=>[key,inheritedKeys.includes(key)?'product':growth.brief[key].trim()?'shared':'empty'])) as Record<keyof GrowthBrief,GrowthBriefSource>;
+  return {...growth,brief,productFacts:facts,briefSources,inheritedKeys};
+}
+/** Keep shared-brief editing inside the product that opened it. */
+export function marketingBriefReturnPath(value:string|null,productId:string):string {
+  if(!value?.startsWith('/')||value.startsWith('//'))return '';
+  try{const url=new URL(value,'https://fivegen.local');if(url.origin!=='https://fivegen.local')return '';const sameProduct=url.pathname==='/'&&url.searchParams.get('project')===productId||url.pathname===`/build/${encodeURIComponent(productId)}`;if(!sameProduct||url.searchParams.get('area')==='vsl')return '';url.searchParams.delete('briefReturn');return url.pathname+url.search+url.hash;}catch{return '';}
 }

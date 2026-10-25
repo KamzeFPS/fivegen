@@ -1,18 +1,19 @@
 'use client';
 
 import {useState} from 'react';
-import {ArrowRight,ChevronDown,CircleAlert,Coins,CreditCard,Banknote,FolderOpen,History,Link2,LogOut,MessageSquare,Plus,ShieldCheck,TrendingUp,Users,LifeBuoy,Scale,FileText,LockKeyhole,Mail,ExternalLink,BookOpen,ShoppingBag,Globe} from 'lucide-react';
+import {ArrowRight,ChevronDown,CircleAlert,Coins,CreditCard,Banknote,FolderOpen,History,Link2,LogOut,MessageSquare,Plus,ShieldCheck,TrendingUp,Users,LifeBuoy,Scale,FileText,LockKeyhole,Mail,ExternalLink,BookOpen,ShoppingBag,Globe,CalendarDays} from 'lucide-react';
 import {DropdownMenu,DropdownMenuContent,DropdownMenuItem,DropdownMenuLabel,DropdownMenuSeparator,DropdownMenuTrigger,DropdownMenuSub,DropdownMenuSubContent,DropdownMenuSubTrigger} from '@/components/ui/dropdown-menu';
 import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
 import {Brand} from './ui-brand';
 import {WorkspaceSearch} from './workspace-search';
 
-type NavigationView='overview'|'library'|'crm'|'credits'|'connections'|'creator-library'|'admin';
+type NavigationView='overview'|'library'|'crm'|'credits'|'connections'|'creator-library'|'calendar'|'admin';
 const navigation=[
   {id:'overview' as const,label:'Dashboard',icon:TrendingUp},
   {id:'library' as const,label:'Products',icon:FolderOpen},
   {id:'crm' as const,label:'Customers',icon:Users},
   {id:'creator-library' as const,label:'Creator library',icon:FolderOpen},
+  {id:'calendar' as const,label:'Calendar',icon:CalendarDays},
 ];
 type Props={
   user:{name:string;email:string}|null;
@@ -41,6 +42,7 @@ export function WorkspaceNavigation({user,view,label,admin,products,creditsLabel
         <button type="button" className="workspace-brand" onClick={onHome||onCreate} aria-label="FiveGen home"><Brand/></button>
         <WorkspaceSearch products={products} history={history} admin={admin} onView={onView} onProduct={onProduct} onConversation={onConversation} onCreate={onCreate} onVisit={onVisit}/>
         <div className="workspace-header-actions">
+          <div id="workspace-gen-slot" className="workspace-gen-slot"/>
           <button type="button" className="workspace-credit-button" onClick={()=>onView('credits')} aria-label={`AI credits: ${creditsLabel}`} title="AI credits"><Coins size={17}/><span>{creditsLabel}</span></button>
           <button type="button" className="workspace-help-trigger workspace-attention-trigger" onClick={()=>onVisit('/operations')} aria-label="Attention & support" title="Attention & support"><CircleAlert size={20}/></button>
           {user?<DropdownMenu>
@@ -53,6 +55,8 @@ export function WorkspaceNavigation({user,view,label,admin,products,creditsLabel
               <DropdownMenuItem onSelect={()=>onVisit('/account/payments')}><Banknote/><span>Get paid</span></DropdownMenuItem>
               <DropdownMenuItem onSelect={()=>onVisit('/account/catalog')}><Globe/><span>Brand & catalog</span></DropdownMenuItem>
               <DropdownMenuItem onSelect={()=>onVisit('/account/billing')}><CreditCard/><span>My FiveGen plan</span></DropdownMenuItem>
+              <DropdownMenuItem onSelect={()=>onView('creator-library')}><FolderOpen/><span>Creator library</span></DropdownMenuItem>
+              <DropdownMenuItem onSelect={()=>onView('calendar')}><CalendarDays/><span>Calendar</span></DropdownMenuItem>
               <DropdownMenuItem onSelect={()=>onView('credits')}><Coins/><span>AI credits</span></DropdownMenuItem>
               <DropdownMenuItem onSelect={()=>onVisit('/customer')}><ShoppingBag/><span>Your purchases</span></DropdownMenuItem>
               <DropdownMenuItem onSelect={()=>onVisit('/collaborate')}><Users/><span>Shared with me</span></DropdownMenuItem>

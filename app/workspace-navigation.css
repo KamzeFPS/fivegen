@@ -3,11 +3,13 @@
 .workspace-skip{position:fixed;top:10px;left:16px;z-index:100;padding:11px 16px;border:1px solid #ffae79;border-radius:8px;background:#ff914d;color:#201108;transform:translateY(-160%);font-size:14px;font-weight:600}
 .workspace-skip:focus{transform:translateY(0)}
 .workspace-header{position:sticky;top:0;z-index:40;background:#101011;border-bottom:1px solid #ffffff12;flex-shrink:0}
-.workspace-toolbar{display:grid;grid-template-columns:minmax(180px,1fr) minmax(240px,440px) minmax(220px,1fr);align-items:center;gap:32px;height:72px;padding:0 28px;border-bottom:1px solid #ffffff09}
+.workspace-toolbar{display:grid;grid-template-columns:minmax(150px,1fr) minmax(160px,440px) auto;align-items:center;gap:32px;height:72px;padding:0 28px;border-bottom:1px solid #ffffff09}
 .workspace-brand{display:flex;align-items:center;justify-self:start;padding:8px 0;border:0;background:none}
 .workspace-brand .brand{font-size:25px;letter-spacing:-1px;white-space:nowrap}
 .workspace-brand .brand-symbol{width:32px;height:32px;margin-right:9px}
 .workspace-header-actions{display:flex;align-items:center;justify-content:flex-end;gap:12px;min-width:0}
+.workspace-gen-slot{display:flex;align-items:center;flex:none;min-width:0}
+.workspace-gen-slot:empty{display:none}
 .workspace-credit-button,.workspace-signin{display:flex;align-items:center;justify-content:center;gap:8px;min-height:42px;border-radius:24px;padding:10px 15px;font-size:12px;font-weight:550;white-space:nowrap}
 .workspace-credit-button{background:#202021;border:1px solid #ffffff09;color:#e1d8d1}
 .workspace-credit-button:hover{background:#292726;border-color:#ffffff20;color:#fff0e4}
@@ -20,6 +22,8 @@
 .workspace-account-trigger[data-state=open] .workspace-avatar{border-color:#f38c4c;box-shadow:0 0 0 3px #f38c4c14}
 .workspace-signin{color:#ead4c4;border:1px solid #ffffff21;background:#ffffff05}
 .workspace-nav-row{height:55px;display:flex;align-items:center;justify-content:space-between;gap:20px;padding:0 28px}
+.workspace-primary-nav{flex:1}
+.workspace-secondary-actions{flex:none}
 .workspace-primary-nav{display:flex;align-items:stretch;gap:20px;height:100%;min-width:0}
 .workspace-primary-nav>button{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;height:100%;padding:0 5px;border:0;border-radius:0;background:transparent;color:#9d9ca0;font-size:13px;font-weight:500;white-space:nowrap}
 .workspace-primary-nav>button:hover{color:#eee8e2}
@@ -67,6 +71,15 @@
 .workspace-support-note{font-size:11px;color:#98908b;line-height:1.8;margin:0}
 .gen-chat-active .workspace-header{flex-shrink:0}
 @media(max-width:1000px){.workspace-toolbar{grid-template-columns:minmax(150px,1fr) minmax(200px,360px) auto;gap:20px;padding:0 22px}.workspace-header-actions{gap:8px}.workspace-credit-button{padding:10px}.workspace-credit-button>span{display:none}.workspace-nav-row{padding:0 22px}}
+/* Reserve the create action before the five destinations run out of space. */
+@media(min-width:701px) and (max-width:1000px){
+  .workspace-nav-row{gap:12px}
+  .workspace-primary-nav{gap:12px}
+  .workspace-primary-nav>button{gap:6px}
+  .workspace-history-trigger{display:none}
+  .workspace-create-button{width:44px;height:44px;min-height:44px;padding:10px}
+  .workspace-create-button>span{display:none}
+}
 @media(max-width:700px){
   .gen-app{--workspace-header-height:116px}
   .workspace-toolbar{display:flex;gap:12px;height:64px;padding:0 16px}
@@ -110,4 +123,5 @@
 .library-filters{flex-wrap:wrap}.library-filters>button{min-height:44px}
 .workspace-help-trigger.workspace-attention-trigger{display:grid;min-height:44px;min-width:44px}
 /* Four global destinations remain readable beside the create action on phones. */
-@media(max-width:700px){.workspace-primary-nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;max-width:none}.workspace-primary-nav>button{min-width:0;flex-direction:column;gap:3px;padding:4px 0;font-size:10px;line-height:1.15}.workspace-primary-nav>button>span{white-space:normal;text-align:center}.workspace-secondary-actions{flex:none}}
+@media(max-width:700px){.workspace-primary-nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;max-width:none}.workspace-primary-nav>button{min-width:0;flex-direction:column;gap:3px;padding:4px 0;font-size:10px;line-height:1.15}.workspace-primary-nav>button>span{white-space:normal;text-align:center}.workspace-secondary-actions{flex:none}}
+@media(max-width:700px){.workspace-help-trigger.workspace-attention-trigger{display:none}.workspace-header-actions{gap:4px}}

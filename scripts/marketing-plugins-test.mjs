@@ -23,9 +23,9 @@ sql.prepare("INSERT INTO automation_jobs (id,enrollment_id,owner,product_id,step
 sql.prepare('INSERT INTO creator_campaigns (product_id,owner,title,items,updated_at) VALUES (?,?,?,?,?)').run(legacyId, originalOwner, 'Existing campaign', '[{"retained":"draft"}]', now);
 sql.prepare("INSERT INTO creator_voice_sources (id,owner,product_id,title,kind,transcript,permission,approved,updated_at) VALUES (?,?,?,'Original voice','text','Retain my voice',1,1,?)").run(randomUUID(), originalOwner, legacyId, now);
 sql.prepare("INSERT INTO offer_experiments (product_id,owner,slug,draft,published,status,revision,published_revision,published_at,updated_at) VALUES (?,?,?,'{}','{}','published',1,1,?,?)").run(legacyId, originalOwner, `offer-${legacyId}`, now, now);
-function stateTables() { return sql.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('fivegen_migrations','product_marketing_plugins') ORDER BY name").all(); }
+function stateTables() { return sql.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('fivegen_migrations','product_marketing_plugins') ORDER BY name").all().map(row=>({...row,columns:sql.prepare(`PRAGMA table_info("${row.name}")`).all().map(column=>column.name)})); }
 function durableState(tables = stateTables()) {
-  return JSON.stringify(tables.map(({ name }) => [name, sql.prepare(`SELECT * FROM "${name}"`).all()]));
+  return JSON.stringify(tables.map(({ name,columns }) => [name, sql.prepare(`SELECT ${columns.map(column=>'"'+column.replaceAll('"','""')+'"').join(',')} FROM "${name}"`).all()]));
 }
 const historicalTables = stateTables(), beforeMigration = durableState(historicalTables); storage.close(); storage = createStorage(root); sql = storage.sqlite;
 assert.equal(durableState(historicalTables), beforeMigration, 'Migration does not alter any historical content or customer state; later additive infrastructure tables are not historical data');
@@ -53,8 +53,8 @@ const request = (id, body, origin = 'http://localhost') => new Request(`http://l
 const get = id => route.GET(request(id), { params: Promise.resolve({ id }) }), patch = (id, body, origin) => route.PATCH(request(id, body, origin), { params: Promise.resolve({ id }) });
 async function response(result, status = 200) { const data = await result.json(); assert.equal(result.status, status, JSON.stringify(data)); assert.equal(result.headers.get('cache-control'), 'private, no-store'); return data; }
 try {
-  assert.deepEqual(await response(await get(legacyId)), { installed: [], updatedAt: 0 }, 'Even a published book with all historical tools opens only the product dashboard');
-  assert.deepEqual(await response(await get(newId)), { installed: [], updatedAt: 0 });
+  assert.deepEqual(await response(await get(legacyId)), { installed: ['funnel-builder'], updatedAt: 0 }, 'Unsaved preferences show only the new strategy shortcut; historical content never reveals other tools');
+  assert.deepEqual(await response(await get(newId)), { installed: ['funnel-builder'], updatedAt: 0 });
   assert.deepEqual(dependencies.readMarketingPluginIds('["funnel","funnel","unknown","vsl"]'), ['vsl', 'funnel']);
   assert.deepEqual(dependencies.readMarketingPluginIds('malformed'), []);
   owner = ''; await response(await get(legacyId), 401); await response(await patch(legacyId, { pluginId: 'vsl', enabled: true, expectedUpdatedAt: 0 }), 401); owner = originalOwner;
@@ -62,21 +62,22 @@ try {
   await response(await patch(legacyId, { pluginId: 'vsl', enabled: true, expectedUpdatedAt: 0 }, 'https://outsider.example'), 403);
   for (const invalid of [{ pluginId: 'crm', enabled: true, expectedUpdatedAt: 0 }, { pluginId: 'vsl', enabled: 'yes', expectedUpdatedAt: 0 }, { pluginId: 'vsl', enabled: true, expectedUpdatedAt: -1 }, { pluginId: 'vsl', enabled: true, expectedUpdatedAt: 0, owner: 'another-owner' }]) await response(await patch(legacyId, invalid), 400);
   assert.equal(sql.prepare('SELECT COUNT(*) n FROM product_marketing_plugins').get().n, 0, 'Rejected mutations do not create preferences');
-  let state = await response(await patch(legacyId, { pluginId: 'vsl', enabled: true, expectedUpdatedAt: 0 }));
+  const hidden=await response(await patch(legacyId,{pluginId:'funnel-builder',enabled:false,expectedUpdatedAt:0}));assert.deepEqual(hidden.installed,[]);assert.ok(hidden.updatedAt>0);assert.deepEqual(await response(await get(legacyId)),hidden,'Explicit hiding survives reload rather than restoring the default');
+  let state = await response(await patch(legacyId, { pluginId: 'vsl', enabled: true, expectedUpdatedAt: hidden.updatedAt }));
   assert.deepEqual(state.installed, ['vsl']); assert.ok(state.updatedAt > 0);
   assert.deepEqual(await response(await get(legacyId)), state, 'Installation persists on reload');
   assert.deepEqual(await response(await patch(legacyId, { pluginId: 'vsl', enabled: true, expectedUpdatedAt: state.updatedAt })), state, 'Repeated explicit installation is a no-op');
   await response(await patch(legacyId, { pluginId: 'funnel', enabled: true, expectedUpdatedAt: 0 }), 409);
   for (const pluginId of dependencies.marketingPluginIds.filter(id => id !== 'vsl')) state = await response(await patch(legacyId, { pluginId, enabled: true, expectedUpdatedAt: state.updatedAt }));
   assert.deepEqual(state.installed, [...dependencies.marketingPluginIds]);
-  assert.deepEqual(await response(await get(newId)), { installed: [], updatedAt: 0 }, 'Installation remains specific to one product');
+  assert.deepEqual(await response(await get(newId)), { installed: ['funnel-builder'], updatedAt: 0 }, 'Installation remains specific to one product');
   for (const pluginId of dependencies.marketingPluginIds) state = await response(await patch(legacyId, { pluginId, enabled: false, expectedUpdatedAt: state.updatedAt }));
   assert.deepEqual(state.installed, []); assert.deepEqual(await response(await get(legacyId)), state, 'Removing every optional plugin persists a dashboard-only workspace');
   const simultaneous = await Promise.all([patch(newId, { pluginId: 'vsl', enabled: true, expectedUpdatedAt: 0 }), patch(newId, { pluginId: 'funnel', enabled: true, expectedUpdatedAt: 0 })]);
   assert.deepEqual(simultaneous.map(item => item.status).sort(), [200, 409], 'Concurrent first writes cannot overwrite one another');
-  assert.equal((await response(await get(newId))).installed.length, 1);
+  const concurrent=await response(await get(newId));assert.equal(concurrent.installed.length,2);assert.ok(concurrent.installed.includes('funnel-builder'),'Concurrent first writes preserve the unsaved default shortcut');
   assert.equal(durableState(), beforeMutations, 'Install/remove does not modify product content, public funnels, campaigns, offer tests, voice sources, active sequences, queued jobs, customer state, or any existing table');
   assert.equal(sql.prepare('PRAGMA foreign_key_check').all().length, 0);
-  console.log('Passed: additive migration, new and legacy opt-in defaults, authenticated owner-only API, input validation, same-origin protection, no-store responses, per-product persistence, all six install/removal paths, stale/concurrent updates, and byte-identical legacy content/live marketing data.');
+  console.log('Passed: additive migration, new and legacy opt-in defaults, authenticated owner-only API, input validation, same-origin protection, no-store responses, per-product persistence, all seven install/removal paths with preserved explicit hidden preferences, stale/concurrent updates, and byte-identical legacy content/live marketing data.');
   console.log('QA fixtures retained: ' + root);
 } finally { storage.close(); }

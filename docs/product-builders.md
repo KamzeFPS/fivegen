@@ -1,8 +1,16 @@
 # Shared product creation pipeline
 
-Implemented entry: `/build/new`. Product workspace: `/build/{id}`. Public page: `/b/{slug}`.
+Implemented entry: `/build/new`. Product workspace: `/build/{id}`. The canonical public Sales page is `/product/{slug}`; `/b/{slug}` remains the compatible delivery/checkout route.
 
-All new UI creation entries use Choose your type → Build your product → Publish & sell. Book/eBook, Guide, Playbook, Mini course, Full/video course, Template kit, Challenge, Consulting/Mentorship, Coaching session, Community and Custom have relevant fields, section labels and readiness rules. Custom selects supported file, course, service or external-community delivery. AI, original uploads and manual authoring share the same persistent product identity.
+New UI creation entries choose a format and starting source, then open the relevant work. Mini course and Full/video course go directly to Curriculum with Upload recording, Write a lesson and Add a resource choices. Save one useful lesson privately before expanding settings. Existing-content entry selects recording upload; manual entry selects writing. Typed teaching is kept when switching methods, and recording attachment retains the existing lesson. Complete the product name, audience and Outcome in Product details as the course develops. Book/eBook, Guide, Playbook, Template kit, Challenge, Consulting/Mentorship, Coaching session, Community and Custom keep their relevant fields, section labels and readiness rules. AI, original uploads and manual authoring share the same persistent product identity.
+
+## Creator clarity release
+
+Overview is the product’s next-action dashboard. Launch review (`/build/{id}?area=review`) is a separate destination for required-content checks, exact saved-version editorial approval, the private delivery preview and explicit delivery publication. Price & access (`area=commerce`) holds money, access and availability settings and offers direct repair actions for unmet requirements. Product content can be published without opening checkout. The Sales page remains a separate public publication.
+
+Zero in an unfinished paid offer is not a free offer. The shared offer projection displays Price not set for an unset or unusable paid amount, consistently in draft and public sales-page rendering. Free / lead magnet or a free membership tier must be chosen explicitly. Payment and access authorization still run through the existing server checks; a label never enables a purchase.
+
+The common marketing brief inherits blank audience, Outcome, tone and inclusions from saved product facts. A nonblank shared answer is an override. Product description is not substituted for Outcome, and showing inherited defaults does not make an untouched editor dirty. Updating a shared answer does not rewrite existing VSL, campaign, page or approved email copy. See [the release checklist](creator-clarity-release-checklist.md) for combined checks and provider boundaries.
 
 The contextual assistant appears on the right, minimizes without clearing history or unsent answers, and starts minimized on small screens. Suggestions require review and explicit application. The existing administrator-managed AI connection, shared planning allowance, full-product quota, credit reservations/refunds and verified owner exception are reused. Original files and private meeting/community URLs are excluded from AI context. No provider credential is requested from a customer.
 

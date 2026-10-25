@@ -8,7 +8,7 @@ import { providerSettings, textGeneration } from './ai';
 import { reserveCredits, refundCredits } from './credits';
 import { textCredits } from './credit-policy';
 import { hasUnlimitedGeneration } from './generation-access';
-import { emptyGrowthBrief, growthBriefSchema, growthAssetsSchema, generatedGrowthAssetsSchema, growthSaveSchema, missingGrowthAnswers, type Growth,type GrowthAssets,type GrowthAssetId,type GrowthAssetProposal,type OfferFacts,growthAssetIds } from './growth';
+import { emptyGrowthBrief, withProductBrief, growthBriefSchema, growthAssetsSchema, generatedGrowthAssetsSchema, growthSaveSchema, missingGrowthAnswers, type Growth,type GrowthAssets,type GrowthAssetId,type GrowthAssetProposal,type OfferFacts,growthAssetIds } from './growth';
 
 function growthFromRow(row: Record<string, unknown>): Growth {
   return { brief: growthBriefSchema.parse(JSON.parse(String(row.brief))), assets: row.assets ? growthAssetsSchema.parse(JSON.parse(String(row.assets))) : null, updatedAt: Number(row.updated_at),contextRefs:row.context_refs?JSON.parse(String(row.context_refs)):null };
@@ -37,12 +37,12 @@ async function recoverExpiredGrowthRuns(productId: string, owner: string) {
 }
 /** Current saved product facts are authoritative; the positioning brief cannot edit them. */
 export async function reviewedOfferFacts(productId:string,owner:string){
- const product=await ownedProduct(productId,owner),builder=await database().prepare('SELECT data,version FROM product_builder_workspaces WHERE product_id=? AND owner=?').bind(productId,owner).first();let facts:OfferFacts={title:String(product.title),description:String(product.description),format:String(product.format),inclusions:[],priceCents:Number(product.price||0),currency:'usd',source:'saved-product',productRevision:Number(product.updated_at),builderVersion:builder?Number(builder.version):null};
- try{const content=JSON.parse(String(builder?.data||product.content)) as {title?:string;description?:string;priceCents?:number;currency?:string;sections?:{title:string}[]};facts={...facts,title:content.title||facts.title,description:content.description||facts.description,inclusions:(content.sections||[]).map(section=>section.title).slice(0,30),...(builder?{priceCents:Number(content.priceCents||0),currency:content.currency||'usd',source:'saved-builder' as const}:{})};}catch{/* Fall back to the current owned saved product record. */}
+ const product=await ownedProduct(productId,owner),builder=await database().prepare('SELECT data,version FROM product_builder_workspaces WHERE product_id=? AND owner=?').bind(productId,owner).first();let facts:OfferFacts={title:String(product.title),description:String(product.description),audience:String(product.audience||''),outcome:'',tone:'',format:String(product.format),inclusions:[],priceCents:Number(product.price||0),currency:'usd',source:'saved-product',productRevision:Number(product.updated_at),builderVersion:builder?Number(builder.version):null};
+ try{const content=JSON.parse(String(builder?.data||product.content)) as {title?:string;description?:string;audience?:string;fields?:{outcome?:string;tone?:string};benefits?:string[];priceCents?:number;currency?:string;sections?:{title:string}[]};facts={...facts,title:content.title||facts.title,description:content.description||facts.description,audience:content.audience??facts.audience,outcome:builder?content.fields?.outcome||'':(content.benefits||[]).filter(value=>typeof value==='string').join('\n'),tone:content.fields?.tone||'',inclusions:(content.sections||[]).map(section=>section.title).slice(0,30),...(builder?{priceCents:Number(content.priceCents||0),currency:content.currency||'usd',source:'saved-builder' as const}:{})};}catch{/* Fall back to the current owned saved product record. */}
  const guard={sql:' AND EXISTS(SELECT 1 FROM products WHERE id=? AND owner=? AND updated_at=?)'+(builder?' AND EXISTS(SELECT 1 FROM product_builder_workspaces WHERE product_id=? AND owner=? AND version=?)':' AND NOT EXISTS(SELECT 1 FROM product_builder_workspaces WHERE product_id=? AND owner=?)'),values:[productId,owner,facts.productRevision,productId,owner,...(builder?[facts.builderVersion!]:[])] as (string|number)[]};return {facts,guard};
 }
 export async function getGrowth(productId: string, owner: string): Promise<Growth> {
- const {facts}=await reviewedOfferFacts(productId,owner);await recoverExpiredGrowthRuns(productId,owner);const row=await database().prepare('SELECT * FROM growth_workspaces WHERE product_id=? AND owner=?').bind(productId,owner).first();const product=await ownedProduct(productId,owner);return {...(row?growthFromRow(row):{brief:emptyGrowthBrief(String(product.audience)),assets:null,updatedAt:0}),productFacts:facts};
+ const {facts}=await reviewedOfferFacts(productId,owner);await recoverExpiredGrowthRuns(productId,owner);const row=await database().prepare('SELECT * FROM growth_workspaces WHERE product_id=? AND owner=?').bind(productId,owner).first();return withProductBrief(row?growthFromRow(row):{brief:emptyGrowthBrief(),assets:null,updatedAt:0},facts);
 }
 export async function saveGrowth(productId: string, owner: string, value: unknown,actorGuard:{sql:string;values:(string|number)[]}={sql:'',values:[]},appliedContextRefs?:CreatorContextRefs): Promise<Growth> {
   await ownedProduct(productId, owner);
@@ -55,7 +55,7 @@ export async function saveGrowth(productId: string, owner: string, value: unknow
     WHERE growth_workspaces.owner=excluded.owner AND growth_workspaces.updated_at=? AND growth_workspaces.lease<?`)
     .bind(productId, owner, JSON.stringify(input.brief), input.assets ? JSON.stringify(input.assets) : null, updatedAt,JSON.stringify(savedRefs), input.expectedUpdatedAt, productId, owner,...actorGuard.values, input.expectedUpdatedAt, now),marketingVersionStatement(owner,productId,'growth',updatedAt,'Saved VSL and page draft',{brief:input.brief,assets:input.assets,updatedAt,contextRefs:savedRefs})]);
   if (!result[0].meta.changes) throw new ApiError('This growth workspace changed or AI is still writing. Reload it before saving.', 409);
-  return { brief: input.brief, assets: input.assets, updatedAt,contextRefs:savedRefs,productFacts:current.productFacts };
+  return withProductBrief({ brief: input.brief, assets: input.assets, updatedAt,contextRefs:savedRefs },current.productFacts!);
 }
 
 const generationInputSchema = z.object({ expectedUpdatedAt: z.number().int().positive(), requestId: z.string().uuid(), maxCredits: z.number().int().min(0).max(30) });

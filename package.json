@@ -48,7 +48,10 @@
     "test:mascot": "node scripts/gen-mascot-test.mjs && node scripts/gen-cloud-layout-test.mjs && node scripts/gen-companion-test.mjs && node scripts/mascot-server-test.mjs && node scripts/mascot-sales-hook-test.mjs",
     "test:product-studio": "node scripts/product-studio-commerce-test.mjs && node scripts/product-learning-test.mjs && node scripts/product-studio-creator-ui-test.mjs && node scripts/product-curriculum-test.mjs && node scripts/product-decision-gallery-test.mjs && node scripts/product-community-tier-test.mjs && node scripts/product-community-ui-test.mjs && npm run test:service-integrations && npm run test:documents && npm run test:teams",
     "test:service-integrations": "node scripts/service-integrations-test.mjs",
-    "test:audit": "node scripts/audit-implementation-test.mjs"
+    "test:audit": "node scripts/audit-implementation-test.mjs",
+    "test:clarity": "node scripts/creator-clarity-preflight.mjs",
+    "test:funnel-builder": "node scripts/funnel-builder-test.mjs && node scripts/funnel-builder-navigation-test.mjs",
+    "test:calendar": "node scripts/workspace-calendar-test.mjs && node scripts/workspace-calendar-ui-test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

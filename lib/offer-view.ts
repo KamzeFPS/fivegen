@@ -5,7 +5,7 @@ export type OfferViewInput = {amount?:number|null;currency?:string|null;pricing?
 export type OfferView = {
  amount:number;currency:string;model:'free'|'one-time'|'subscription'|'pwyw';interval:'month'|'year'|null;
  amountText:string;priceText:string;terms:string;minimumCents:number;suggestedCents:number;
- tiered:boolean;requiresChoice:boolean;bundleCount:number;
+ tiered:boolean;requiresChoice:boolean;bundleCount:number;priceSet:boolean;
 };
 const cents=(value:unknown,fallback=0)=>typeof value==='number'&&Number.isFinite(value)?Math.max(0,Math.min(999900,Math.round(value))):fallback;
 export function offerMoney(amount:number,currency:string){
@@ -21,10 +21,11 @@ export function offerView(input:OfferViewInput):OfferView{
  const tiers=(Array.isArray(input.tiers)?input.tiers:[]).filter(tier=>tier&&['free','month','year'].includes(tier.billing)&&Number.isFinite(tier.priceCents));
  const tiered=tiers.length>0,minimumCents=cents(pricing.minimumCents),suggestedCents=cents(pricing.suggestedCents)||cents(input.amount);
  const amount=tiered?Math.min(...tiers.map(tier=>tier.billing==='free'?0:cents(tier.priceCents))):model==='free'?0:model==='pwyw'?Math.max(minimumCents,suggestedCents):cents(input.amount);
- const amountText=amount===0?'Free':offerMoney(amount,currency),bundleCount=new Set(Array.isArray(pricing.bundleProductIds)?pricing.bundleProductIds:[]).size;
- const priceText=tiered?`Plans from ${amountText}`:model==='pwyw'?`${offerMoney(amount,currency)} suggested`:model==='subscription'?`${amountText} / ${interval}`:amountText;
- const terms=tiered?'Choose a plan at checkout. Each plan shows its amount and renewal interval before you continue.':model==='free'?'No payment required.':model==='subscription'?`Billed every ${interval}. Renews until canceled.`:model==='pwyw'?`Choose your amount. Minimum ${offerMoney(minimumCents,currency)}. One-time payment.`:'One-time payment.';
- return {amount,currency,model,interval,amountText,priceText,terms,minimumCents,suggestedCents,tiered,requiresChoice:tiered||model==='pwyw',bundleCount};
+ const priceSet=tiered?tiers.every(tier=>tier.billing==='free'?tier.priceCents===0:cents(tier.priceCents)>=50):model==='free'||(model==='pwyw'?amount>=Math.max(50,minimumCents):amount>=50);
+ const amountText=!priceSet?'Price not set':amount===0?'Free':offerMoney(amount,currency),bundleCount=new Set(Array.isArray(pricing.bundleProductIds)?pricing.bundleProductIds:[]).size;
+ const priceText=!priceSet?'Price not set':tiered?`Plans from ${amountText}`:model==='pwyw'?`${offerMoney(amount,currency)} suggested`:model==='subscription'?`${amountText} / ${interval}`:amountText;
+ const terms=!priceSet?'The creator has not set a paid price. Checkout is unavailable.':tiered?'Choose a plan at checkout. Each plan shows its amount and renewal interval before you continue.':model==='free'?'No payment required.':model==='subscription'?`Billed every ${interval}. Renews until canceled.`:model==='pwyw'?`Choose your amount. Minimum ${offerMoney(minimumCents,currency)}. One-time payment.`:'One-time payment.';
+ return {amount,currency,model,interval,amountText,priceText,terms,minimumCents,suggestedCents,tiered,requiresChoice:tiered||model==='pwyw',bundleCount,priceSet};
 }
 export function paymentEligibility(input:{mode?:string|null;platformReady:boolean;sellerReady:boolean;selling:boolean;free:boolean}){
  const mode=input.mode==='live'||input.mode==='test'?input.mode:null;

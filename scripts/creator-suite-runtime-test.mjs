@@ -65,18 +65,18 @@ try {
   await json(pluginsUrl,'GET',undefined,otherHeaders,404);
   await json(`/api/products/${randomUUID()}/marketing-plugins`,'GET',undefined,headers,404);
   const pluginResponse=await fetch(base+pluginsUrl,{headers});assert.equal(pluginResponse.status,200);assert.equal(pluginResponse.headers.get('cache-control'),'private, no-store');
-  let plugins=await pluginResponse.json();assert.deepEqual(plugins,{installed:[],updatedAt:0});
+  let plugins=await pluginResponse.json();assert.deepEqual(plugins,{installed:['funnel-builder'],updatedAt:0});
   const addVsl={pluginId:'vsl',enabled:true,expectedUpdatedAt:0};
   await json(pluginsUrl,'PATCH',addVsl,anonymous,401);
   await json(pluginsUrl,'PATCH',addVsl,otherHeaders,404);
   await json(pluginsUrl,'PATCH',addVsl,{...headers,origin:'https://other.example.test'},403);
   await json(pluginsUrl,'PATCH',{...addVsl,pluginId:'crm'},headers,400);
-  plugins=await json(pluginsUrl,'PATCH',addVsl);assert.deepEqual(plugins.installed,['vsl']);assert.ok(plugins.updatedAt>0);
+  plugins=await json(pluginsUrl,'PATCH',addVsl);assert.deepEqual(plugins.installed,['vsl','funnel-builder']);assert.ok(plugins.updatedAt>0);
   assert.deepEqual(await json(pluginsUrl),plugins,'A new HTTP read restores installed plugins');
   assert.deepEqual(await json(pluginsUrl,'PATCH',{...addVsl,expectedUpdatedAt:plugins.updatedAt}),plugins,'Idempotent add preserves the revision');
   await json(pluginsUrl,'PATCH',{pluginId:'funnel',enabled:true,expectedUpdatedAt:0},headers,409);
-  assert.deepEqual(JSON.parse(app.storage.sqlite.prepare('SELECT installed FROM product_marketing_plugins WHERE product_id=? AND owner=?').get(product.id,owner).installed),['vsl']);
-  plugins=await json(pluginsUrl,'PATCH',{pluginId:'vsl',enabled:false,expectedUpdatedAt:plugins.updatedAt});assert.deepEqual(plugins.installed,[]);
+  assert.deepEqual(JSON.parse(app.storage.sqlite.prepare('SELECT installed FROM product_marketing_plugins WHERE product_id=? AND owner=?').get(product.id,owner).installed),['vsl','funnel-builder']);
+  plugins=await json(pluginsUrl,'PATCH',{pluginId:'vsl',enabled:false,expectedUpdatedAt:plugins.updatedAt});assert.deepEqual(plugins.installed,['funnel-builder']);
   assert.equal(app.storage.sqlite.prepare('SELECT updated_at FROM products WHERE id=?').get(product.id).updated_at,product.updatedAt,'Preferences do not alter product content or publication');
 
   // Offer hypotheses are drafts until explicitly published, with round-scoped
@@ -162,7 +162,7 @@ try {
   await json('/api/growth/dashboard?days=14', 'GET', undefined, headers, 400);
   const landingHtml = await (await fetch(base + '/g/' + funnel.slug)).text(); assert.ok(!landingHtml.includes('PRIVATE_CREATOR_STORY')); assert.ok(!landingHtml.includes('PRIVATE_SALES_SCRIPT'));
 
-  assert.deepEqual((await json(pluginsUrl)).installed,[],'Saved voice, campaigns, automations and a published funnel never install plugins');
+  assert.deepEqual((await json(pluginsUrl)).installed,['funnel-builder'],'Saved voice, campaigns, automations and a published funnel never install plugins');
   assert.ok(!dashboard.actions.some(action=>/area=(funnel|vsl|voice|campaigns|automations|offer)/.test(action.href)),'Default recommendations do not force optional tools');
   plugins=await json(pluginsUrl,'PATCH',{pluginId:'funnel',enabled:true,expectedUpdatedAt:plugins.updatedAt});
   plugins=await json(pluginsUrl,'PATCH',{pluginId:'funnel',enabled:false,expectedUpdatedAt:plugins.updatedAt});
@@ -173,6 +173,14 @@ try {
   // requiring a funnel. Other product and owner traffic stays outside it.
   let book=await json('/api/builder','POST',{type:'book',source:'manual',requestId:randomUUID()},headers,201);
   book=await json(`/api/builder/${book.product.id}`,'PATCH',{expectedVersion:book.version,draft:{...book.draft,title:'A published book without a funnel',description:'An original illustrated workflow guide for independent creators.',audience:'Independent illustrators',fields:{...book.draft.fields,outcome:'Finish a practical client handoff checklist'},sections:[{id:randomUUID(),title:'A practical first chapter',body:'PRIVATE_BOOK_TEXT: Follow these concrete steps to prepare a client handoff, review the worked example, and finish your own checklist.'}]}});
+  // Publication requires a review of this exact saved version. Exercise the
+  // authenticated HTTP workflow rather than inserting an approval in SQLite.
+  await json(`/api/builder/${book.product.id}/publish`,'POST',{expectedVersion:book.version},headers,409);
+  const reviewUrl=`/api/builder/${book.product.id}/review`,reviewStamp=review=>({expectedVersion:review.version,fingerprint:review.fingerprint,expectedUpdatedAt:review.updatedAt});
+  let bookReview=await json(reviewUrl);
+  if(bookReview.summary.remaining)bookReview=await json(reviewUrl,'POST',{...reviewStamp(bookReview),action:'acknowledge-all',note:'Reviewed the synthetic handoff example, original chapter and audience wording; any flagged patterns are intentional fixture text.',evidence:'This isolated test contains creator-authored fixture content and no real customer claims.',attested:true});
+  bookReview=await json(reviewUrl,'POST',{...reviewStamp(bookReview),action:'approve',note:'Read the saved chapter and product settings for this exact synthetic book version before publication.',attested:true});
+  assert.equal(bookReview.summary.remaining,0);assert.equal(bookReview.approved,true);assert.equal(bookReview.version,book.version);
   book=await json(`/api/builder/${book.product.id}/publish`,'POST',{expectedVersion:book.version});assert.ok(book.publication);assert.equal(book.selling,false);
   const bookDashboardUrl=`/api/growth/dashboard?days=7&productId=${book.product.id}`;
   await json(bookDashboardUrl,'GET',undefined,anonymous,401);
