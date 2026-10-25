@@ -17,6 +17,9 @@ export function docsHostRequest({docsOrigin,host,method,path}){
  if(pathname==='/robots.txt'||pathname==='/sitemap.xml')return {status:200,path:'/docs'+pathname};
  if(/^\/docs(?:\/[a-z0-9-]+(?:\.(?:json|txt|xml))?)*\/?$/.test(pathname))return {status:200,path};
  if(pathname==='/')return {status:200,path:'/docs'};
+ // These are guide groups too. They still resolve exclusively under /docs;
+ // account and commerce application handlers never receive this request.
+ if(/^\/(?:account|sell)\/[a-z0-9]+(?:-[a-z0-9]+)*\/?$/.test(pathname))return {status:200,path:'/docs'+pathname.replace(/\/$/,'')};
  if(/^\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*\/?$/.test(pathname)&&!['api','signin','signup','signout','callback','customer','admin','build','sell','account','operations'].includes(pathname.split('/')[1]))return {status:200,path:'/docs'+pathname.replace(/\/$/,'')};
  return {status:404,path:null};
 }

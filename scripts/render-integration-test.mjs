@@ -86,6 +86,9 @@ try {
   const docs=await requestHost('docs.fivegen.example');assert.equal(docs.status,200);assert.equal(docs.headers['x-fivegen-surface'],'docs');assert.match(docs.body,/FiveGen/);assert.match(docs.body,/Search/);assert.equal(docs.headers['set-cookie'],undefined);
   for(const path of ['/api/workspace','/signin','/customer','/build/private'])assert.equal((await requestHost('docs.fivegen.example',path)).status,404,'Docs cannot reach application routes');
   assert.equal((await requestHost('docs.fivegen.example','/','POST')).status,405);assert.equal((await requestHost('docs.fivegen.example','/integrations/mcp')).status,200);assert.match((await requestHost('docs.fivegen.example','/robots.txt')).body,/Sitemap:/);assert.match((await requestHost('docs.fivegen.example','/sitemap.xml')).body,/<urlset/);
+  const liveGuides=JSON.parse((await requestHost('docs.fivegen.example','/docs/manifest.json')).body).articles;assert.equal(liveGuides.length,25);
+  for(const guide of liveGuides){const response=await requestHost('docs.fivegen.example','/'+guide.slug);assert.equal(response.status,200,'Canonical docs URL: '+guide.slug);assert.equal(response.headers['x-fivegen-surface'],'docs');assert.equal(response.headers['set-cookie'],undefined);}
+  for(const path of ['/account','/account/catalog','/sell','/api/account/catalog'])assert.equal((await requestHost('docs.fivegen.example',path)).status,404,'Guide namespaces cannot reach application handlers');
 
   const alias = await requestHost('fivegen-integration.onrender.com', '/?connect=mcp');
   assert.equal(alias.status, 308);

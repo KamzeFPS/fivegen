@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import {readDocsOrigin,docsHostRequest} from '../runtime/render/docs-host.mjs';
+import {readFileSync} from 'node:fs';
+import ts from 'typescript';
 const docsOrigin='https://docs.fivegen.ai';
 const call=(path,method='GET',host='docs.fivegen.ai')=>docsHostRequest({docsOrigin,host,method,path});
 assert.equal(readDocsOrigin({},'https://www.fivegen.ai'),docsOrigin);
@@ -8,6 +10,8 @@ assert.throws(()=>readDocsOrigin({DOCS_ORIGIN:'https://www.fivegen.ai'},'https:/
 assert.throws(()=>readDocsOrigin({DOCS_ORIGIN:'https://docs.fivegen.ai/path'},'https://www.fivegen.ai'));
 assert.equal(call('/').path,'/docs');assert.equal(call('/getting-started').path,'/docs/getting-started');
 assert.equal(call('/create/courses').path,'/docs/create/courses');assert.equal(call('/integrations/mcp').path,'/docs/integrations/mcp');
+const guideExports={};new Function('exports',ts.transpileModule(readFileSync('lib/docs.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(guideExports);
+for(const article of guideExports.docsArticles){assert.equal(call('/'+article.slug).path,'/docs/'+article.slug,article.slug+' canonical guide route');assert.equal(call('/'+article.slug,'POST').status,405);}
 assert.equal(call('/docs/getting-started').path,'/docs/getting-started');assert.equal(call('/docs/manifest.json').path,'/docs/manifest.json');
 for(const path of ['/assets/main.js','/fonts/inter-latin.woff2','/brand/fivegen-logo.webp','/llms.txt'])assert.equal(call(path).status,200);
 for(const path of ['/api/workspace','/api/auth/email','/build/id','/signin','/signup','/account','/customer','//evil.test','/assets/../api/workspace','/%5capi%5cworkspace'])assert.notEqual(call(path).status,200,path);
