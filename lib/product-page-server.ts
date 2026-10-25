@@ -7,6 +7,7 @@ import { publicCommerceOffer } from './commerce-v2-server';
 import { publicFreeStudioOffer } from './product-studio-commerce';
 import {getPublishedFileSale} from './file-sales';
 import type {ProductStudioConfig} from './product-studio-contract';
+import {offerView} from './offer-view';
 import { builderDraftSchema, builderTypeDetails } from './builder-contract';
 import { saleDraftSchema } from './file-sale-contract';
 import {
@@ -105,9 +106,10 @@ export async function pageCommerce(productId:string, owner:string, product:Publi
   if (builder) {
     const shown=JSON.parse(String(builder.public_snapshot)) as {priceCents?:number;currency?:string;studio?:ProductStudioConfig};
     const freeOffer=await publicFreeStudioOffer(String(builder.slug)),paidOffer=await publicCommerceOffer(String(builder.slug)),offer=freeOffer||paidOffer;
-    const tiers=shown.studio?.community?.tiers,amount=tiers?.length?Math.min(...tiers.map(tier=>tier.priceCents)):Number(shown.priceCents??product.priceCents??0);
+    const tiers=shown.studio?.community?.tiers,view=offerView({amount:shown.priceCents??product.priceCents,currency:shown.currency??product.currency,pricing:shown.studio?.pricing,tiers}),amount=view.amount;
+    const includedProducts=await publicBundleProducts(productId,owner,shown.studio);
     // Read only the published pricing presentation, never the delivery snapshot.
-    return {amount,currency:shown.currency??product.currency??'usd',enabled:!!offer,paidReady:!!paidOffer,path:offer?`/b/${encodeURIComponent(String(builder.slug))}`:null,...(offer?{mode:offer.mode as 'test'|'live'}:{}),model:shown.studio?.pricing?.model??'one-time',interval:shown.studio?.pricing?.interval,publicationVersion:Number(builder.version),...(offer?{checkout:{slug:String(builder.slug),pricing:shown.studio?.pricing,tiers:shown.studio?.community?.tiers,physical:shown.studio?.custom?.requiresShipping===true}}:{})};
+    return {amount,currency:view.currency,enabled:!!offer,paidReady:!!paidOffer,path:offer?`/b/${encodeURIComponent(String(builder.slug))}`:null,...(offer?{mode:offer.mode as 'test'|'live'}:{}),source:'published',offer:view,availabilityMessage:offer?'Confirm exact totals, currency and eligible payment methods at secure checkout.':'New purchases are paused. The reviewed offer below is not currently available for checkout.',includedProducts,model:view.model,...(view.interval?{interval:view.interval}:{}),publicationVersion:Number(builder.version),checkout:{slug:String(builder.slug),pricing:shown.studio?.pricing,tiers,physical:shown.studio?.custom?.requiresShipping===true}};
   }
   const draft=await database().prepare('SELECT product_id FROM product_builder_workspaces WHERE product_id=? AND owner=?').bind(productId,owner).first();
   if (draft) return {amount:product.priceCents??0,currency:product.currency??'usd',enabled:false,path:null};
@@ -118,16 +120,37 @@ export async function pageCommerce(productId:string, owner:string, product:Publi
   return {amount:offer?.amount??product.priceCents??0,currency:offer?.currency??product.currency??'usd',enabled:!!offer,paidReady:!!offer,model:'one-time',...(offer&&funnel?{checkout:{slug:String(funnel.slug)}}:{}),path:offer&&funnel?`/g/${encodeURIComponent(String(funnel.slug))}`:null,...(offer?{mode:offer.mode as 'test'|'live'}:{})};
 }
 
+async function publicBundleProducts(productId:string,owner:string,studio?:Pick<ProductStudioConfig,'pricing'>){
+ const included=[] as {id:string;title:string;publicationVersion:number}[];
+ for(const id of new Set((Array.isArray(studio?.pricing?.bundleProductIds)?studio.pricing.bundleProductIds:[]).slice(0,10))){
+  if(id===productId)continue;
+  const row=await database().prepare('SELECT b.version,b.public_snapshot FROM product_builder_publications b JOIN products p ON p.id=b.product_id AND p.owner=b.owner WHERE b.product_id=? AND b.owner=? AND p.archived_at IS NULL AND b.published_at>0').bind(id,owner).first();
+  if(row){const shown=JSON.parse(String(row.public_snapshot));included.push({id,title:String(shown.title||'Included product').slice(0,100),publicationVersion:Number(row.version)});}
+ }
+ return included;
+}
+
+/** Editor previews follow the saved workspace. Public pages keep following the
+ * reviewed publication, even while a new workspace revision is being edited. */
+export async function draftPageCommerce(productId:string,owner:string,fallback:LandingCommerce):Promise<LandingCommerce>{
+ const workspace=await database().prepare('SELECT data FROM product_builder_workspaces WHERE product_id=? AND owner=?').bind(productId,owner).first();
+ if(!workspace)return fallback;
+ const draft=builderDraftSchema.parse(JSON.parse(String(workspace.data))),view=offerView({amount:draft.priceCents,currency:draft.currency,pricing:draft.studio?.pricing,tiers:draft.studio?.community?.tiers});
+ const tiers=(Array.isArray(draft.studio?.community?.tiers)?draft.studio.community.tiers:[]).slice(0,20).map(({id,name,description,billing,priceCents})=>({id,name,description,billing,priceCents})),studio={pricing:{model:view.model,interval:view.interval||'month',minimumCents:view.minimumCents,suggestedCents:view.suggestedCents,bundleProductIds:draft.studio?.pricing?.bundleProductIds||[]},community:{tiers},custom:{requiresShipping:(draft.studio?.custom?.deliveryKinds as string[]|undefined)?.includes('physical')||(draft.studio?.custom?.blocks as {kind?:string}[]|undefined)?.some(block=>block.kind==='physical')}};
+ return {amount:view.amount,currency:view.currency,enabled:false,paidReady:fallback.paidReady,path:null,source:'draft',offer:view,model:view.model,...(view.interval?{interval:view.interval}:{}),availabilityMessage:'Saved draft offer · Preview only. Launch review checks the published offer before checkout can open.',includedProducts:await publicBundleProducts(productId,owner,studio),checkout:{slug:productId,pricing:studio?.pricing,tiers:studio?.community?.tiers,physical:studio?.custom?.requiresShipping===true}};
+}
+
 export async function getProductPage(productId: string, owner: string): Promise<ProductPageState> {
   const product = await ownedProduct(productId, owner);
   const row = await database().prepare('SELECT * FROM product_pages WHERE product_id=? AND owner=?').bind(productId, owner).first();
+  const projection=(await snapshotProduct(product)).snapshot,publishedCommerce=await pageCommerce(productId,owner,projection),commerce=await draftPageCommerce(productId,owner,publishedCommerce);
   return {
     id:productId,purpose:'sales',name:'Sales page',
     draft: row ? productPageConfigSchema.parse(JSON.parse(String(row.draft))) : defaultProductPageConfig(String(product.format)),
     published: row?.published_at != null && row.published ? productPageConfigSchema.parse(JSON.parse(String(row.published))) : null,
     publishedAt: row?.published_at == null ? null : Number(row.published_at), updatedAt: Number(row?.updated_at || 0),
     publicPath: pagePath(String(product.slug)), reviewSummary: await reviewSummary(productId, owner),
-    commerce: await pageCommerce(productId,owner,(await snapshotProduct(product)).snapshot),
+    product:projection,commerce,publishedCommerce,
   };
 }
 
@@ -151,6 +174,7 @@ export async function saveProductPage(productId: string, owner: string, input: u
 
 export async function publishProductPage(productId: string, owner: string, input: unknown) {
   const { expectedUpdatedAt } = productPageRevisionSchema.parse(input), product = await ownedProduct(productId, owner);
+  if(product.archived_at!=null)throw new ApiError('Restore this product before publishing its page.',409);
   const page = await getProductPage(productId, owner);
   if (page.updatedAt !== expectedUpdatedAt) throw new ApiError('Your product page changed in another tab. Reload before publishing.', 409);
   if (page.draft.templateId !== 'classic' && !page.draft.sections.some(section => section.type === 'hero' && section.enabled)) throw new ApiError('Enable a hero section before publishing your sales page.', 409);
@@ -181,7 +205,7 @@ export async function unpublishProductPage(productId: string, owner: string, inp
 }
 
 async function publishedPage(slug: string) {
-  const row = await database().prepare('SELECT pp.*,p.slug FROM product_pages pp JOIN products p ON p.id=pp.product_id AND p.owner=pp.owner WHERE p.slug=? AND pp.published_at IS NOT NULL AND pp.published IS NOT NULL AND pp.public_product IS NOT NULL').bind(slug).first();
+  const row = await database().prepare('SELECT pp.*,p.slug FROM product_pages pp JOIN products p ON p.id=pp.product_id AND p.owner=pp.owner WHERE p.slug=? AND p.archived_at IS NULL AND pp.published_at IS NOT NULL AND pp.published IS NOT NULL AND pp.public_product IS NOT NULL').bind(slug).first();
   if (!row) throw new ApiError('This product page is unavailable.', 404);
   return row;
 }

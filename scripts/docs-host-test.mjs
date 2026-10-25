@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {readDocsOrigin,docsHostRequest} from '../runtime/render/docs-host.mjs';
+const docsOrigin='https://docs.fivegen.ai';
+const call=(path,method='GET',host='docs.fivegen.ai')=>docsHostRequest({docsOrigin,host,method,path});
+assert.equal(readDocsOrigin({},'https://www.fivegen.ai'),docsOrigin);
+assert.equal(readDocsOrigin({},'http://localhost:5198'),null);
+assert.throws(()=>readDocsOrigin({DOCS_ORIGIN:'https://www.fivegen.ai'},'https://www.fivegen.ai'));
+assert.throws(()=>readDocsOrigin({DOCS_ORIGIN:'https://docs.fivegen.ai/path'},'https://www.fivegen.ai'));
+assert.equal(call('/').path,'/docs');assert.equal(call('/getting-started').path,'/docs/getting-started');
+assert.equal(call('/create/courses').path,'/docs/create/courses');assert.equal(call('/integrations/mcp').path,'/docs/integrations/mcp');
+assert.equal(call('/docs/getting-started').path,'/docs/getting-started');assert.equal(call('/docs/manifest.json').path,'/docs/manifest.json');
+for(const path of ['/assets/main.js','/fonts/inter-latin.woff2','/brand/fivegen-logo.webp','/llms.txt'])assert.equal(call(path).status,200);
+for(const path of ['/api/workspace','/api/auth/email','/build/id','/signin','/signup','/account','/customer','//evil.test','/assets/../api/workspace','/%5capi%5cworkspace'])assert.notEqual(call(path).status,200,path);
+assert.equal(call('/getting-started','POST').status,405);assert.equal(call('/','GET','attacker.test'),null);
+assert.equal(call('/robots.txt').path,'/docs/robots.txt');assert.equal(call('/sitemap.xml').path,'/docs/sitemap.xml');
+console.log('Docs hostname routing passed: public guides and assets only, no auth/API/actions/session routes, separate origin validation.');

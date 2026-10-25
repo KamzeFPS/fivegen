@@ -4,3 +4,10 @@
 .ops-pilot-fields{display:grid;gap:18px;border:0;padding:0;margin:22px 0;min-width:0}.ops-pilot-fields>label,.ops-pilot-partner label{display:grid;gap:8px}.ops-pilot-partner{padding:20px;border:1px solid var(--line,#333);border-radius:14px;margin:8px 0;display:grid;gap:16px;min-width:0}.ops-pilot-partner fieldset{border:1px solid var(--line,#333);border-radius:10px;padding:14px;max-height:260px;overflow:auto;display:grid;gap:10px}.ops-pilot-fields .ops-checkbox{display:flex;align-items:flex-start;gap:10px}.ops-pilot-fields input[type=checkbox]{width:18px;min-width:18px;margin-top:3px}.ops-pilot-fields input:not([type=checkbox]),.ops-pilot-fields select,.ops-pilot-fields textarea{width:100%;min-height:44px;box-sizing:border-box}.ops-pilot-blocked{margin-top:24px;padding:18px;border:1px solid #6e542f;border-radius:14px;background:#654a191a}.ops-pilot-blocked li{margin:12px 0;line-height:1.5}.partner-pilot-proposal a[aria-disabled=true]{opacity:.5;cursor:not-allowed}.partner-pilot-proposal fieldset:disabled{opacity:.65}
 
 .ops-highlight{padding:14px;border:1px solid #ff804a66;border-radius:8px;background:#ff804a0c}.ops-person-detail h2:focus-visible{outline:3px solid #ff804a;outline-offset:5px}.ops-person-detail a{overflow-wrap:anywhere}.ops-filters select:disabled{opacity:.8;cursor:default}
+
+/* Member delivery is a dark application surface, separate from document paper. */
+.pb-preview-dialog.pb-member-preview-dialog .pb-preview-content{background:#101113;color:#f4f1ee;padding:0}
+.member-delivery-preview.ops-card{--foreground:#f4f1ee;--muted-foreground:#b7b2ac;--card:#101113;--border:#38383e;--fg-text:#f4f1ee;--fg-muted:#b7b2ac;--fg-bg:#101113;--fg-panel:#19191d;--fg-surface:#222228;--fg-border:#38383e;--fg-accent:#ff9b66;background:#101113;color:#f4f1ee;margin:0;border:0}
+.member-delivery-preview .buyer-simulation-preview>h3,.member-delivery-preview .buyer-section-heading :is(h2,h3,h4),.member-delivery-preview .ops-preview-content :is(h2,h3,h4){color:#f4f1ee}
+.member-delivery-preview>details{margin:20px 0;color:#e8e2dc}
+.member-delivery-preview>details>summary{cursor:pointer;min-height:44px;display:flex;align-items:center}

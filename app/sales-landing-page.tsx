@@ -6,6 +6,8 @@ import {Dialog as Modal} from 'radix-ui';
 import {PublicPageLeadForm} from './public-page-lead-form';
 import {PublicApplicationForm} from './public-application-form';
 import {CommerceCheckout} from './commerce-checkout';
+import {offerView,offerMoney} from '@/lib/offer-view';
+import {landingThemeTokens} from '@/lib/page-theme';
 import {trackProductJourney} from './product-journey-tracker';
 import { ArrowRight, ArrowUpRight, Check, ChevronDown, LockKeyhole, MapPin, Star, UserRound, X } from 'lucide-react';
 import type { LandingCommerce, LandingSection, ProductPageConfig, ProductReviewSummary, PublicProductSummary } from '@/lib/product-page';
@@ -16,24 +18,23 @@ export type SalesLandingProps = {
   preview?: boolean; selectedSection?: string; onSelectSection?: (id: string) => void;
 };
 export const templateArtwork = { eclipse: '/templates/eclipse.webp', dunes: '/studio/dunes.webp', blue: '/studio/blue.webp', chrome: '/studio/chrome.webp', none: '' };
-export function money(amount: number, currency: string) { try { return new Intl.NumberFormat('en-US', {style: 'currency', currency: currency.toUpperCase(), maximumFractionDigits: amount % 100 ? 2 : 0}).format(amount / 100); } catch { return `${(amount / 100).toFixed(2)} ${currency.toUpperCase()}`; } }
-function buttonInk(hex: string) { const rgb = hex.slice(1).match(/.{2}/g)?.map(x=>parseInt(x,16)) || [255,128,74]; return rgb[0]*.299+rgb[1]*.587+rgb[2]*.114 > 145 ? '#17181b' : '#ffffff'; }
+export const money=offerMoney;
+
 
 export function SalesLandingPage({product, config, reviewSummary, commerce, iconUrl, bannerUrl, pageId=product.id,pageVersion=0,preview, selectedSection, onSelectSection}: SalesLandingProps) {
   const {brand} = config;
   const [checkoutOpen,setCheckoutOpen]=useState(false);
   const image = bannerUrl || templateArtwork[config.heroAsset];
-  const style = { '--landing-accent': brand.accentHex, '--landing-bg': brand.backgroundHex, '--landing-button-ink': buttonInk(brand.accentHex) } as CSSProperties;
+  const style = landingThemeTokens(brand) as CSSProperties;
   const sections = config.sections.filter(section=>section.enabled && (section.type!=='curriculum'||config.showContent) && (section.type!=='reviews'||config.showReviews));
   const formSection=sections.find(s=>s.type==='lead-form'&&s.leadForm||s.type==='application'&&s.application?.enabled);
   const form=config.ctaMode==='form'&&!!formSection;
   const external = config.ctaMode === 'link' && !!config.ctaUrl;
-  const available = form || external || !!commerce?.enabled && !!commerce.path;
+  const available = form || external || !!commerce?.enabled && !!commerce.path || !!preview && commerce?.source==='draft';
   const destination = form ? '#landing-'+formSection!.id : external ? config.ctaUrl : commerce?.path;
   const label = available ? config.buttonLabel || (form?'Take the next step':external ? 'Learn more' : commerce?.amount === 0 ? 'Get access' : /course/i.test(product.format)?'Join the course':/coaching|consulting|mentorship/i.test(product.format)?'Book a session':'Get access') : 'Sales currently paused';
-  const amount = commerce?.amount ?? product.priceCents ?? 0, currency = commerce?.currency ?? product.currency ?? 'usd';
-  const tiered=!!commerce?.checkout?.tiers?.length;
-  const pricing = tiered ? 'Choose a plan at checkout. Renewal terms depend on the selected plan.' : commerce?.model === 'subscription' ? `Renews ${commerce.interval === 'year' ? 'yearly' : 'monthly'} until canceled.` : commerce?.model === 'pwyw' ? 'Choose your amount at checkout.' : 'One-time payment';
+  const offer=commerce?.offer||offerView({amount:commerce?.amount??product.priceCents,currency:commerce?.currency??product.currency,pricing:commerce?.checkout?.pricing||{model:commerce?.model as 'free'|'one-time'|'subscription'|'pwyw',interval:commerce?.interval as 'month'|'year'},tiers:commerce?.checkout?.tiers});
+  const {amount,currency}=offer;
   const initials = product.title.trim().split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase();
   function action(className = '') {
     if (preview) return <button type="button" className={`landing-action ${className}`} onClick={()=>onSelectSection?.('hero')} aria-label={`${label} — visual preview only`}>{label}<ArrowRight size={16}/></button>;
@@ -50,7 +51,7 @@ export function SalesLandingPage({product, config, reviewSummary, commerce, icon
         {config.showCreator&&config.creatorName&&<div className="landing-creator-byline">{iconUrl?<img src={iconUrl} alt=""/>:<UserRound size={18}/>}<span>Created by <strong>{config.creatorName}</strong></span></div>}
         <div className="landing-hero-inline-action">{action()}</div>
       </div>
-      {!form&&<aside className="landing-offer" aria-label="Product offer"><span>{product.title}</span><strong>{tiered&&<small>From </small>}{amount===0?'Free':money(amount,currency)}{amount>0&&<small>{currency.toUpperCase()}</small>}</strong><p>{pricing}</p>{commerce?.mode==='test'&&<span className="landing-test-label">Test checkout · no real payment</span>}{action()}<div className="landing-offer-note"><LockKeyhole size={14}/><span>{available ? external ? 'Continue on the creator’s website.' : 'Review your purchase and access at checkout.' : 'The public page is available. New purchases are paused.'}</span></div>{config.welcomeMessage&&<p className="landing-offer-welcome">{config.welcomeMessage}</p>}</aside>}
+      {!form&&<aside className="landing-offer" aria-label="Product offer"><span>{product.title}</span><strong>{offer.tiered&&<small>Plans from </small>}{!offer.tiered&&offer.model==='pwyw'?money(amount,currency):offer.amountText}{!offer.tiered&&offer.interval&&<small> / {offer.interval}</small>}{!offer.tiered&&offer.model==='pwyw'&&<small> suggested</small>}{amount>0&&<small>{currency.toUpperCase()}</small>}</strong><p>{offer.terms}</p>{commerce?.source==='draft'&&<span className="landing-test-label">Saved draft offer · visual preview</span>}{commerce?.mode==='test'&&<span className="landing-test-label">Test checkout · no real payment</span>}{action()}<div className="landing-offer-note"><LockKeyhole size={14}/><span>{available ? external ? 'Continue on the creator’s website.' : 'Review your purchase and access at checkout.' : 'The public page is available. New purchases are paused.'}</span></div>{commerce?.includedProducts?.length? <div><strong>Included in this offer</strong><ul>{commerce.includedProducts.map(item=><li key={item.id}>{item.title}</li>)}</ul><p>One checkout total. Included access follows this offer’s payment and cancellation terms.</p></div>:null}{commerce?.availabilityMessage&&<p>{commerce.availabilityMessage}</p>}{config.welcomeMessage&&<p className="landing-offer-welcome">{config.welcomeMessage}</p>}</aside>}
     </div>;
     if (section.type === 'benefits') {
       const items = section.items.length ? section.items : product.benefits || [];
@@ -74,5 +75,5 @@ export function SalesLandingPage({product, config, reviewSummary, commerce, icon
     <header className="landing-header"><a href={preview?'#':pageId===product.id?`/product/${encodeURIComponent(product.slug)}`:`/pages/${pageId}`} className="landing-wordmark" onClick={preview?event=>{event.preventDefault();onSelectSection?.('hero');}:undefined}>{iconUrl?<img src={iconUrl} alt=""/>:<span>{initials}</span>}<strong>{product.title}</strong></a><nav aria-label="Sales page sections">{renderedSections.map(item=>item.section).filter(section=>['curriculum','creator','faq'].includes(section.type)).map(section=><a href={`#landing-${section.id}`} key={section.id}>{section.type==='creator'?'About':section.type==='faq'?'FAQ':'Curriculum'}</a>)}</nav>{action('landing-header-action')}</header>
     {renderedSections.map(({section,node})=><section id={`landing-${section.id}`} data-section={section.id} className={`landing-section landing-section-${section.type} ${preview&&selectedSection===section.id?'is-selected':''}`} key={section.id} onClick={preview?()=>onSelectSection?.(section.id):undefined}>{node}</section>)}
     <footer className="landing-footer"><span>{config.showCreator&&config.creatorName?config.creatorName:product.title}</span>{!preview&&<a href="/customer">My purchases <ArrowRight size={13}/></a>}<Link href="/" className="landing-powered"><img src="/brand/fivegen-transparent.webp" alt="FiveGen"/><span>Made with FiveGen</span></Link></footer>
-  </article>{!preview&&commerce?.enabled&&commerce.checkout&&<Modal.Root open={checkoutOpen} onOpenChange={setCheckoutOpen}><Modal.Portal><Modal.Overlay className="sales-dialog-overlay"/><Modal.Content className="landing-checkout-dialog"><header><div><Modal.Title>Complete your order</Modal.Title><Modal.Description>Confirm your product and access details before secure checkout.</Modal.Description></div><Modal.Close className="sales-icon-button" aria-label="Close checkout"><X size={19}/></Modal.Close></header><CommerceCheckout slug={commerce.checkout.slug} amount={commerce.amount} currency={commerce.currency} mode={commerce.mode||'test'} publicationVersion={commerce.publicationVersion} pricing={commerce.checkout.pricing} tiers={commerce.checkout.tiers} physical={commerce.checkout.physical} paidReady={commerce.paidReady} summary={{title:product.title,creatorName:config.showCreator?config.creatorName:undefined,includes:product.benefits}}/></Modal.Content></Modal.Portal></Modal.Root>}</>;
+  </article>{!preview&&commerce?.enabled&&commerce.checkout&&<Modal.Root open={checkoutOpen} onOpenChange={setCheckoutOpen}><Modal.Portal><Modal.Overlay className="sales-dialog-overlay"/><Modal.Content className="landing-checkout-dialog"><header><div><Modal.Title>Complete your order</Modal.Title><Modal.Description>Confirm your product and access details before secure checkout.</Modal.Description></div><Modal.Close className="sales-icon-button" aria-label="Close checkout"><X size={19}/></Modal.Close></header><CommerceCheckout slug={commerce.checkout.slug} amount={commerce.amount} currency={commerce.currency} mode={commerce.mode||'test'} publicationVersion={commerce.publicationVersion} pricing={commerce.checkout.pricing} tiers={commerce.checkout.tiers} physical={commerce.checkout.physical} paidReady={commerce.paidReady} summary={{title:product.title,creatorName:config.showCreator?config.creatorName:undefined,includes:[...(product.benefits||[]),...(commerce.includedProducts||[]).map(item=>'Included: '+item.title)]}}/></Modal.Content></Modal.Portal></Modal.Root>}</>;
 }

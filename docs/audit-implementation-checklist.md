@@ -1,0 +1,65 @@
+# Audit implementation checklist
+
+Scope: all 36 recommendations from the fresh October 25 comparative audit, plus the requested docs.fivegen.ai site. Implementation and local synthetic verification are distinct from live provider setup and deployment.
+
+No application secrets or production customer data are used for local verification.
+
+- [x] **R01 · P0 · Unify recurring offer terms** — For free, one-time, monthly, annual and pay-what-you-want offers: saved setup, sales page, preview and Stripe summary agree; null/undefined never reaches text. Test draft and published snapshots separately.
+- [ ] **R02 · P1 · Make email delivery ready before presenting activation** — A controlled test lead receives the approved sequence; unsubscribe and purchase exit suppress later sales messages; provider acceptance and inbox delivery remain distinct states. **External/remaining verification:** Implementation verified with controlled transport; real provider acceptance and inbox receipt still require the configured sender and an approved controlled recipient.
+- [x] **R03 · P1 · Route member preview to actual delivery** — View as member opens the correct classroom/download/service/community renderer for each type in one action, with no sales-page detour.
+- [x] **R04 · P1 · Repair every stock theme and preview contrast** — All five templates and both themes are reviewed at 390px and desktop; headings, body, form errors, focus and overlays remain readable with every stock artwork.
+- [x] **R05 · P1 · One Launch review with explicit state ownership** — One summary controls content approval, sales-page publication, checkout availability and delivery checks. All entry points use identical names; updates explain exactly what pauses and why.
+- [ ] **R06 · P1 · Verify the real buyer lifecycle in a sandbox** — Test card checkout, delayed/failure webhook, duplicate event, email receipt, access, return login, cancellation, refund and access end; do not call internal checks a full payment test. **External/remaining verification:** SQLite lifecycle, actual Stripe signature verification, duplicate/delayed/failure/refund/cancellation tests pass. A real Stripe sandbox card and provider-origin deployed webhook/inbox check remain external.
+- [x] **R07 · P2 · Preserve selected page through sign-in** — Secondary lead/application pages retain page ID and safe editor mode through email, Google and recovery return paths.
+- [x] **R08 · P2 · Make named shortcuts resolve to their promised place** — Customer reviews opens reviews; each product-menu action has an explicit destination and sensible empty state.
+- [x] **R09 · P2 · Give editing more width** — Optional product rail collapses; inspector width is adjustable; full-width buyer preview returns to the same selected section and scroll position.
+- [x] **R10 · P2 · Move diagnostic mechanics under Details** — Byte budgets, raw revision IDs, attribution implementation and lengthy caveats move into expandable help; primary copy retains who acts, what saves and what becomes public.
+- [x] **R11 · P2 · Open the right tool from each growth goal** — Collect leads opens a private form page; Sell opens sales readiness; Applications opens intake setup. Each goal provides direct next-step actions without requiring shortcut customization.
+- [x] **R12 · P2 · Standardize save, retry and recovery behavior** — Every editor has one consistent save state; failed saves show retry; navigation guards cover all dirty child panels; history restoration names the affected scope.
+- [x] **R13 · P2 · Make zero-state screens useful** — Buyer, campaign, results and library empty states show one relevant action and a reversible sample/example view; never invent activity or customer proof.
+- [x] **R14 · P2 · Reuse product facts in a short guided brief** — Saved audience, outcome and inclusions prefill the shared brief as editable proposals; a minimal three-question start is possible, with optional depth and honest unknowns.
+- [x] **R15 · P2 · Build a guided first useful lesson** — A manual path adds module, lesson, recording/resource and next action with progressive disclosure; quiz/assignment settings appear only when selected.
+- [x] **R16 · P2 · Make upload and processing recovery explicit** — Display accepted formats/limits before selecting a file, upload progress, processing status, cancel/retry and preserved originals. Verify large, unsupported and interrupted uploads.
+- [x] **R17 · P2 · Unify page and commerce ownership of FAQs and proof** — A creator understands where FAQ, creator identity, verified reviews and testimonials are edited; editing one public item updates the intended page only and preserves permissions.
+- [x] **R18 · P2 · Add per-creator launch diagnostics** — Readiness shows account, product and platform blockers with owner and recovery route; no repeated generic unavailable/coming-soon states when a specific cause is known.
+- [x] **R19 · P2 · Expose actual payment eligibility early** — Show seller currency support, Stripe readiness and test/live mode before launch; buyer checkout shows only available wallets/methods and exact presentment terms. No automatic MNT→INR promise for recurring offers.
+- [x] **R20 · P2 · Make analytics answer a question** — Separate platform-wide business performance from product/campaign results; label date/timezone/currency and missing tracking; show one evidence-based next action without unsupported conversion claims.
+- [x] **R21 · P2 · Move email handoff beside campaign copy** — Draft email → review source/copy → choose recipient rule/destination → activate from one guided transition. Results stay in Results, with details linked back to the asset.
+- [x] **R22 · P2 · Give voice sources a simple review journey** — Paste/record → edit transcript → approve permitted use → select products; show original and excerpts together. Saved product facts and private source references are visibly distinct.
+- [x] **R23 · P2 · Make product switching recognizable at scale** — Pinned favorites, real icons, hover/focus names and a searchable switcher; collapsed rail is optional and mobile has a named product selector.
+- [x] **R24 · P2 · Add a recoverable product archive** — Archive pauses discovery/new sales with explicit effects; restore is available; historical customer/order records remain intact; permanent delete stays separately guarded.
+- [ ] **R25 · P2 · Validate keyboard, screen reader and phone journeys** — Run keyboard-only create/edit/publish-review/checkout-preview/learn; audit focus order, modal return, errors, touch target sizes and zoom. Phone test real player/forms, not just an editor frame. **External/remaining verification:** Desktop/390px keyboard and semantic/ARIA journeys pass in the production build; a formal assistive-device/screen-reader session is not represented by these checks.
+- [x] **R26 · P3 · Make the learner home a first-class workspace** — A named Your purchases entry, contextual support, clear resume progress and accessible resource/player view across return sessions.
+- [x] **R27 · P3 · Verify and improve existing delivery depth** — Course media, progress, assignments, cohorts, drip, captions and transcripts have implementation in code. Verify the existing release, prerequisites, permissions and learner behavior across formats before calling them ready; improve based on creator demand.
+- [x] **R28 · P3 · Expand relationship automation after delivery is reliable** — A small visual trigger/action journey handles consent, purchase, application, booking, onboarding and cancellation without conflating access with marketing permission.
+- [ ] **R29 · P3 · Add branded catalog and domain capability deliberately** — Shared identity, products, creator story and domain connect without duplicating the individual sales-page editor; show DNS/TLS and rollback status. **External/remaining verification:** Catalog authoring/publication and isolated host routing are implemented and locally verified. Creator-specific hosting/TLS remains pending until a real creator hostname is provided and provisioned.
+- [x] **R30 · P3 · Verify existing bundles; evaluate cart and order-bump expansion** — Bundles already exist in code: verify their inclusions, recurring terms and retained customer snapshots. Evaluate cart/order-bump expansion separately; any added purchase must show its total and recurrence before consent.
+- [x] **R31 · P3 · Keep affiliate activation behind operational readiness** — Commissions, attribution, refunds, payouts and disputes are tested before activation. Until then, tracking-only links and private Partner pilot clearly state no earnings activation.
+- [x] **R32 · P3 · Avoid a broad app marketplace for now** — Third-party apps, physical goods, banking, ads and workforce tools remain outside primary launch navigation until target creators demonstrate the need. Use integrations for narrow proven jobs.
+- [x] **R33 · P2 · Remove stale and overlapping labels** — Retire Funnel wording for a second sales-page generator; use Lead capture for lead/application pages, Campaigns for assets/reminders, Emails for delivery, Results for measurement. Remove legacy follow-up wording from script-save actions.
+- [x] **R34 · P2 · Remove unsupported outcome promises from UI** — Do not advertise automatic social publishing when only calendar reminders exist; distinguish provider acceptance from delivery, simulation from purchase, research preference from buying intent.
+- [x] **R35 · P2 · Keep creator-authored content and explicit privacy** — Manual creation and empty-library launch remain first-class; private recordings stay separate from public media; no invented proof or ratings; optional AI proposals never silently replace approved copy.
+- [x] **R36 · P2 · Keep the outcome-led overview and clear fee model** — One concrete next launch action stays ahead of graphs; gross/net/orders remain distinct; account payout, plan billing and buyer payments remain named separately.
+- [ ] **R37 · Documentation site** — Searchable FiveGen guides, accessible navigation, mobile layout, truthful product/integration documentation, and docs.fivegen.ai routing/domain configuration. **External/remaining verification:** 25-guide docs site and isolated host routing are built/verified. Render now shows the domain verified and its certificate issued; public DNS points to fivegen.onrender.com. Deployment and live guide verification remain.
+
+## Verification record
+
+Code and local verification are complete except for the explicitly named external/assistive-device checks above. Checkboxes represent the full stated acceptance criterion, not merely the existence of a screen.
+
+- Production Render build and full TypeScript check pass.
+- 25 focused regression suites pass, including actual SQLite owner/race/history/privacy and lifecycle checks. See `outputs/audit-implementation-2026-10-25/final-regressions.json`.
+- The real production server integration passes docs-host isolation, authentication, retired routes and persistence. See `render-integration-final.log` in that evidence folder.
+- All 11 synthetic product HTTP lifecycles pass. The harness now explicitly publishes the canonical sales page separately from delivery and uses the sales-page publication token before marking a link shared. Evidence: `outputs/product-studio-e2e/834b9e1e-1d31-4496-938e-8217fde62138/journey.json`.
+- Source changes preserve the manual/AI boundary, defer affiliate earnings and broad marketplace expansion, and retain the existing plan/fee model. Cart/order-bump expansion was evaluated and deferred; existing bundles are verified.
+- Per-area verification: commerce, archive, catalog and independent runtime review JSON in `outputs/audit-implementation-2026-10-25`; marketing/content inventories in `outputs/comparative-audit-2026-10-25/implementation`; template matrix and docs evidence in the matching `outputs/*-verification-2026-10-25` folders.
+
+No production secret was read. Synthetic checks make no provider requests, charges, customer sends or live data mutations. Public domain and controlled provider validation are distinct rollout steps.
+
+
+### Browser verification
+
+Production desktop/390px checks exercised product search/pins/collapse, first manual lesson, real member preview and lesson navigation, customer-change guards/discard, branded catalog save/publication, and learner video speed/focus. Browser findings were corrected and rechecked: shared classroom styles, dark-heading contrast, practice-step parity and catalog publication/save labels. Catalog links now use the trusted application origin so local/staging checks cannot navigate into production offers.
+
+Docs keyboard search, mobile navigation, focus return and code copy were verified. Screenshots and the final browser record are under `outputs/audit-implementation-2026-10-25/browser`.
+
+The local preview has providers disabled and uses only synthetic records. It does not validate a live Stripe card, deployed provider callbacks, inbox placement, or production DNS/TLS. A formal screen-reader device session remains separate from the semantic/keyboard checks.

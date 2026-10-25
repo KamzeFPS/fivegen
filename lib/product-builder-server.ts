@@ -74,7 +74,7 @@ export async function getBuilderWorkspace(productId:string,owner:string):Promise
   builderReadiness(productId,owner,draft),commerceAccount(owner),getCommerceOffer(productId,owner),
   database().prepare('SELECT version,slug,published_at FROM product_builder_publications WHERE product_id=? AND owner=?').bind(productId,owner).first(),
  ]);
- return {product,draft,version:Number(row.version),uploads:uploads.results as unknown as BuilderWorkspace['uploads'],readiness,payments,selling:offer.enabled,publication:publication?{version:Number(publication.version),slug:String(publication.slug),publishedAt:Number(publication.published_at)}:null};
+ return {product,draft,version:Number(row.version),uploads:uploads.results as unknown as BuilderWorkspace['uploads'],readiness,payments,selling:offer.enabled,publication:publication&&Number(publication.published_at)>0?{version:Number(publication.version),slug:String(publication.slug),publishedAt:Number(publication.published_at)}:null};
 }
 export async function createBuilderWorkspace(owner:string,input:unknown){
  const value=z.object({type:z.enum(builderTypes),source:z.enum(['ai','upload','manual']),requestId:z.string().uuid()}).parse(input);

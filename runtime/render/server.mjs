@@ -8,6 +8,9 @@ import { createAuth, stripHeaders } from './auth.mjs';
 import { createPaddleWebhookIpGuard } from './paddle-webhook-ips.mjs';
 import {initializePurchaseEmailDispatchSecret,startPurchaseEmailWorker} from './purchase-email-worker.mjs';
 import {loopbackRequest} from './loopback-http.mjs';
+import {readDocsOrigin,docsHostRequest} from './docs-host.mjs';
+import {catalogHostRequest} from './catalog-host.mjs';
+import {initializeAutomationDispatchSecret,startAutomationWorker} from './automation-worker.mjs';
 
 export function readConfig(source = process.env) {
   const origin = new URL(source.APP_ORIGIN || source.RENDER_EXTERNAL_URL || '');
@@ -32,7 +35,7 @@ export function readConfig(source = process.env) {
   }
   if (origin.hostname.startsWith('www.')) redirectHosts.add(origin.host.slice(4));
   redirectHosts.delete(origin.host);
-  return { origin: origin.origin, redirectHosts, port, googleClientId: source.GOOGLE_CLIENT_ID, googleClientSecret: source.GOOGLE_CLIENT_SECRET };
+  return { origin: origin.origin, docsOrigin:readDocsOrigin(source,origin.origin), redirectHosts, port, googleClientId: source.GOOGLE_CLIENT_ID, googleClientSecret: source.GOOGLE_CLIENT_SECRET };
 }
 
 export async function start() {
@@ -44,6 +47,7 @@ export async function start() {
   process.env.MCP_ORIGIN = config.origin;
   process.env.VINEXT_TRUST_PROXY = '1';
   initializePurchaseEmailDispatchSecret();
+  initializeAutomationDispatchSecret();
   if(!process.env.PRODUCT_REMINDER_DISPATCH_SECRET?.trim())process.env.PRODUCT_REMINDER_DISPATCH_SECRET=randomBytes(32).toString('base64url');
   if(!process.env.AUTH_EMAIL_DISPATCH_SECRET?.trim())process.env.AUTH_EMAIL_DISPATCH_SECRET=randomBytes(32).toString('base64url');
   const storage = getStorage();
@@ -87,8 +91,23 @@ export async function start() {
         res.writeHead(healthy ? 200 : 503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
         res.end(JSON.stringify({ status: healthy ? 'ok' : 'unavailable' })); return;
       }
+      const docs=docsHostRequest({docsOrigin:config.docsOrigin,host,method:req.method,path:url.pathname});
+      if(docs){
+        res.setHeader('X-FiveGen-Surface','docs');
+        res.setHeader('Cache-Control','public, max-age=60');
+        if(docs.status!==200){res.writeHead(docs.status,{'Content-Type':'text/plain',...(docs.status===405?{Allow:'GET, HEAD'}:{})});res.end('Documentation route not found');return;}
+        // Docs are public and receive neither application sessions nor credentials.
+        stripHeaders(req,name=>name==='cookie'||name==='authorization');
+        req.url=docs.path+url.search;
+        for(const handler of handlers)handler.call(server,req,res);
+        return;
+      }
       if (config.redirectHosts.has(host) && ['GET', 'HEAD'].includes(req.method)) {
         res.writeHead(308, { Location: config.origin + url.pathname + url.search, 'Cache-Control': 'no-store' }); res.end(); return;
+      }
+      if(host!==authority.host){
+        const catalog=catalogHostRequest(storage.sqlite,{host,method:req.method,path:url.pathname});
+        if(catalog){res.setHeader('X-FiveGen-Surface','catalog');res.setHeader('Cache-Control','no-store');if(catalog.status!==200){res.writeHead(catalog.status,{'Content-Type':'text/plain',...(catalog.status===405?{Allow:'GET, HEAD'}:{})});res.end('Catalog route not found');return;}stripHeaders(req,name=>name==='cookie'||name==='authorization');req.url=catalog.path+url.search;for(const handler of handlers)handler.call(server,req,res);return;}
       }
       if (host !== authority.host && !productHost) { res.writeHead(421, { 'Cache-Control': 'no-store' }); res.end('Unrecognized host'); return; }
       // Apply the boundary to encoded and trailing-slash route equivalents too.
@@ -128,29 +147,18 @@ export async function start() {
     server.listen(config.port, '0.0.0.0', resolve);
   });
   console.log(`FiveGen production server listening on port ${config.port}`);
-  // The durable queue lives in SQLite. Only explicitly configured deployments
-  // dispatch; missed ticks catch up after restart, and the route claims leases.
-  let dispatching = false;
-  const dispatch = async () => {
-    if (stopping || dispatching || process.env.AUTOMATIONS_WORKER_ENABLED === 'false' || (process.env.AUTOMATION_DISPATCH_SECRET || '').length < 32) return;
-    dispatching = true;
-    try {
-      const response = await fetch(`http://127.0.0.1:${config.port}/api/automations/dispatch`, { method: 'POST', headers: { Host: new URL(config.origin).host, Authorization: `Bearer ${process.env.AUTOMATION_DISPATCH_SECRET}` }, signal: AbortSignal.timeout(90000) });
-      if (!response.ok) console.error('Automation dispatch did not complete:', response.status);
-    } catch { if (!stopping) console.error('Automation dispatch temporarily unavailable. Pending jobs will retry.'); }
-    finally { dispatching = false; }
-  };
-  const dispatchTimer = setInterval(() => { void dispatch(); }, 60000);
-  dispatchTimer.unref();
+  // Approved sequence jobs are durable. Provider readiness, consent, purchase
+  // exits and per-sequence activation are rechecked by the dispatch route.
+  const automationWorker=startAutomationWorker(config);
   // Transactional confirmations are independent of optional marketing queues.
   const purchaseEmailWorker=startPurchaseEmailWorker(config);
   const productReminderWorker=startPurchaseEmailWorker(config,{source:{...process.env,PURCHASE_EMAILS_WORKER_ENABLED:process.env.PRODUCT_REMINDERS_WORKER_ENABLED,PURCHASE_EMAIL_DISPATCH_SECRET:process.env.PRODUCT_REMINDER_DISPATCH_SECRET},fetcher:(url,options)=>loopbackRequest(String(url).replace('/api/purchase-emails/dispatch','/api/product-reminders/dispatch'),options)});
   const serviceIntegrationWorker=startPurchaseEmailWorker(config,{source:{...process.env,PURCHASE_EMAILS_WORKER_ENABLED:process.env.SERVICE_INTEGRATIONS_WORKER_ENABLED??process.env.PRODUCT_REMINDERS_WORKER_ENABLED,PURCHASE_EMAIL_DISPATCH_SECRET:process.env.PRODUCT_REMINDER_DISPATCH_SECRET},fetcher:(url,options)=>loopbackRequest(String(url).replace('/api/purchase-emails/dispatch','/api/service-integrations/dispatch'),options)});
-  server.once('close',()=>{purchaseEmailWorker.stop();productReminderWorker.stop();serviceIntegrationWorker.stop();});
+  server.once('close',()=>{automationWorker.stop();purchaseEmailWorker.stop();productReminderWorker.stop();serviceIntegrationWorker.stop();});
   const shutdown = () => {
     if (stopping) return;
     stopping = true;
-    clearInterval(dispatchTimer);
+    automationWorker.stop();
     purchaseEmailWorker.stop();
     productReminderWorker.stop();
     serviceIntegrationWorker.stop();

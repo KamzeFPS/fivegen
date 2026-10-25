@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {leadFormSchema,type PagePurpose} from './public-pages';
 import {applicationFormConfigSchema} from './service-applications';
 import type {ProductStudioConfig} from './product-studio-contract';
+import type {OfferView} from './offer-view';
 
 export const productPageLinkSchema = z.object({
   label: z.string().trim().min(1).max(60),
@@ -85,12 +86,14 @@ export type PublicProductSummary = {
   sections: { title: string; category?: string }[];
   priceCents?: number; currency?: string; benefits?: string[];
 };
-export type LandingCommerce = { amount: number; currency: string; enabled: boolean; paidReady?:boolean; path: string | null; mode?: 'test' | 'live'; model?: string; interval?: string; publicationVersion?: number; checkout?: {slug:string; pricing?:ProductStudioConfig['pricing']; tiers?:{id:string;name:string;description:string;billing:'free'|'month'|'year';priceCents:number}[]; physical?:boolean}; };
+export type LandingCommerce = { amount: number; currency: string; enabled: boolean; paidReady?:boolean; path: string | null; mode?: 'test' | 'live'; model?: string; interval?: string; publicationVersion?: number; source?:'draft'|'published'; offer?:OfferView; availabilityMessage?:string; includedProducts?:{id:string;title:string;publicationVersion:number}[]; checkout?: {slug:string; pricing?:ProductStudioConfig['pricing']; tiers?:{id:string;name:string;description:string;billing:'free'|'month'|'year';priceCents:number}[]; physical?:boolean}; };
 export type ProductPageState = {
   id?:string;purpose?:PagePurpose;name?:string;
   draft: ProductPageConfig; published: ProductPageConfig | null; publishedAt: number | null;
   updatedAt: number; publicPath: string; reviewSummary: ProductReviewSummary;
   commerce?: LandingCommerce;
+  publishedCommerce?:LandingCommerce;
+  product?:PublicProductSummary;
 };
 export type PublicProductPage = {
   pageId?:string;pagePurpose?:PagePurpose;

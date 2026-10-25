@@ -49,7 +49,7 @@ async function harness(search = '') {
   };
   const dependencies = {
     ...Object.fromEntries(['ArrowDownToLine','ArrowLeft','ArrowRight','BookOpen','CalendarDays','CheckCircle2','ChevronDown','Clock3','FileText','GraduationCap','Layers','LockKeyhole','Play','Users'].map(name=>[name,icons[name]])),...presentation,renderStudioMarkdown,CustomerLearning:()=>null,CustomerCommunity:()=>null,CustomerService:()=>null,PurchasedProductResources:()=>null,ProductReminders:()=>null,ProductPushReminders:()=>null,ProductFulfillment:()=>null,ProductUpdateNotice:()=>null,TeamContent:()=>null,WrittenContent,BuyerSubscription:()=>null,
-    PurchaseRecovery:'purchase-recovery',PurchaseHelp:'purchase-help',Dialog:()=>null,DialogContent:()=>null,DialogHeader:()=>null,DialogTitle:()=>null,DialogDescription:()=>null,DialogFooter:()=>null,
+    WorkspaceExample:'workspace-example',PurchaseRecovery:'purchase-recovery',PurchaseHelp:'purchase-help',Dialog:()=>null,DialogContent:()=>null,DialogHeader:()=>null,DialogTitle:()=>null,DialogDescription:()=>null,DialogFooter:()=>null,
     React, useState, useRef, useCallback, useEffect, Link:'a', Brand:()=>React.createElement('span',null,'FiveGen'), location:browserLocation,
     window:{location:browserLocation,history:{replaceState(_state,_title,url){browserLocation.href=String(url);browserLocation.search=new URL(String(url)).search;}}},
     commerceMoney:amount => `$${(amount / 100).toFixed(2)}`,
@@ -96,13 +96,26 @@ const content = (id = 'paid-a', extra = {}) => ({
   intakePrompt:'', meetingUrl:'', booking:null, slots:[], ...extra,
 });
 
+// An empty buyer library keeps purchase recovery primary. The reversible
+// shared illustration does not manufacture a paid order or resource request.
+{
+ const app=await harness();await app.respond(0,{orders:[]});
+ const recovery=app.find('a').find(link=>text(link).includes('Find my purchases'));
+ assert.ok(recovery);assert.equal(recovery.props.className,'buyer-button primary');assert.match(recovery.props.href,/signin-with-chatgpt/);
+ const sample=app.find('workspace-example');assert.equal(sample.length,1);assert.equal(sample[0].props.kind,'library');
+ assert.equal(app.requests.length,1,'No sample purchase or content is fetched for the empty library');
+ assert.match(app.text,/Your library is waiting/);app.dispose();
+ const failed=await harness();await failed.respond(0,{error:'Purchases could not load.'},503);
+ assert.equal(failed.find('workspace-example').length,0,'A loading failure is not misrepresented as an empty library');failed.dispose();
+}
+
 // The exact report: a paid book plus an abandoned pending attempt. Both the
 // plain library URL and a pending checkout return must open the existing book.
 for (const search of ['', '?order=pending-order']) {
   const app = await harness(search);
   await app.respond(0,{orders:[paidA,pending], paymentStatusError:search ? 'Still checking your latest payment.' : undefined});
   assert.equal(app.requests[1].url,'/api/commerce/customer/paid-a');
-  assert.match(app.text,/Opening your product/);
+  assert.match(app.text,/Opening your product/);assert.equal(app.find('workspace-example').length,0,'The sample never replaces a real purchase');
   assert.doesNotMatch(app.text,/Select a paid product/);
   await app.respond(1,content());
   assert.match(app.text,/Private purchased content for paid-a/);

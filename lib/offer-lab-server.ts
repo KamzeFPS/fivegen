@@ -86,7 +86,7 @@ export async function exportOfferResponses(productId: string, owner: string) {
   return new Response(stream, { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="offer-feedback.csv"', 'Cache-Control': 'private, no-store', 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff' } });
 }
 export async function publicOfferStudy(slug: string) {
-  const row = await database().prepare("SELECT e.* FROM offer_experiments e JOIN products p ON p.id=e.product_id AND p.owner=e.owner WHERE e.slug=? AND e.status='live' AND e.published IS NOT NULL").bind(slug).first();
+  const row = await database().prepare("SELECT e.* FROM offer_experiments e JOIN products p ON p.id=e.product_id AND p.owner=e.owner WHERE e.slug=? AND p.archived_at IS NULL AND e.status='live' AND e.published IS NOT NULL").bind(slug).first();
   if (!row) throw new ApiError('This offer survey is unavailable.', 404);
   return { productId: String(row.product_id), owner: String(row.owner), slug: String(row.slug), revision: Number(row.published_revision), study: (()=>{const study=offerStudySchema.parse(JSON.parse(String(row.published)));return {question:study.question,problem:study.problem,a:study.a,b:study.b};})() };
 }

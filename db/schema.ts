@@ -1,3 +1,4 @@
+export * from './creator-catalog-schema';
 import { sqliteTable, text, integer, index, uniqueIndex, primaryKey, unique, check } from "drizzle-orm/sqlite-core";
 import { sql } from 'drizzle-orm';
 export * from './growth-schema';
@@ -83,6 +84,7 @@ export const products = sqliteTable(
     color: text("color").notNull(),
     content: text("content").notNull(),
     status: text("status").notNull().default("draft"),
+    archivedAt: integer("archived_at"),
     commerce: text("commerce").notNull().default("{}"),
     experience: text("experience").notNull().default("{}"),
     createdAt: integer("created_at").notNull(),
@@ -90,6 +92,7 @@ export const products = sqliteTable(
   },
   (t) => [index("idx_products_owner").on(t.owner)],
 );
+export const productArchiveEvents=sqliteTable('product_archive_events',{id:text('id').primaryKey(),productId:text('product_id').notNull(),owner:text('owner').notNull(),action:text('action').notNull(),createdAt:integer('created_at').notNull()},t=>[index('idx_product_archive_history').on(t.owner,t.productId,t.createdAt)]);
 export const sellers = sqliteTable("sellers", {
   owner: text("owner").primaryKey(),
   name: text("name").notNull().default("My studio"),

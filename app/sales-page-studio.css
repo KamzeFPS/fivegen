@@ -23,3 +23,56 @@
 @media(max-width:600px){.public-page-manager{align-items:stretch}.public-page-manager>label{width:100%}.sales-dialog-body .sales-history-row{flex-wrap:wrap;gap:12px}.sales-dialog-body .sales-history-row p{overflow-wrap:anywhere}}
 .public-page-manager>label{color:#b8bec8}.public-page-manager select{appearance:none;background:#1b1d21;color:#eceef2;border-color:#3b4049;padding-right:24px}.landing-hero.is-form{grid-template-columns:minmax(0,1fr)}.landing-hero.is-form .landing-hero-inline-action{display:block;margin-top:24px}.sales-dialog-body label{color:#b8bec8}.sales-dialog-body input:not([type=checkbox]),.sales-dialog-body select,.sales-dialog-body textarea{background:#16181c;color:#eceef2}
 .public-page-manager>label{min-width:0;width:min(340px,100%)}.public-page-manager select{width:100%;min-width:0;box-sizing:border-box}
+
+/* Keep page colors independent of the creator workspace, including theme overrides. */
+.sales-landing :is(h1,h2,h3,h4,h5,h6){color:var(--landing-text)}
+.sales-landing :is(.landing-wordmark,.landing-benefits,.landing-curriculum summary,.landing-faq summary,.landing-social a){color:var(--landing-text)}
+.sales-landing :is(.landing-eyebrow,.landing-wordmark>span,.landing-benefits svg,.landing-rating svg,.landing-test-label){color:var(--landing-accent-text,var(--landing-accent))}
+.sales-landing .landing-offer{color:var(--landing-card-text,var(--landing-text))}
+.sales-landing .landing-offer :is(p,.landing-offer-note){color:var(--landing-card-muted,var(--landing-muted))}
+.sales-landing .landing-offer .landing-test-label{color:var(--landing-card-accent,var(--landing-card-text,var(--landing-text)))}
+.sales-landing .landing-action{color:var(--landing-button-ink)}
+.sales-landing .landing-action.unavailable{color:var(--landing-card-muted,var(--landing-muted))}
+.sales-landing .landing-hero.with-art .landing-hero-copy :is(h1,h2,h3){color:var(--landing-hero-text,#fff)}
+.sales-landing .landing-hero.with-art .landing-hero-copy>p,.sales-landing .landing-hero.with-art .landing-creator-byline{color:var(--landing-hero-muted,#ede8e3)}
+.sales-landing .landing-hero.with-art .landing-eyebrow{color:#f9d5bf}
+.sales-landing .landing-hero-scrim{background:linear-gradient(90deg,#000d,#000b)}
+.sales-landing:is(.template-essential,.template-mentorship) .landing-hero-art{opacity:.16}
+.sales-landing:is(.template-essential,.template-mentorship) .landing-hero-scrim{background:color-mix(in srgb,var(--landing-bg) 70%,transparent)}
+.sales-landing:is(.template-essential,.template-mentorship) .landing-hero.with-art .landing-hero-copy :is(h1,h2,h3){color:var(--landing-text)}
+.sales-landing:is(.template-essential,.template-mentorship) .landing-hero.with-art .landing-hero-copy>p,.sales-landing:is(.template-essential,.template-mentorship) .landing-hero.with-art .landing-creator-byline{color:var(--landing-muted)}
+.sales-landing:is(.template-essential,.template-mentorship) .landing-hero.with-art .landing-eyebrow{color:var(--landing-accent-text,var(--landing-text))}
+.sales-landing :is(input,textarea,select,button,a,summary,video):focus-visible{outline:3px solid var(--landing-focus,#ffab79);outline-offset:4px;box-shadow:0 0 0 2px var(--landing-bg)}
+.sales-landing :is(.landing-public-form,.public-application-form){background:var(--landing-card);color:var(--landing-card-text,var(--landing-text))}
+.sales-landing :is(.landing-public-form,.public-application-form) :is(label,p,small,legend){color:inherit}
+.sales-landing [role=alert]{border-left:3px solid currentColor;padding:10px 12px;font-weight:600;color:inherit}
+.sales-landing :is(input,textarea,select)::placeholder{color:inherit;opacity:.72}
+.sales-landing :is(input,textarea,select){color-scheme:normal}
+.sales-landing .landing-section-inner,.sales-landing .landing-hero-copy{overflow-wrap:anywhere}
+.sales-landing .landing-curriculum summary,.sales-landing .landing-faq summary,.sales-landing .landing-social a{min-height:44px}
+.sales-landing .landing-footer a{min-height:44px}
+.sales-studio-status>span>small{display:block;font-size:11px;line-height:1.6;color:#b9c2cf;margin-top:3px}
+.sales-studio-error{flex-wrap:wrap;line-height:1.6}.sales-studio-error button{min-height:36px}
+.sales-studio-workbench{grid-template-columns:minmax(260px,min(var(--sales-inspector-width,340px),46%)) minmax(0,1fr)}
+.sales-studio-workbench.is-full-width{grid-template-columns:minmax(0,1fr)}
+.sales-studio-workbench.is-full-width .sales-inspector{display:none}
+.sales-studio-workbench.is-full-width .sales-preview-scroll{min-height:70vh;max-height:calc(100vh - 180px)}
+.sales-inspector-size{display:grid!important;grid-template-columns:1fr auto;gap:8px!important;border-bottom:1px solid #353941;padding-bottom:14px;margin-bottom:16px!important}
+.sales-inspector-size input{grid-column:1/-1;width:100%;min-height:28px;accent-color:#ff804a}
+.sales-inspector-size span{color:#c8cfd8}
+.sales-section-empty,.sales-ownership-note{padding:13px;border:1px solid #3d4653;background:#20252c;border-radius:8px;color:#c4ccd7;font-size:12px;line-height:1.7}
+.sales-ownership-note p{margin:8px 0}.sales-ownership-note strong{display:block;color:#edf0f4}
+.sales-section-empty h3{color:#edf0f4;margin:0 0 8px;font-size:16px}.sales-section-empty p{margin:0 0 16px}
+.sales-buyer-preview{max-width:none}
+.sales-reorder{opacity:1;flex-direction:row}.sales-reorder button{min-width:28px;min-height:28px;height:auto;padding:5px}
+/* The real buyer renderer needs its own surface variables inside the owner simulation. */
+.buyer-simulation-preview{--fg-bg:#111214;--fg-panel:#1b1d21;--fg-surface:#262a30;--fg-text:#f1f3f6;--fg-muted:#bbc2cc;--fg-border:#444b57;--fg-accent:#ff995d;--fg-paper:#fbf8f1;--fg-ink:#302d28;color:var(--fg-text);background:var(--fg-bg);padding:24px;border:1px solid var(--fg-border);border-radius:12px}
+.buyer-simulation-preview :is(.buyer-learning,.buyer-session,.buyer-community,.buyer-resources){color:var(--fg-text)}
+.buyer-simulation-preview :is(.buyer-active-lesson,.buyer-service-session,.buyer-community-post,.buyer-learning-callout){background:var(--fg-panel);color:var(--fg-text)}
+.buyer-simulation-preview .buyer-learning.is-challenge .buyer-active-lesson{background:var(--fg-paper);color:var(--fg-ink)}
+.buyer-simulation-preview :is(button,a,summary,input,select,textarea):focus-visible{outline:3px solid #ff995d;outline-offset:4px}
+@media(max-width:800px){.sales-studio-workbench{display:block}.sales-inspector-size{display:none!important}.sales-inspector input:not([type=checkbox]):not([type=color]):not([type=file]),.sales-inspector textarea,.sales-inspector select{font-size:16px}.sales-preview-toolbar{flex-wrap:wrap}.sales-preview-toolbar button:not(.button),.sales-page-studio .sales-icon-button,.sales-page-studio .sales-text-button{min-height:44px}.sales-preview-toolbar>div{margin-left:auto}.sales-studio-workbench.is-full-width .sales-preview-scroll{min-height:65vh;max-height:none}.sales-reorder button{min-width:38px;min-height:44px}.buyer-simulation-preview{padding:16px}}
+@container landing (max-width:470px){.sales-landing .landing-hero h1{font-size:clamp(29px,8.8cqw,38px)}.sales-landing .landing-hero-copy>p{font-size:15px;line-height:1.75}.sales-landing .landing-section-inner>p,.sales-landing .landing-section-inner>div>p,.sales-landing .landing-benefits li{font-size:14px}.sales-landing .landing-footer{font-size:12px}.sales-landing .landing-curriculum summary,.sales-landing .landing-faq summary{font-size:14px;line-height:1.6}}
+
+.sales-studio-workbench.is-full-width .sales-mobile-open{display:none!important}
+.sales-landing .landing-empty-section{opacity:1}

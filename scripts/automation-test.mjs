@@ -43,6 +43,7 @@ deps.listMarketingDestinations=async()=>[];deps.resolveMarketingDestination=asyn
 Object.assign(deps,await load('lib/purchase-email.ts'));
 Object.assign(deps, await load('lib/checkout-recovery-eligibility.ts'));
 Object.assign(deps, await load('lib/automation-server.ts'));
+Object.assign(deps, await load('lib/product-archive-server.ts'));
 const api = await load('app/api/automations/route.ts'), worker = await load('app/api/automations/dispatch/route.ts'), unsubscribe = await load('app/api/automations/unsubscribe/route.ts');
 const base = 'https://fivegen.test';
 const request = (path, method = 'GET', body, headers = {}) => new Request(base + path, { method, headers: { 'Content-Type': 'application/json', origin: base, ...headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
@@ -95,6 +96,10 @@ try {
   lead('catchup@example.test'); await deps.dispatchAutomations(); assert.equal(jobs('catchup@example.test')[0].status, 'sent', 'Worker recovers enrollment after signup persistence without a hook');
   const revoked = purchase('refunded@example.test'); await deps.enrollAutomationPurchase(revoked); storage.sqlite.prepare("UPDATE commerce_orders SET status='revoked' WHERE id=?").run(revoked); const beforeRefund = networkCalls; await deps.dispatchAutomations(); assert.equal(networkCalls, beforeRefund); assert.equal(jobs('refunded@example.test')[0].status, 'cancelled');
   response = await api.GET(request(`/api/automations?productId=${productId}`)); assert.equal(response.status, 200); const state = await response.json(); assert.ok(state.counts.sent >= 1); assert.ok(state.logs.some(log => log.status === 'failed')); assert.equal(response.headers.get('cache-control'), 'private, no-store'); assert.ok(!JSON.stringify(state).includes(configuration.AUTOMATION_DISPATCH_SECRET));
+  lead('archived-before-send@example.test');await deps.enrollAutomationLead(productId,owner,'archived-before-send@example.test');
+  let archive;duringProviderKey=async()=>{archive=await deps.setProductArchive(productId,owner,{action:'archive',expectedUpdatedAt:Number(storage.sqlite.prepare('SELECT updated_at FROM products WHERE id=?').get(productId).updated_at)});};
+  const beforeArchiveSend=networkCalls;await deps.dispatchAutomations();assert.equal(networkCalls,beforeArchiveSend,'An archive during asynchronous preparation is rechecked before provider I/O');assert.equal(jobs('archived-before-send@example.test')[0].status,'pending','Unsent marketing is held behind a paused sequence');
+  await deps.setProductArchive(productId,owner,{action:'restore',expectedUpdatedAt:archive.product.updatedAt});await deps.dispatchAutomations();assert.equal(networkCalls,beforeArchiveSend,'Restoring a product does not silently resume its held email queue');
   console.log('Passed: real SQLite sequences, optimistic edits, immutable approval, missing-config gates, owner isolation, CSRF, worker authentication, consent, activation windows, event dedupe, purchase stop rules, test/live isolation, paid onboarding, retry idempotency, leases, relative delays, pause/revoke rechecks, hashed unsubscribe and creator-wide suppression, catch-up enrollment, expired retry windows and refund cancellation. All email requests mocked; no external sends.');
   console.log('QA records retained: ' + root);
 } finally { globalThis.fetch = realFetch; Date.now = realNow; storage.close(); }

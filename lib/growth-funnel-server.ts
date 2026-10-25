@@ -12,7 +12,7 @@ export async function getOwnedFunnel(productId: string, owner: string) {
   return row ? funnelFromRow(row) : null;
 }
 export async function getPublicFunnel(slug: string) {
-  const row = await database().prepare("SELECT f.* FROM growth_funnels f JOIN products p ON p.id=f.product_id AND p.owner=f.owner WHERE f.slug=? AND f.published_at IS NOT NULL").bind(slug).first();
+  const row = await database().prepare("SELECT f.* FROM growth_funnels f JOIN products p ON p.id=f.product_id AND p.owner=f.owner WHERE f.slug=? AND p.archived_at IS NULL AND f.published_at IS NOT NULL").bind(slug).first();
   if (!row) throw new ApiError("This page is unavailable.", 404);
   return { ...funnelFromRow(row), productId: String(row.product_id), owner: String(row.owner) };
 }
@@ -38,6 +38,7 @@ export async function saveFunnelVideoDraft(productId:string,owner:string,input:{
 }
 export async function publishFunnel(productId: string, owner: string, input: { expectedUpdatedAt: number; expectedGrowthUpdatedAt: number; creatorVslUploadId: string | null;expectedVideoDraftUpdatedAt?:number }) {
   const product = await ownedProduct(productId, owner);
+  if(product.archived_at!=null)throw new ApiError('Restore this product before publishing.',409);
   const growth = await getGrowth(productId, owner);
   if (growth.updatedAt !== input.expectedGrowthUpdatedAt) throw new ApiError("Your draft changed. Reload it before publishing.", 409);
   if (!growth.assets) throw new ApiError("Save landing page copy before publishing.");

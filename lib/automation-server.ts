@@ -1,6 +1,6 @@
 import { ApiError, binding, database, ownedProduct } from '@/lib/server';
 import { providerKey, providerSettings } from '@/lib/ai';
-import { automationDraftSchema, renderAutomationText, type AutomationDraft, type AutomationSequence, type AutomationWorkspace, type AutomationTrigger } from '@/lib/automation';
+import { automationDraftSchema, isRelationshipAutomation, isTransactionalAutomation, renderAutomationText, type AutomationDraft, type AutomationSequence, type AutomationWorkspace, type AutomationTrigger } from '@/lib/automation';
 import {checkoutRecoveryEligibility,checkoutRecoveryCandidates,checkoutRecoveryGuard} from './checkout-recovery-eligibility';
 
 import { assertCreatorContextRefs,creatorContextGuard } from './creator-context-server';
@@ -8,7 +8,7 @@ import {listMarketingDestinations,resolveMarketingDestination,destinationGuard} 
 import {getReplyTemplate} from './reply-template-server';
 
 type Row = Record<string, unknown>;
-type Snapshot = AutomationDraft & { from: string; origin: string; trigger: AutomationTrigger; name: string; product: string; funnel_url: string; portal_url: string;checkout_url:string;product_url?:string };
+type Snapshot = AutomationDraft & { from: string; origin: string; trigger: AutomationTrigger; name: string; product: string; funnel_url: string; portal_url: string;checkout_url:string;product_url?:string;relationshipEventId?:string;booking_time?:string;event_label?:string };
 const noStore = { 'Cache-Control': 'private, no-store', 'Referrer-Policy': 'no-referrer' };
 export const automationResponseHeaders = noStore;
 function sequence(row: Row): AutomationSequence {
@@ -21,6 +21,7 @@ export async function automationReadiness() {
   const settings = await providerSettings(), sender = settings.config.emailFrom || binding('EMAIL_FROM');
   if (!settings.connected.resend || !sender) return { ready: false, message: 'FiveGen delivery setup is incomplete. Your drafts are safe; the FiveGen administrator needs to connect and verify the platform sender. You can export copy or contact support, then recheck readiness.' };
   if (!/^[^<>\s]+@[^<>\s]+\.[^<>\s]+$/.test(sender)) return { ready: false, message: 'The platform sending address needs attention from the FiveGen administrator. Keep editing your drafts and use manual export until delivery is ready.' };
+  if(binding('AUTOMATIONS_WORKER_ENABLED')==='false')return {ready:false,message:'FiveGen’s email worker is paused by the platform administrator. Your approved drafts will not send. Contact support or export your copy; recheck readiness after the platform resumes delivery.'};
   if (!origin() || binding('AUTOMATION_DISPATCH_SECRET').length < 32) return { ready: false, message: 'FiveGen’s delivery worker is not ready. This is a platform setup task, not a change to your sender details. Save or export your drafts and recheck later.' };
   return { ready: true, message: 'Email delivery is configured. Review your copy and sender details before activating.' };
 }
@@ -32,12 +33,13 @@ export async function getAutomationWorkspace(productId: string, owner: string): 
   return {destinations:await listMarketingDestinations(productId,owner),origin:origin(),manualTemplate:await getReplyTemplate(productId,owner),sequences: rows.results.map(sequence), readiness: await automationReadiness(), counts: Object.fromEntries(counts.results.map(r => [String(r.status), Number(r.count)])), logs: logRows.results.map(r => ({ id: String(r.id),enrollmentId:String(r.enrollment_id),stepIndex:Number(r.step_index),sequenceRevision:Number(r.sequence_revision), email: String(r.email), subject: (JSON.parse(String(r.snapshot)) as Snapshot).steps[Number(r.step_index)]?.subject || '', status: r.status==='pending'&&r.sequence_status==='paused'?'paused':String(r.status), dueAt: Number(r.due_at), sentAt: r.sent_at == null ? null : Number(r.sent_at), attempts: Number(r.attempts), error: String(r.error) })) };
 }
 function validateRecoveryDraft(trigger:AutomationTrigger,draft:AutomationDraft){
+  if(isRelationshipAutomation(trigger)&&(draft.steps.length!==1||draft.steps[0].kind!=='onboarding'||draft.steps[0].delayHours>24||!!draft.provenance||draft.steps.some(step=>!!step.campaignSource)))throw new ApiError('Relationship notices are one transactional service email within 24 hours, not a marketing campaign. Keep promotional copy in the consent-based lead sequence.');
   if(trigger==='checkout-recovery'&&(draft.steps.length!==1||draft.steps[0].kind!=='reminder'||draft.steps[0].delayHours<24||draft.steps[0].delayHours>168))throw new ApiError('Checkout recovery is one reminder, 24 to 168 hours after checkout, capped at one per person and product every 30 days.');
 }
 export async function saveAutomation(productId: string, owner: string, trigger: AutomationTrigger, draftInput: unknown, expectedRevision: number, sourceGuard:{sql:string;values:(string|number)[]}={sql:'',values:[]}) {
   await ownedProduct(productId, owner); const draft = automationDraftSchema.parse(draftInput);
   validateRecoveryDraft(trigger,draft);
-  if (trigger === 'purchase' && draft.steps.some(s => s.kind !== 'onboarding')) throw new ApiError('Purchase emails must contain customer onboarding only. Keep promotional content in the consent-based lead sequence.');
+  if (isTransactionalAutomation(trigger) && draft.steps.some(s => s.kind !== 'onboarding')) throw new ApiError('Purchase emails must contain customer onboarding only. Keep promotional content in the consent-based lead sequence.');
   if (trigger === 'lead' && draft.steps.some(s => s.kind === 'onboarding')) throw new ApiError('Use the purchase sequence for customer onboarding.');
   const now = Date.now();
   const result = await database().prepare(`INSERT INTO automation_sequences (id,owner,product_id,trigger,status,draft,revision,updated_at)
@@ -62,11 +64,11 @@ export async function setAutomationStatus(productId: string, owner: string, trig
     const sources=draft.steps.flatMap(step=>step.campaignSource?.sourceRefs?[step.campaignSource.sourceRefs]:[]);for(const refs of sources)await assertCreatorContextRefs(owner,productId,refs);
     const briefRevisions=[...new Set(draft.steps.flatMap(step=>step.campaignSource?.briefRevision?[step.campaignSource.briefRevision]:[]))];if(briefRevisions.length){const growth=await database().prepare('SELECT updated_at FROM growth_workspaces WHERE product_id=? AND owner=?').bind(productId,owner).first();if(briefRevisions.some(revision=>revision!==Number(growth?.updated_at)))throw new ApiError('An imported campaign email uses an older offer brief. Review and update the affected draft before activation.',409);}
     const selectedDestinations=draft.steps.map(step=>step.destination||draft.destination||null);
-    for(let index=0;index<draft.steps.length;index++){const step=draft.steps[index],required=trigger!=='purchase'||/\{\{(?:product_url|funnel_url|checkout_url)\}\}/.test(step.body);if(required&&!selectedDestinations[index])throw new ApiError(`Select and review a currently published destination for email ${index+1} before activating.`,409);}
+    for(let index=0;index<draft.steps.length;index++){const step=draft.steps[index],required=!isTransactionalAutomation(trigger)||/\{\{(?:product_url|funnel_url|checkout_url)\}\}/.test(step.body);if(required&&!selectedDestinations[index])throw new ApiError(`Select and review a currently published destination for email ${index+1} before activating.`,409);}
     const destinations=await Promise.all(selectedDestinations.filter((value):value is NonNullable<typeof value>=>!!value).map(value=>resolveMarketingDestination(productId,owner,value)));
     const destination=draft.destination?await resolveMarketingDestination(productId,owner,draft.destination):null;
     if (!draft.replyTo) throw new ApiError('Add your reply-to email before activating.');
-    if (trigger !== 'purchase' && !draft.postalAddress.trim()) throw new ApiError('Add your business mailing address for the marketing email footer.');
+    if (!isTransactionalAutomation(trigger) && !draft.postalAddress.trim()) throw new ApiError('Add your business mailing address for the marketing email footer.');
     const config = await providerSettings();
     const guards=[...(draft.provenance?.sourceRefs?[creatorContextGuard(owner,productId,draft.provenance.sourceRefs)]:[]),...sources.map(refs=>creatorContextGuard(owner,productId,refs)),...destinations.map(value=>destinationGuard(value,owner)),...briefRevisions.map(revision=>({sql:' AND EXISTS(SELECT 1 FROM growth_workspaces WHERE product_id=? AND owner=? AND updated_at=?)',values:[productId,owner,revision]}))],guard={sql:guards.map(g=>g.sql).join(''),values:guards.flatMap(g=>g.values)};
     const approved = { ...draft,...(destination?{destination,resolvedDestinationUrl:origin()+destination.path}:{}), from: config.config.emailFrom || binding('EMAIL_FROM'), origin: origin(), trigger };
@@ -87,10 +89,12 @@ async function recoveryOfferPath(productId:string,owner:string){
   const row=await database().prepare(`SELECT p.slug,pp.published_at,b.slug builder_slug,g.slug funnel_slug,g.published_at funnel_published,f.published_revision_id file_revision FROM products p LEFT JOIN product_pages pp ON pp.product_id=p.id AND pp.owner=p.owner LEFT JOIN product_builder_publications b ON b.product_id=p.id AND b.owner=p.owner LEFT JOIN growth_funnels g ON g.product_id=p.id AND g.owner=p.owner LEFT JOIN file_sale_drafts f ON f.product_id=p.id WHERE p.id=? AND p.owner=?`).bind(productId,owner).first();
   return !row?null:row.published_at?`/product/${encodeURIComponent(String(row.slug))}`:row.builder_slug?`/b/${encodeURIComponent(String(row.builder_slug))}`:row.file_revision?`/p/${encodeURIComponent(String(row.slug))}`:row.funnel_published?`/g/${encodeURIComponent(String(row.funnel_slug))}`:null;
 }
-async function enroll(row: Row, event: { eventId: string; email: string; name: string; leadId?: string; orderId?: string; createdAt: number }) {
+async function enroll(row: Row, event: { eventId: string; email: string; name: string; leadId?: string; orderId?: string; createdAt: number; relationshipEventId?:string }) {
   if (row.status !== 'active' || !row.approved || event.createdAt < Number(row.activated_at || 0)) return;
   const owner = String(row.owner), productId = String(row.product_id), trigger = row.trigger as AutomationTrigger;
-  if (trigger !== 'purchase' && (await suppressed(owner, event.email) || await paid(productId, owner, event.email))) return;
+  const relationship=isRelationshipAutomation(trigger)&&event.relationshipEventId?await database().prepare('SELECT * FROM automation_relationship_events WHERE id=? AND owner=? AND product_id=? AND trigger=? AND email=?').bind(event.relationshipEventId,owner,productId,trigger,event.email).first():null;
+  if(isRelationshipAutomation(trigger)&&(!relationship||!await relationshipEventEligible(relationship)))return;
+  if (!isTransactionalAutomation(trigger) && (await suppressed(owner, event.email) || await paid(productId, owner, event.email))) return;
   if(trigger==='checkout-recovery'){
     const eligible=event.orderId?await checkoutRecoveryEligibility(event.orderId):null;
     if(!eligible||eligible.owner!==owner||eligible.productId!==productId||eligible.email!==event.email||eligible.leadId!==event.leadId)return;
@@ -102,12 +106,12 @@ async function enroll(row: Row, event: { eventId: string; email: string; name: s
   validateRecoveryDraft(trigger,approved);
   for(const destination of approved.steps.map(step=>step.destination||approved.destination).filter(Boolean)){try{await resolveMarketingDestination(productId,owner,destination);}catch{return;}}
   const destinationUrl=approved.destination?approved.origin+approved.destination.path:null;
-  const snapshot: Snapshot = { ...approved, name: event.name || 'there', product: String(product.title), product_url:destinationUrl||`${approved.origin}/product/${String(product.slug)}`,funnel_url:destinationUrl||`${approved.origin}/g/${String(product.slug)}`, portal_url: `${approved.origin}/customer`,checkout_url:destinationUrl||`${approved.origin}${restartPath}` };
+  const snapshot: Snapshot = { ...approved,...(relationship?{relationshipEventId:String(relationship.id),booking_time:relationship.starts_at?new Date(Number(relationship.starts_at)).toISOString().replace('T',' ').replace(/\.\d{3}Z$/,' UTC'):'',event_label:String(relationship.label)}:{}), name: event.name || 'there', product: String(product.title), product_url:destinationUrl||`${approved.origin}/product/${String(product.slug)}`,funnel_url:destinationUrl||`${approved.origin}/g/${String(product.slug)}`, portal_url: `${approved.origin}/customer`,checkout_url:destinationUrl||`${approved.origin}${restartPath}` };
   const recoveryGuard=trigger==='checkout-recovery'?checkoutRecoveryGuard(event.orderId!,now):{sql:'',values:[] as (string|number)[]};
   let offset = 0;
   const statements = [database().prepare(`INSERT OR IGNORE INTO automation_enrollments (id,owner,product_id,sequence_id,event_id,email,lead_id,order_id,revision,snapshot,created_at)
     SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM automation_sequences WHERE id=? AND status='active' AND approved_revision=?)${recoveryGuard.sql}`).bind(id, owner, productId, row.id, event.eventId, event.email, event.leadId || null, event.orderId || null, row.approved_revision, JSON.stringify(snapshot), now, row.id, row.approved_revision,...recoveryGuard.values)];
-  snapshot.steps.forEach((step, i) => { offset += Math.round(step.delayHours * 3600000); statements.push(database().prepare(`INSERT INTO automation_jobs (id,enrollment_id,owner,product_id,step_index,status,due_at,lease,attempts,error) SELECT ?,?,?,?,?,'pending',?,0,0,'' WHERE EXISTS(SELECT 1 FROM automation_enrollments WHERE id=?)`).bind(crypto.randomUUID(), id, owner, productId, i, Math.max(now,(trigger==='checkout-recovery'?event.createdAt:now) + offset), id)); });
+  snapshot.steps.forEach((step, i) => { offset += Math.round(step.delayHours * 3600000); statements.push(database().prepare(`INSERT INTO automation_jobs (id,enrollment_id,owner,product_id,step_index,status,due_at,lease,attempts,error) SELECT ?,?,?,?,?,'pending',?,0,0,'' WHERE EXISTS(SELECT 1 FROM automation_enrollments WHERE id=?)`).bind(crypto.randomUUID(), id, owner, productId, i, Math.max(now,(trigger==='checkout-recovery'||isRelationshipAutomation(trigger)?event.createdAt:now) + offset), id)); });
   await database().batch(statements);
 }
 export async function enrollAutomationLead(productId: string, owner: string, email: string) {
@@ -125,7 +129,7 @@ export async function enrollAutomationCheckoutRecovery(orderId:string){
 // Called only after the commerce webhook persists an authenticated, verified order.
 // The order is looked up again here, so caller-provided email/owner is never trusted.
 export async function enrollAutomationPurchase(orderId: string) {
-  const order = await database().prepare("SELECT * FROM commerce_orders WHERE id=? AND status='paid' AND mode='live'").bind(orderId).first();
+  const order = await database().prepare("SELECT o.* FROM commerce_orders o WHERE o.id=? AND o.status='paid' AND o.mode='live' AND NOT EXISTS(SELECT 1 FROM product_commerce_intents i WHERE i.order_id=o.id AND i.pricing_model='subscription' AND (i.status NOT IN('active','trialing') OR COALESCE(i.period_end,0)<=?))").bind(orderId,Date.now()).first();
   if (!order) return;
   const owner = String(order.owner), productId = String(order.product_id), email = String(order.email).toLowerCase();
   await database().prepare(`UPDATE automation_jobs SET status='cancelled',lease=0,error='Customer purchased this product.' WHERE owner=? AND product_id=? AND status IN ('pending','sending') AND enrollment_id IN (SELECT id FROM automation_enrollments WHERE owner=? AND email=? AND lead_id IS NOT NULL)`).bind(owner, productId, owner, email).run();
@@ -148,11 +152,32 @@ export async function unsubscribeAutomation(token: string) {
     database().prepare("UPDATE automation_jobs SET status='cancelled',lease=0,error='Recipient unsubscribed.' WHERE status IN ('pending','sending') AND enrollment_id IN(SELECT id FROM automation_enrollments WHERE owner=? AND email=? AND lead_id IS NOT NULL)").bind(row.owner, row.email),
   ]);
 }
+/** Recheck the persisted source, not a caller-supplied address or event name. */
+async function relationshipEventEligible(event:Row){
+ const now=Date.now();if(event.suppressed_at!=null||Number(event.occurred_at)>now+1000||Number(event.occurred_at)+7*86400000<=now)return false;
+ const db=database();let source:Row|null=null;
+ if(event.reference_kind==='application')source=await db.prepare('SELECT owner,product_id,email FROM service_applications WHERE id=? AND consent_at>0 AND length(review_consent)>0').bind(event.reference_id).first();
+ else if(event.reference_kind==='session')source=await db.prepare(`SELECT s.owner,s.product_id,o.email,s.status,s.starts_at,o.status order_status FROM product_service_sessions s JOIN commerce_orders o ON o.id=s.order_id AND o.owner=s.owner AND o.product_id=s.product_id WHERE s.id=? AND s.order_id=? AND s.mode='live' AND o.mode='live' AND ( ?='cancellation' OR NOT EXISTS(SELECT 1 FROM product_commerce_intents i WHERE i.order_id=o.id AND i.pricing_model='subscription' AND (i.status NOT IN('active','trialing') OR COALESCE(i.period_end,0)<=?)))`).bind(event.reference_id,event.order_id,event.trigger,now).first();
+ else if(event.reference_kind==='booking')source=await db.prepare(`SELECT b.owner,b.product_id,o.email,b.status,s.starts_at,o.status order_status FROM commerce_bookings b JOIN commerce_orders o ON o.id=b.order_id AND o.owner=b.owner AND o.product_id=b.product_id JOIN commerce_slots s ON s.id=b.slot_id WHERE b.id=? AND b.order_id=? AND b.mode='live' AND o.mode='live' AND ( ?='cancellation' OR NOT EXISTS(SELECT 1 FROM product_commerce_intents i WHERE i.order_id=o.id AND i.pricing_model='subscription' AND (i.status NOT IN('active','trialing') OR COALESCE(i.period_end,0)<=?)))`).bind(event.reference_id,event.order_id,event.trigger,now).first();
+ else if(event.reference_kind==='subscription')source=await db.prepare(`SELECT o.owner,o.product_id,o.email,i.status FROM product_commerce_intents i JOIN commerce_orders o ON o.id=i.order_id WHERE i.order_id=? AND i.pricing_model='subscription' AND o.mode='live'`).bind(event.order_id).first();
+ if(!source||source.owner!==event.owner||source.product_id!==event.product_id||String(source.email).toLowerCase()!==String(event.email).toLowerCase())return false;
+ if(event.trigger==='booking')return source.status==='confirmed'&&source.order_status==='paid'&&Number(source.starts_at)===Number(event.starts_at)&&Number(source.starts_at)>now;
+ if(event.trigger==='cancellation')return event.reference_kind==='subscription'?source.status==='canceled':source.status==='cancelled';
+ return event.trigger==='application'&&event.reference_kind==='application';
+}
+export async function enrollAutomationRelationship(eventId:string){
+ const db=database(),event=await db.prepare('SELECT * FROM automation_relationship_events WHERE id=? AND suppressed_at IS NULL').bind(eventId).first();if(!event)return;
+ if(!await relationshipEventEligible(event)){if(Number(event.occurred_at)<=Date.now())await db.prepare("UPDATE automation_relationship_events SET suppressed_at=?,suppression_reason='The persisted source changed, was removed or the service notice expired.' WHERE id=? AND suppressed_at IS NULL").bind(Date.now(),event.id).run();return;}
+ const row=await database().prepare("SELECT * FROM automation_sequences WHERE product_id=? AND owner=? AND trigger=? AND status='active'").bind(event.product_id,event.owner,event.trigger).first();
+ if(row)await enroll(row,{eventId:String(event.id),relationshipEventId:String(event.id),email:String(event.email),name:String(event.name),...(event.order_id?{orderId:String(event.order_id)}:{}),createdAt:Number(event.occurred_at)});
+}
 async function canSend(row: Row): Promise<'send' | 'pause' | string> {
-  const current = await database().prepare(`SELECT s.status FROM automation_sequences s JOIN products p ON p.id=s.product_id AND p.owner=s.owner WHERE s.id=? AND s.owner=?`).bind(row.sequence_id, row.owner).first();
+  const current = await database().prepare(`SELECT s.status,p.archived_at FROM automation_sequences s JOIN products p ON p.id=s.product_id AND p.owner=s.owner WHERE s.id=? AND s.owner=?`).bind(row.sequence_id, row.owner).first();
   if (!current) return 'The product or sequence was removed.';
-  if (current.status !== 'active') return 'pause';
-  if (row.lead_id) {
+  if (current.archived_at!=null || current.status !== 'active') return 'pause';
+  const approvedSnapshot=JSON.parse(String(row.snapshot)) as Snapshot;
+  if(isRelationshipAutomation(approvedSnapshot.trigger)){const event=approvedSnapshot.relationshipEventId?await database().prepare('SELECT * FROM automation_relationship_events WHERE id=? AND owner=? AND product_id=? AND email=? AND trigger=?').bind(approvedSnapshot.relationshipEventId,row.owner,row.product_id,row.email,approvedSnapshot.trigger).first():null;if(!event||!await relationshipEventEligible(event))return 'The application, booking or cancellation no longer matches this notice.';}
+  else if (row.lead_id) {
     if (await suppressed(String(row.owner), String(row.email))) return 'Recipient unsubscribed.';
     const lead = await database().prepare('SELECT id FROM growth_leads WHERE id=? AND owner=? AND product_id=? AND email=? AND marketing=1 AND consent_at IS NOT NULL').bind(row.lead_id, row.owner,row.product_id, row.email).first();
     if (!lead) return 'Marketing consent was revoked.';
@@ -164,10 +189,10 @@ async function canSend(row: Row): Promise<'send' | 'pause' | string> {
       const path=snapshot.steps[Number(row.step_index)]?.destination?.path||snapshot.destination?.path||await recoveryOfferPath(String(row.product_id),String(row.owner));if(!path||`${snapshot.origin}${path}`!==snapshot.checkout_url)return 'The public offer changed or was removed. Review the recovery destination.';
     }
   } else {
-    const order = await database().prepare("SELECT id FROM commerce_orders WHERE id=? AND owner=? AND product_id=? AND email=? AND status='paid' AND mode='live'").bind(row.order_id, row.owner, row.product_id, row.email).first();
+    const order = await database().prepare("SELECT o.id FROM commerce_orders o WHERE o.id=? AND o.owner=? AND o.product_id=? AND o.email=? AND o.status='paid' AND o.mode='live' AND NOT EXISTS(SELECT 1 FROM product_commerce_intents i WHERE i.order_id=o.id AND i.pricing_model='subscription' AND (i.status NOT IN('active','trialing') OR COALESCE(i.period_end,0)<=?))").bind(row.order_id,row.owner,row.product_id,row.email,Date.now()).first();
     if (!order) return 'The purchase is no longer active.';
   }
-  const approvedSnapshot=JSON.parse(String(row.snapshot)) as Snapshot,reviewedDestination=approvedSnapshot.steps[Number(row.step_index)]?.destination||approvedSnapshot.destination;if(reviewedDestination){try{await resolveMarketingDestination(String(row.product_id),String(row.owner),reviewedDestination);}catch{return 'The reviewed public email destination changed or was unpublished. Review a new destination for future participants.';}}
+  const reviewedDestination=approvedSnapshot.steps[Number(row.step_index)]?.destination||approvedSnapshot.destination;if(reviewedDestination){try{await resolveMarketingDestination(String(row.product_id),String(row.owner),reviewedDestination);}catch{return 'The reviewed public email destination changed or was unpublished. Review a new destination for future participants.';}}
   return 'send';
 }
 async function reconcileEnrollments() {
@@ -178,6 +203,8 @@ async function reconcileEnrollments() {
   const orders = await database().prepare(`SELECT o.id FROM commerce_orders o JOIN automation_sequences s ON s.product_id=o.product_id AND s.owner=o.owner AND s.trigger='purchase' AND s.status='active' WHERE o.status='paid' AND o.mode='live' AND o.paid_at>=s.activated_at AND NOT EXISTS(SELECT 1 FROM automation_enrollments e WHERE e.sequence_id=s.id AND e.event_id=o.id) ORDER BY o.paid_at LIMIT 100`).all();
   for (const order of orders.results) await enrollAutomationPurchase(String(order.id));
   for(const order of await checkoutRecoveryCandidates(Date.now(),100))await enrollAutomationCheckoutRecovery(order.id);
+  const relationshipEvents=await database().prepare(`SELECT e.id FROM automation_relationship_events e JOIN automation_sequences s ON s.owner=e.owner AND s.product_id=e.product_id AND s.trigger=e.trigger AND s.status='active' JOIN products p ON p.id=e.product_id AND p.owner=e.owner AND p.archived_at IS NULL WHERE e.suppressed_at IS NULL AND e.occurred_at>=s.activated_at AND e.occurred_at>=? AND e.occurred_at<=? AND NOT EXISTS(SELECT 1 FROM automation_enrollments a WHERE a.sequence_id=s.id AND a.event_id=e.id) ORDER BY e.occurred_at LIMIT 100`).bind(Date.now()-7*86400000,Date.now()).all();
+  for(const event of relationshipEvents.results)await enrollAutomationRelationship(String(event.id));
 }
 export async function dispatchAutomations(limit = 20) {
   const readiness = await automationReadiness(); if (!readiness.ready) return { processed: 0, sent: 0, message: readiness.message };
@@ -187,7 +214,7 @@ export async function dispatchAutomations(limit = 20) {
   let sent = 0, processed = 0;
   for (const candidate of jobs.results) {
     const lease = Date.now() + 60000;
-    const claimed = await database().prepare("UPDATE automation_jobs SET status='sending',lease=? WHERE id=? AND (status='pending' OR (status='sending' AND lease<?))").bind(lease, candidate.id, Date.now()).run();
+    const claimed = await database().prepare("UPDATE automation_jobs SET status='sending',lease=? WHERE id=? AND NOT EXISTS(SELECT 1 FROM products p WHERE p.id=automation_jobs.product_id AND p.archived_at IS NOT NULL) AND (status='pending' OR (status='sending' AND lease<?))").bind(lease, candidate.id, Date.now()).run();
     if (!claimed.meta.changes) continue; processed++;
     const row = await database().prepare('SELECT j.*,e.email,e.sequence_id,e.lead_id,e.order_id,e.snapshot FROM automation_jobs j JOIN automation_enrollments e ON e.id=j.enrollment_id WHERE j.id=?').bind(candidate.id).first(); if (!row) continue;
     // Resend retains idempotency keys for 24 hours. Never retry ambiguous sends
@@ -201,7 +228,7 @@ export async function dispatchAutomations(limit = 20) {
       if (permission === 'pause') { await finishJob(row, 'pending', 'Sequence paused.'); continue; }
       if (permission !== 'send') { await finishJob(row, 'cancelled', permission); continue; }
       let footer = '', unsubscribeUrl = '';
-      if (snapshot.trigger !== 'purchase') {
+      if (!isTransactionalAutomation(snapshot.trigger)) {
         const token = await unsubscribeToken(String(row.enrollment_id)), tokenHash = await hash(token);
         const existing = await database().prepare('SELECT hash FROM automation_unsubscribe_tokens WHERE enrollment_id=?').bind(row.enrollment_id).first();
         if (existing && existing.hash !== tokenHash) { await finishJob(row, 'failed', 'The worker signing key changed. Review delivery in Resend before retrying.'); continue; }
@@ -214,7 +241,7 @@ export async function dispatchAutomations(limit = 20) {
       const finalPermission = await canSend(row);
       if (!live) continue;
       if (finalPermission !== 'send') { await finishJob(row, finalPermission === 'pause' ? 'pending' : 'cancelled', finalPermission === 'pause' ? 'Sequence paused.' : finalPermission); continue; }
-      const attempt = await database().prepare("UPDATE automation_jobs SET attempts=attempts+1,first_attempt_at=COALESCE(first_attempt_at,?) WHERE id=? AND lease=? AND status='sending'").bind(Date.now(), row.id, lease).run();
+      const attempt = await database().prepare("UPDATE automation_jobs SET attempts=attempts+1,first_attempt_at=COALESCE(first_attempt_at,?) WHERE id=? AND lease=? AND status='sending' AND NOT EXISTS(SELECT 1 FROM products p WHERE p.id=automation_jobs.product_id AND p.archived_at IS NOT NULL)").bind(Date.now(), row.id, lease).run();
       if (!attempt.meta.changes) continue;
       row.attempts = Number(row.attempts) + 1;
       const response = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'Idempotency-Key': `fivegen-automation/${String(row.id)}` }, body: JSON.stringify({ from: `${snapshot.senderName} <${snapshot.from}>`, reply_to: snapshot.replyTo, to: [String(row.email)], subject:renderAutomationText(step.subject,step.destination?{...snapshot,product_url:snapshot.origin+step.destination.path,funnel_url:snapshot.origin+step.destination.path,checkout_url:snapshot.origin+step.destination.path}:snapshot),text:renderAutomationText(step.body,step.destination?{...snapshot,product_url:snapshot.origin+step.destination.path,funnel_url:snapshot.origin+step.destination.path,checkout_url:snapshot.origin+step.destination.path}:snapshot)+footer }), signal: AbortSignal.timeout(15000) });

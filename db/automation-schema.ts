@@ -27,3 +27,10 @@ export const automationSuppressions = sqliteTable('automation_suppressions', {
 export const automationUnsubscribeTokens = sqliteTable('automation_unsubscribe_tokens', {
   hash: text('hash').primaryKey(), owner: text('owner').notNull(), email: text('email').notNull(), enrollmentId: text('enrollment_id').notNull(), createdAt: integer('created_at').notNull(),
 }, t => [uniqueIndex('idx_automation_unsubscribe_enrollment').on(t.enrollmentId)]);
+
+export const automationRelationshipEvents = sqliteTable('automation_relationship_events', {
+  id:text('id').primaryKey(), owner:text('owner').notNull(), productId:text('product_id').notNull(),
+  trigger:text('trigger').notNull(), referenceKind:text('reference_kind').notNull(), referenceId:text('reference_id').notNull(), orderId:text('order_id'),
+  email:text('email').notNull(), name:text('name').notNull().default(''), occurredAt:integer('occurred_at').notNull(), startsAt:integer('starts_at'), label:text('label').notNull().default(''),
+  suppressedAt:integer('suppressed_at'), suppressionReason:text('suppression_reason').notNull().default(''),
+}, t=>[index('relationship_automation_pending').on(t.owner,t.productId,t.trigger,t.occurredAt)]);

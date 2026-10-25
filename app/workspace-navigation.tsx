@@ -1,7 +1,7 @@
 'use client';
 
 import {useState} from 'react';
-import {ArrowRight,ChevronDown,CircleAlert,Coins,CreditCard,Banknote,FolderOpen,History,Link2,LogOut,MessageSquare,Plus,ShieldCheck,TrendingUp,Users,LifeBuoy,Scale,FileText,LockKeyhole,Mail,ExternalLink} from 'lucide-react';
+import {ArrowRight,ChevronDown,CircleAlert,Coins,CreditCard,Banknote,FolderOpen,History,Link2,LogOut,MessageSquare,Plus,ShieldCheck,TrendingUp,Users,LifeBuoy,Scale,FileText,LockKeyhole,Mail,ExternalLink,BookOpen,ShoppingBag,Globe} from 'lucide-react';
 import {DropdownMenu,DropdownMenuContent,DropdownMenuItem,DropdownMenuLabel,DropdownMenuSeparator,DropdownMenuTrigger,DropdownMenuSub,DropdownMenuSubContent,DropdownMenuSubTrigger} from '@/components/ui/dropdown-menu';
 import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
 import {Brand} from './ui-brand';
@@ -51,12 +51,15 @@ export function WorkspaceNavigation({user,view,label,admin,products,creditsLabel
               <DropdownMenuLabel className="workspace-menu-section">YOUR WORKSPACE</DropdownMenuLabel>
               <DropdownMenuItem onSelect={()=>onVisit('/operations')}><CircleAlert/><span>Attention & support</span></DropdownMenuItem>
               <DropdownMenuItem onSelect={()=>onVisit('/account/payments')}><Banknote/><span>Get paid</span></DropdownMenuItem>
+              <DropdownMenuItem onSelect={()=>onVisit('/account/catalog')}><Globe/><span>Brand & catalog</span></DropdownMenuItem>
               <DropdownMenuItem onSelect={()=>onVisit('/account/billing')}><CreditCard/><span>My FiveGen plan</span></DropdownMenuItem>
               <DropdownMenuItem onSelect={()=>onView('credits')}><Coins/><span>AI credits</span></DropdownMenuItem>
+              <DropdownMenuItem onSelect={()=>onVisit('/customer')}><ShoppingBag/><span>Your purchases</span></DropdownMenuItem>
               <DropdownMenuItem onSelect={()=>onVisit('/collaborate')}><Users/><span>Shared with me</span></DropdownMenuItem>
               <DropdownMenuItem onSelect={()=>onView('connections')}><Link2/><span>Connected assistants</span></DropdownMenuItem>
               {admin&&<DropdownMenuItem onSelect={()=>onView('admin')}><ShieldCheck/><span>Platform settings</span></DropdownMenuItem>}
               <DropdownMenuSeparator/>
+              <DropdownMenuItem onSelect={()=>onVisit('/docs')}><BookOpen/><span>Documentation</span></DropdownMenuItem>
               <DropdownMenuItem onSelect={()=>setSupportOpen(true)}><LifeBuoy/><span>Help & support</span></DropdownMenuItem>
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger><Scale/><span>Legal & policies</span></DropdownMenuSubTrigger>
@@ -89,6 +92,6 @@ export function WorkspaceNavigation({user,view,label,admin,products,creditsLabel
         </div>
       </div>
     </header>
-    <Dialog open={supportOpen} onOpenChange={setSupportOpen}><DialogContent className="workspace-support-dialog"><DialogHeader><span className="workspace-support-icon"><LifeBuoy size={25}/></span><DialogTitle>A little help, when you need it.</DialogTitle><DialogDescription>Questions about your workspace, billing, or a product? Contact FiveGen support.</DialogDescription></DialogHeader><a className="workspace-support-email" href="mailto:kamzewac@gmail.com?subject=FiveGen%20support"><Mail size={19}/><span><strong>Email support</strong><small>kamzewac@gmail.com</small></span><ExternalLink size={16}/></a><p className="workspace-support-note">Include the product name and what you were trying to do.</p></DialogContent></Dialog>
+    <Dialog open={supportOpen} onOpenChange={setSupportOpen}><DialogContent className="workspace-support-dialog"><DialogHeader><span className="workspace-support-icon"><LifeBuoy size={25}/></span><DialogTitle>A little help, when you need it.</DialogTitle><DialogDescription>Questions about your workspace, billing, or a product? Contact FiveGen support.</DialogDescription></DialogHeader><button type="button" className="button secondary" onClick={()=>{setSupportOpen(false);onVisit('/docs');}}>Explore FiveGen guides<ArrowRight size={16}/></button><a className="workspace-support-email" href="mailto:kamzewac@gmail.com?subject=FiveGen%20support"><Mail size={19}/><span><strong>Email support</strong><small>kamzewac@gmail.com</small></span><ExternalLink size={16}/></a><p className="workspace-support-note">Include the product name and what you were trying to do.</p></DialogContent></Dialog>
   </>;
 }

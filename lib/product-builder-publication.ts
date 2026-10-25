@@ -14,10 +14,11 @@ import {editorialReviewPublicationGuard} from './product-editorial-review-server
 export async function getBuilderPublication(productId:string,owner:string){
  await ownedProduct(productId,owner);
  const row=await database().prepare('SELECT * FROM product_builder_publications WHERE product_id=? AND owner=?').bind(productId,owner).first();
- return row?{version:Number(row.version),slug:String(row.slug),publishedAt:Number(row.published_at),snapshot:builderPublicSnapshotSchema.parse(JSON.parse(String(row.public_snapshot)))}:null;
+ return row&&Number(row.published_at)>0?{version:Number(row.version),slug:String(row.slug),publishedAt:Number(row.published_at),snapshot:builderPublicSnapshotSchema.parse(JSON.parse(String(row.public_snapshot)))}:null;
 }
 export async function publishBuilderProduct(productId:string,owner:string,input:unknown){
  const {expectedVersion}=z.object({expectedVersion:z.number().int().min(1)}).parse(input),workspace=await getBuilderWorkspace(productId,owner);
+ if(workspace.product.archivedAt!=null)throw new ApiError('Restore this product before publishing or starting new sales.',409);
  if(workspace.version!==expectedVersion)throw new ApiError('This product changed. Reload and review it before publishing.',409);
  const previous=await getBuilderPublication(productId,owner);
  if(previous?.version===expectedVersion)return workspace;
@@ -27,7 +28,7 @@ export async function publishBuilderProduct(productId:string,owner:string,input:
  if(!verified.publishReady)throw new ApiError(verified.checks.find(check=>!check.ready)?.message||'A product file could not be verified. Upload it again before publishing.',409);
  const pricing=studioPricing(draft.studio);
  if(pricing.bundleProductIds.includes(productId))throw new ApiError('A bundle cannot contain itself.');
- for(const includedId of pricing.bundleProductIds){await ownedProduct(includedId,owner);const included=await database().prepare('SELECT product_id FROM product_builder_publications WHERE product_id=? AND owner=?').bind(includedId,owner).first();if(!included)throw new ApiError('Publish each included product before adding it to a bundle.');}
+ for(const includedId of pricing.bundleProductIds){await ownedProduct(includedId,owner);const included=await database().prepare('SELECT b.product_id FROM product_builder_publications b JOIN products p ON p.id=b.product_id AND p.owner=b.owner WHERE b.product_id=? AND b.owner=? AND b.published_at>0 AND p.archived_at IS NULL').bind(includedId,owner).first();if(!included)throw new ApiError('Publish each included product before adding it to a bundle.');}
  const orderedSections=draft.studio?.course?.modules?curriculumOrder(draft.sections,draft.studio.course.modules):draft.sections;
  const displayPriceCents=draft.studio?.community?.tiers?.length?Math.min(...draft.studio.community.tiers.map(tier=>tier.priceCents)):draft.priceCents;
  const snapshot=builderPublicSnapshotSchema.parse({title:draft.title,description:draft.description,audience:draft.audience,format:product.format,benefits:product.content.benefits,outline:orderedSections.map(section=>section.title),priceCents:displayPriceCents,currency:draft.currency,hasCover:!!draft.coverUploadId,studio:publicStudio(draft.studio),preview:draft.sections.filter(section=>section.id&&draft.studio?.sales?.previewSectionIds?.includes(section.id)).slice(0,5).map(section=>({title:section.title,body:section.body}))});
@@ -38,9 +39,9 @@ export async function publishBuilderProduct(productId:string,owner:string,input:
  const now=Date.now(),commitToken=crypto.randomUUID(),db=database();
  const results=await db.batch([
   db.prepare(`INSERT INTO product_builder_publications (product_id,owner,version,slug,public_snapshot,content_snapshot,upload_ids,published_at,updated_at,commit_token)
-   SELECT ?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM product_builder_workspaces WHERE product_id=? AND owner=? AND version=?) AND ${reviewGuard.sql}
-   ON CONFLICT(product_id) DO UPDATE SET version=excluded.version,public_snapshot=excluded.public_snapshot,content_snapshot=excluded.content_snapshot,upload_ids=excluded.upload_ids,published_at=excluded.published_at,updated_at=excluded.updated_at,commit_token=excluded.commit_token WHERE product_builder_publications.owner=excluded.owner AND product_builder_publications.version<excluded.version`)
-   .bind(productId,owner,expectedVersion,product.slug,JSON.stringify(snapshot),JSON.stringify({...delivery,draft,product}),JSON.stringify(draft.uploadIds),now,now,commitToken,productId,owner,expectedVersion,...reviewGuard.values),
+   SELECT ?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM product_builder_workspaces WHERE product_id=? AND owner=? AND version=?) AND EXISTS(SELECT 1 FROM products WHERE id=? AND owner=? AND archived_at IS NULL AND updated_at=?) AND ${reviewGuard.sql}
+   ON CONFLICT(product_id) DO UPDATE SET version=excluded.version,public_snapshot=excluded.public_snapshot,content_snapshot=excluded.content_snapshot,upload_ids=excluded.upload_ids,published_at=excluded.published_at,updated_at=excluded.updated_at,commit_token=excluded.commit_token WHERE product_builder_publications.owner=excluded.owner AND (product_builder_publications.version<excluded.version OR (product_builder_publications.version=excluded.version AND product_builder_publications.published_at=0))`)
+   .bind(productId,owner,expectedVersion,product.slug,JSON.stringify(snapshot),JSON.stringify({...delivery,draft,product}),JSON.stringify(draft.uploadIds),now,now,commitToken,productId,owner,expectedVersion,productId,owner,product.updatedAt,...reviewGuard.values),
   // Republishing never silently resumes selling, changes a live purchase price
   // or grants new modules to a previous buyer. A creator explicitly starts sales.
   // A losing concurrent publish can observe the same version committed by
@@ -61,6 +62,7 @@ export async function setBuilderSelling(productId:string,owner:string,input:unkn
  const delivery=published?builderDeliverySnapshotSchema.parse(JSON.parse(String(published.content_snapshot))):null;
  const value={enabled:request.enabled,expectedUpdatedAt:currentOffer.updatedAt,amount:request.enabled?publication?.snapshot.priceCents||0:currentOffer.amount,currency:publication?.snapshot.currency??workspace.draft.currency,intakePrompt:delivery?.intakePrompt||'',meetingUrl:delivery?.meetingUrl||''};
  if(value.enabled){
+  if(workspace.product.archivedAt!=null)throw new ApiError('Restore this product before starting sales.',409);
   if(!publication)throw new ApiError('Publish your product page before starting sales.',409);
   const pricing=studioPricing(workspace.draft.studio);
   if(pricing.model!=='free'&&!workspace.draft.studio?.community?.tiers?.some(tier=>tier.billing==='free')&&publication.snapshot.priceCents<50)throw new ApiError('Set a price of at least 0.50, or choose free access, then publish the update.',409);
@@ -73,10 +75,10 @@ export async function setBuilderSelling(productId:string,owner:string,input:unkn
  }
  if(studioPricing(workspace.draft.studio).model==='free'||workspace.draft.studio?.community?.tiers?.some(tier=>tier.billing==='free')){
   if(request.enabled&&publication?.snapshot.priceCents!==0)throw new ApiError('Set the price to zero and publish before offering free access.',409);
-  const mode=commerceMode(),now=Math.max(Date.now(),currentOffer.updatedAt+1),guard='(?=0 OR EXISTS(SELECT 1 FROM product_builder_workspaces w JOIN product_builder_publications p ON p.product_id=w.product_id AND p.owner=w.owner WHERE w.product_id=? AND w.owner=? AND w.version=? AND p.version=w.version))',db=database();
+  const mode=commerceMode(),now=Math.max(Date.now(),currentOffer.updatedAt+1),guard='(?=0 OR (EXISTS(SELECT 1 FROM product_builder_workspaces w JOIN product_builder_publications p ON p.product_id=w.product_id AND p.owner=w.owner WHERE w.product_id=? AND w.owner=? AND w.version=? AND p.version=w.version AND p.published_at>0) AND EXISTS(SELECT 1 FROM products WHERE id=? AND owner=? AND archived_at IS NULL AND updated_at=?)))',db=database(),guardValues=[+request.enabled,productId,owner,request.expectedVersion,productId,owner,workspace.product.updatedAt];
   const result=currentOffer.updatedAt===0?
-   await db.prepare(`INSERT OR IGNORE INTO commerce_offers(product_id,owner,enabled,enabled_mode,amount,currency,intake_prompt,meeting_url,updated_at) SELECT ?,?,?,?,0,?,?,?,? WHERE ${guard}`).bind(productId,owner,+request.enabled,mode,workspace.draft.currency,value.intakePrompt,value.meetingUrl,now,+request.enabled,productId,owner,request.expectedVersion).run():
-   await db.prepare(`UPDATE commerce_offers SET enabled=?,enabled_mode=?,amount=0,currency=?,intake_prompt=?,meeting_url=?,updated_at=? WHERE product_id=? AND owner=? AND updated_at=? AND ${guard}`).bind(+request.enabled,mode,workspace.draft.currency,value.intakePrompt,value.meetingUrl,now,productId,owner,currentOffer.updatedAt,+request.enabled,productId,owner,request.expectedVersion).run();
+   await db.prepare(`INSERT OR IGNORE INTO commerce_offers(product_id,owner,enabled,enabled_mode,amount,currency,intake_prompt,meeting_url,updated_at) SELECT ?,?,?,?,0,?,?,?,? WHERE ${guard}`).bind(productId,owner,+request.enabled,mode,workspace.draft.currency,value.intakePrompt,value.meetingUrl,now,...guardValues).run():
+   await db.prepare(`UPDATE commerce_offers SET enabled=?,enabled_mode=?,amount=0,currency=?,intake_prompt=?,meeting_url=?,updated_at=? WHERE product_id=? AND owner=? AND updated_at=? AND ${guard}`).bind(+request.enabled,mode,workspace.draft.currency,value.intakePrompt,value.meetingUrl,now,productId,owner,currentOffer.updatedAt,...guardValues).run();
   if(!result.meta.changes)throw new ApiError('The product or access settings changed. Reload before enabling access.',409);
   return getBuilderWorkspace(productId,owner);
  }
@@ -87,7 +89,7 @@ export async function setBuilderSelling(productId:string,owner:string,input:unkn
 }
 function validPrivateUrl(value:string){try{const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password;}catch{return false;}}
 export async function getPublicBuilderProduct(slug:string){
- const row=await database().prepare('SELECT product_id,owner,version,slug,public_snapshot,published_at FROM product_builder_publications WHERE slug=?').bind(slug).first();
+ const row=await database().prepare('SELECT b.product_id,b.owner,b.version,b.slug,b.public_snapshot,b.published_at FROM product_builder_publications b JOIN products p ON p.id=b.product_id AND p.owner=b.owner WHERE b.slug=? AND p.archived_at IS NULL AND b.published_at>0').bind(slug).first();
  if(!row)throw new ApiError('This product page is unavailable.',404);
  const paidOffer=await publicCommerceOffer(slug),offer=await publicFreeStudioOffer(slug)||paidOffer;
  return {snapshot:builderPublicSnapshotSchema.parse(JSON.parse(String(row.public_snapshot))),productId:String(row.product_id),owner:String(row.owner),version:Number(row.version),slug:String(row.slug),publishedAt:Number(row.published_at),selling:!!offer,paidReady:!!paidOffer,offer};

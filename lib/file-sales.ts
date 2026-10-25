@@ -140,6 +140,7 @@ export async function saveFileSale(productId:string,owner:string,input:unknown){
 export async function publishFileSale(productId:string,owner:string,input:unknown){
   requireFileSales();const {expectedVersion,grantModulesToExisting}=z.object({expectedVersion:z.number().int().min(1),grantModulesToExisting:z.array(z.enum(['downloads','course'])).max(2).default([])}).parse(input);
   const {product,row,draft}=await saleRow(productId,owner);
+  if(product.archived_at!=null)throw new ApiError('Restore this product before publishing.',409);
   if(Number(row.version)!==expectedVersion)throw new ApiError('This draft changed. Review the latest version before publishing.',409);
   const existing=await database().prepare('SELECT id FROM file_sale_revisions WHERE product_id=? AND version=?').bind(productId,expectedVersion).first();
   if(existing&&row.published_revision_id===existing.id)return getFileSale(productId,owner);
@@ -182,7 +183,7 @@ export async function publishFileSale(productId:string,owner:string,input:unknow
 }
 
 export async function getPublishedFileSale(slug:string,options:{verifyIntegrity?:boolean}={}){
-  const product=await database().prepare("SELECT p.*,d.published_revision_id FROM products p JOIN file_sale_drafts d ON d.product_id=p.id WHERE p.slug=? AND p.status='published'").bind(slug).first();
+  const product=await database().prepare("SELECT p.*,d.published_revision_id FROM products p JOIN file_sale_drafts d ON d.product_id=p.id WHERE p.slug=? AND p.archived_at IS NULL AND p.status='published'").bind(slug).first();
   if(!product?.published_revision_id)return null;
   const revision=await database().prepare('SELECT * FROM file_sale_revisions WHERE id=? AND product_id=?').bind(product.published_revision_id,product.id).first();
   if(!revision)return null;
@@ -200,7 +201,7 @@ export async function startFileSaleCheckout(request:Request,input:unknown){
   const seller=await database().prepare('SELECT stripe_account FROM sellers WHERE owner=?').bind(product.owner).first();
   const account=String(seller?.stripe_account||''),id=`file_${data.requestId}`,email=data.email?.toLowerCase()||'',amount=snapshot.priceCents,db=database();
   const items=JSON.stringify([{id:String(product.id),slug:String(product.slug),title:snapshot.title,price:amount/100,amount,saleRevisionId:revisionId}]);
-  await db.prepare("INSERT OR IGNORE INTO checkout_intents (id,owner,product_id,account,amount,mode,items,quantity,platform_fee,email,created_at,sale_revision_id) SELECT ?,?,?,?,?,'payment',?,1,?,?,?,? WHERE EXISTS(SELECT 1 FROM products p JOIN file_sale_drafts d ON d.product_id=p.id JOIN file_sale_revisions r ON r.id=d.published_revision_id AND r.product_id=p.id WHERE p.id=? AND p.owner=? AND p.status='published' AND r.id=?)").bind(id,product.owner,product.id,account,amount,items,commissionAmount(amount),email,Date.now(),revisionId,product.id,product.owner,revisionId).run();
+  await db.prepare("INSERT OR IGNORE INTO checkout_intents (id,owner,product_id,account,amount,mode,items,quantity,platform_fee,email,created_at,sale_revision_id) SELECT ?,?,?,?,?,'payment',?,1,?,?,?,? WHERE EXISTS(SELECT 1 FROM products p JOIN file_sale_drafts d ON d.product_id=p.id JOIN file_sale_revisions r ON r.id=d.published_revision_id AND r.product_id=p.id WHERE p.id=? AND p.owner=? AND p.archived_at IS NULL AND p.status='published' AND r.id=?)").bind(id,product.owner,product.id,account,amount,items,commissionAmount(amount),email,Date.now(),revisionId,product.id,product.owner,revisionId).run();
   const intent=await db.prepare('SELECT * FROM checkout_intents WHERE id=?').bind(id).first();
   if(!intent)throw new ApiError('This product changed or was removed. Reload the page before paying.',409);
   if(intent.product_id!==product.id||intent.sale_revision_id!==revisionId||intent.email!==email||intent.account!==account||Number(intent.amount)!==amount)throw new ApiError('This checkout request was already used for a different selection. Start again.',409);

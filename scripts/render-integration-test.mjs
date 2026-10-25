@@ -34,7 +34,7 @@ async function launch() {
       CREDENTIAL_ENCRYPTION_KEY: 'local-test-encryption-value-'.repeat(2),
       STRIPE_MODE: 'live', STRIPE_SECRET_KEY: 'sk_live_integration_fixture_not_a_key', STRIPE_WEBHOOK_SECRET: webhookSecret, STRIPE_BILLING_WEBHOOK_SECRET: '',
       STRIPE_COMMERCE_ENABLED: 'false', STRIPE_CONNECT_WEBHOOK_SECRET: '',
-      RENDER_EXTERNAL_URL: 'https://fivegen-integration.onrender.com', PRODUCT_DOMAIN: '',
+      RENDER_EXTERNAL_URL: 'https://fivegen-integration.onrender.com', PRODUCT_DOMAIN: '',DOCS_ORIGIN:'https://docs.fivegen.example',
       OPENAI_API_KEY: '', ANTHROPIC_API_KEY: '', FAL_KEY: '', RESEND_API_KEY: '', EMAIL_FROM: '',
       AUTOMATIONS_WORKER_ENABLED: 'false', AUTOMATION_DISPATCH_SECRET: '',
       PADDLE_ENVIRONMENT: 'sandbox', PADDLE_API_KEY: '', PADDLE_WEBHOOK_SECRET: '',
@@ -63,11 +63,11 @@ async function json(path, method = 'GET', body, authenticated = true, status = 2
   assert.equal(response.status, status, `${method} ${path}: ${text.slice(0, 350)}\n${output.slice(-1500)}`);
   return JSON.parse(text);
 }
-function requestHost(host, path = '/') {
+function requestHost(host, path = '/',method='GET') {
   return new Promise((resolve, reject) => {
-    const request = httpRequest(base + path, { headers: { host } }, response => {
-      response.resume();
-      response.on('end', () => resolve({ status: response.statusCode, location: response.headers.location }));
+    const request = httpRequest(base + path, { method,headers: { host,cookie,'oai-authenticated-user-id':owner } }, response => {
+      let body='';response.on('data',chunk=>body+=chunk);
+      response.on('end', () => resolve({ status: response.statusCode, location: response.headers.location,headers:response.headers,body }));
     });
     request.on('error', reject); request.end();
   });
@@ -83,6 +83,10 @@ try {
   assert.equal(home.headers.get('x-frame-options'), 'DENY');
   const misdirected = await requestHost('attacker.example');
   assert.equal(misdirected.status, 421, 'Unknown hosts stay blocked');
+  const docs=await requestHost('docs.fivegen.example');assert.equal(docs.status,200);assert.equal(docs.headers['x-fivegen-surface'],'docs');assert.match(docs.body,/FiveGen/);assert.match(docs.body,/Search/);assert.equal(docs.headers['set-cookie'],undefined);
+  for(const path of ['/api/workspace','/signin','/customer','/build/private'])assert.equal((await requestHost('docs.fivegen.example',path)).status,404,'Docs cannot reach application routes');
+  assert.equal((await requestHost('docs.fivegen.example','/','POST')).status,405);assert.equal((await requestHost('docs.fivegen.example','/integrations/mcp')).status,200);assert.match((await requestHost('docs.fivegen.example','/robots.txt')).body,/Sitemap:/);assert.match((await requestHost('docs.fivegen.example','/sitemap.xml')).body,/<urlset/);
+
   const alias = await requestHost('fivegen-integration.onrender.com', '/?connect=mcp');
   assert.equal(alias.status, 308);
   assert.equal(alias.location, base + '/?connect=mcp');

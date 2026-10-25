@@ -9,6 +9,9 @@ services:
     buildCommand: npm ci --include=dev --include=optional && npm run build:render
     startCommand: npm run start:render
     healthCheckPath: /healthz
+    domains:
+      - www.fivegen.ai
+      - docs.fivegen.ai
     # Disk-backed services do not support a custom shutdown delay.
     autoDeployTrigger: off
     disk:
@@ -24,6 +27,8 @@ services:
         value: render
       - key: APP_ORIGIN
         value: https://www.fivegen.ai
+      - key: DOCS_ORIGIN
+        value: https://docs.fivegen.ai
       - key: FIVEGEN_DATA_DIR
         value: /var/data/fivegen
       - key: CREDENTIAL_ENCRYPTION_KEY
@@ -48,7 +53,9 @@ services:
       - key: STRIPE_COMMERCE_ENABLED
         sync: false
       - key: AUTOMATIONS_WORKER_ENABLED
-        value: "false"
+        # Preserve the deliberate deployment setting. Individual sequences also
+        # require creator approval and a verified sender before any dispatch.
+        sync: false
       - key: STRIPE_WALLET_WEBHOOK_SECRET
         sync: false
       - key: STRIPE_CONNECT_WEBHOOK_SECRET

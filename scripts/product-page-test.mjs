@@ -36,6 +36,7 @@ Object.assign(deps, await load('lib/commerce-v2-server.ts'));
 Object.assign(deps, await load('lib/public-pages.ts'));
 Object.assign(deps, await load('lib/service-applications.ts'));
 Object.assign(deps, await load('lib/product-page.ts'));
+Object.assign(deps, await load('lib/offer-view.ts'));
 Object.assign(deps, await load('lib/product-page-server.ts'));
 const pageRoute = await load('app/api/products/[id]/page/route.ts');
 const publishRoute = await load('app/api/products/[id]/page/publish/route.ts');

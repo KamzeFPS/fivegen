@@ -17,6 +17,7 @@ import {TeamContent} from './team-content';
 import {BuyerSubscription} from './delivery-controls';
 import {PurchaseHelp,PurchaseRecovery} from './purchase-help';
 import {WrittenContent} from './written-content';
+import {WorkspaceExample} from '../workspace-example';
 import type {ProductStudioConfig} from '@/lib/product-studio-contract';
 import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription,DialogFooter} from '@/components/ui/dialog';
 import './customer-experience.css';
@@ -127,7 +128,7 @@ export function CustomerPortal() {
     <header><Link href="/" aria-label="FiveGen home"><Brand/></Link><Link className="buyer-library-home" href="/customer"><BookOpen size={15}/> Your library</Link><Link href={signInHref}>Sign in with purchase email <ArrowRight size={14}/></Link></header>
     <section className="customer-heading buyer-page-heading"><div><h1>Your purchases</h1><p>Read, learn and access everything you’ve purchased.</p></div><span className="buyer-private-label"><LockKeyhole size={14}/> Private customer library</span></section>
     {orderError && <div className="buyer-notice" role="alert"><p>{orderError}</p><button className="buyer-button secondary" disabled={refreshing} onClick={() => void load(false,paymentCheckRef.current||undefined)}>{refreshing ? 'Checking…' : 'Retry payment status'}</button></div>}
-    {loading ? <div className="buyer-loading" role="status"><span className="buyer-loading-cover"/><div><h2>Getting your library ready…</h2><p>Checking your purchases securely.</p></div></div> : !orders.length ? !orderError && <div className="buyer-empty"><BookOpen size={32}/><h2>Your library is waiting</h2><p>Open the checkout return link in the browser where you purchased, or sign in with your purchase email.</p><Link className="buyer-button primary" href={signInHref}>Find my purchases <ArrowRight size={16}/></Link></div> : <div className="customer-layout buyer-layout">
+    {loading ? <div className="buyer-loading" role="status"><span className="buyer-loading-cover"/><div><h2>Getting your library ready…</h2><p>Checking your purchases securely.</p></div></div> : !orders.length ? !orderError && <div className="buyer-empty"><BookOpen size={32}/><h2>Your library is waiting</h2><p>Open the checkout return link in the browser where you purchased, or sign in with your purchase email.</p><Link className="buyer-button primary" href={signInHref}>Find my purchases <ArrowRight size={16}/></Link><WorkspaceExample kind="library"/></div> : <div className="customer-layout buyer-layout">
       <aside className="buyer-library-rail" aria-label="Your purchases">
         <h2 className="customer-library-label">Available products <span>{paidOrders.length}</span></h2>
         {!!paidOrders.length&&<label className="customer-product-select" htmlFor="customer-product-select">Your product<select id="customer-product-select" value={selected} disabled={booking} onChange={event=>choosePurchase(event.target.value)}>{paidOrders.map(order=><option key={order.id} value={order.id}>{order.title} · {commerceMoney(order.amount,order.currency)}</option>)}</select></label>}

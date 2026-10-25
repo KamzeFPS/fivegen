@@ -42,6 +42,7 @@ for(const path of ['lib/product-editorial-review.ts','lib/product-editorial-revi
 for(const path of ['lib/creator-voice.ts','lib/creator-voice-server.ts','lib/creator-context-contract.ts','lib/creator-context-server.ts'])Object.assign(deps,await load(path));
 const builder=await load('lib/product-builder-server.ts');Object.assign(deps,builder);
 const publication=await load('lib/product-builder-publication.ts');Object.assign(deps,publication);
+Object.assign(deps,await load('lib/product-archive-server.ts'));
 async function reviewedPublish(id,who,input){await approveCurrentEditorialForFixture(deps,id,who);return publication.publishBuilderProduct(id,who,input);}
 const legacyDownload=await load('app/api/download/[slug]/route.ts'),legacyOffers=await load('lib/offers-server.ts'),uploadRoute=await load('app/api/uploads/[id]/route.ts');
 const coverRoute=await load('app/api/builder-cover/[slug]/route.ts');
@@ -269,6 +270,10 @@ try{
  audioOnly=await save(audioOnly,{...completeDraft(audioOnly),uploadIds:[audioId],sections:[{id:randomUUID(),title:'A guided project planning session',body:'',studio:{kind:'audio',audioId}}]});
  publishedReady(audioOnly,'Audio-only section with an owned verified file');assert.equal(deps.evaluateProductReadiness(audioOnly.draft).ready,true);
  audioOnly=await reviewedPublish(audioOnly.product.id,owner,{expectedVersion:audioOnly.version});assert.ok(audioOnly.publication);
+ const audioVersion=audioOnly.version,archived=await deps.setProductArchive(audioOnly.product.id,owner,{action:'archive',expectedUpdatedAt:audioOnly.product.updatedAt});
+ assert.equal((await builder.getBuilderWorkspace(audioOnly.product.id,owner)).publication,null);await assert.rejects(()=>publication.publishBuilderProduct(audioOnly.product.id,owner,{expectedVersion:audioVersion}),error=>error.status===409&&/Restore/.test(error.message));
+ await deps.setProductArchive(audioOnly.product.id,owner,{action:'restore',expectedUpdatedAt:archived.product.updatedAt});audioOnly=await builder.getBuilderWorkspace(audioOnly.product.id,owner);assert.equal(audioOnly.publication,null,'Restoring does not publish delivery');
+ audioOnly=await reviewedPublish(audioOnly.product.id,owner,{expectedVersion:audioVersion});assert.equal(audioOnly.publication.version,audioVersion,'An explicitly reviewed unchanged version can be republished after restore');assert.equal(audioOnly.selling,false,'Republishing the retained version never silently opens sales');
  const missingAudio={...audioOnly.draft,sections:[{...audioOnly.draft.sections[0],studio:{kind:'audio',audioId:randomUUID()}}]};
  assert.equal((await builder.builderReadiness(audioOnly.product.id,owner,missingAudio)).publishReady,false,'An arbitrary audio ID cannot pass readiness');
 
@@ -285,6 +290,18 @@ try{
  assert.equal(circular.readiness.checks.find(check=>check.key==='prerequisites').ready,false,'Indirect prerequisite cycles are rejected');
  await assert.rejects(()=>publication.publishBuilderProduct(circular.product.id,owner,{expectedVersion:circular.version}),error=>error.status===409);
  circular=await save(circular,{...circular.draft,sections:circular.draft.sections.map((item,index)=>({...item,studio:{prerequisiteIds:index?[lessonA]:[]}}))});publishedReady(circular,'An acyclic prerequisite chain');
+ // Archiving and restoring must invalidate a publication already waiting to
+ // commit, even if its workspace version and editorial review are unchanged.
+ let archiveRace=await builder.createBuilderWorkspace(owner,{type:'guide',source:'manual',requestId:randomUUID()});archiveRace=await save(archiveRace,completeDraft(archiveRace));await approveCurrentEditorialForFixture(deps,archiveRace.product.id,owner);
+ const originalArchiveRaceBatch=storage.DB.batch;let archiveRaceTriggered=false;
+ storage.DB.batch=async statements=>{if(!archiveRaceTriggered){archiveRaceTriggered=true;const archived=await deps.setProductArchive(archiveRace.product.id,owner,{action:'archive',expectedUpdatedAt:archiveRace.product.updatedAt});await deps.setProductArchive(archiveRace.product.id,owner,{action:'restore',expectedUpdatedAt:archived.product.updatedAt});}return originalArchiveRaceBatch(statements);};
+ try{await assert.rejects(()=>publication.publishBuilderProduct(archiveRace.product.id,owner,{expectedVersion:archiveRace.version}),error=>error.status===409,'An in-flight pre-archive publication cannot reopen a restored product');}finally{storage.DB.batch=originalArchiveRaceBatch;}
+ assert.equal((await builder.getBuilderWorkspace(archiveRace.product.id,owner)).publication,null,'Restore keeps delivery unlisted after the stale publication is rejected');
+ let freeArchiveRace=await builder.createBuilderWorkspace(owner,{type:'guide',source:'manual',requestId:randomUUID()});freeArchiveRace=await save(freeArchiveRace,{...completeDraft(freeArchiveRace),priceCents:0,studio:{pricing:{model:'free'}}});freeArchiveRace=await reviewedPublish(freeArchiveRace.product.id,owner,{expectedVersion:freeArchiveRace.version});
+ const originalFreeRacePrepare=storage.DB.prepare;let freeRaceTriggered=false;
+ storage.DB.prepare=(query,...args)=>{const statement=originalFreeRacePrepare(query,...args);if(!query.startsWith('INSERT OR IGNORE INTO commerce_offers'))return statement;const wrap=current=>({...current,bind:(...values)=>wrap(current.bind(...values)),async run(){if(!freeRaceTriggered){freeRaceTriggered=true;const archived=await deps.setProductArchive(freeArchiveRace.product.id,owner,{action:'archive',expectedUpdatedAt:freeArchiveRace.product.updatedAt});await deps.setProductArchive(freeArchiveRace.product.id,owner,{action:'restore',expectedUpdatedAt:archived.product.updatedAt});await reviewedPublish(freeArchiveRace.product.id,owner,{expectedVersion:freeArchiveRace.version});}return current.run();}});return wrap(statement);};
+ try{await assert.rejects(()=>publication.setBuilderSelling(freeArchiveRace.product.id,owner,{enabled:true,expectedVersion:freeArchiveRace.version}),error=>error.status===409,'An old free-access activation cannot reopen sales even after explicit same-version republishing');}finally{storage.DB.prepare=originalFreeRacePrepare;}
+ assert.equal((await builder.getBuilderWorkspace(freeArchiveRace.product.id,owner)).selling,false);freeArchiveRace=await publication.setBuilderSelling(freeArchiveRace.product.id,owner,{enabled:true,expectedVersion:freeArchiveRace.version});assert.equal(freeArchiveRace.selling,true,'A new deliberate activation after restore still succeeds');
  assert.equal(providerCalls,0,'Creating, saving and checking publication never contacts a payment provider');
  assert.equal(sql.prepare('PRAGMA foreign_key_check').all().length,0,'New and retained rows satisfy foreign keys');
  console.log(`Product builder tests passed: all ${deps.builderTypes.length} types, exact resume, original-file readiness, ownership, payment-independent publication, private snapshots and selling gates. Fixtures retained at ${root}`);

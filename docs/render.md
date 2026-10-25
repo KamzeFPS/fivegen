@@ -17,7 +17,7 @@ For a new deployment:
 3. In Render, choose **New → Blueprint**, select the repository, and use the root `render.yaml`. Review the service and persistent-disk costs before creating resources. Render generates `CREDENTIAL_ENCRYPTION_KEY` for a new database; preserve it in secure disaster recovery.
 4. Deploy. Startup applies pending SQL migrations transactionally, checks existing migration checksums, and starts the server on `0.0.0.0:$PORT`. Migrations run at startup because service disks are unavailable during build and pre-deploy commands. `/healthz` checks database access and free disk space.
 
-Automatic deployment is off in the Blueprint. Commerce and wallet checkout release switches are supplied explicitly when creating a service and managed in that service's Environment thereafter; Blueprint sync preserves existing values. Set them to `false` for new or staging services until verification is complete. The automation worker defaults to disabled.
+Automatic deployment is off in the Blueprint. Commerce and wallet checkout release switches are supplied explicitly when creating a service and managed in that service's Environment thereafter; Blueprint sync preserves existing values. Set them to `false` for new or staging services until verification is complete. The automation worker setting is preserved during Blueprint sync. Set it to `false` for a new/staging service until sender and delivery verification is complete. Each sequence still requires creator approval before any dispatch.
 
 ## Custom domain and sign-in
 
@@ -90,3 +90,30 @@ Email signup requires name, email, and a 15–128 character password. Verificati
 Passwords use unique salts and bounded asynchronous scrypt. Only token hashes are stored; raw verification/reset links are sent privately through the configured Resend sender. Used/expired token metadata is cleared after seven days; hashed rate-limit metadata after two days. Auth emails require the same encrypted Resend connection as purchase confirmations. No new Render secret is needed: the production process generates a private, process-only credential for its loopback delivery bridge. These emails are separate from marketing and do not opt anyone into campaigns.
 
 The append-only migration `0024_email_password_auth.sql` preserves existing sessions and Google owner IDs. Preserve the database, media disk, provider settings, and encryption key on deployment. After building, run `npm run test:auth`, `npm run test:render`, `npm run test:auth:integration`, and `npm run test:render:integration`. The integration checks use retained synthetic databases and no external emails or payments.
+
+
+## Documentation subdomain
+
+The same existing service serves public documentation at `/docs`. `docs.fivegen.ai` uses an isolated public route surface: it serves guides/assets, strips application credentials and rejects account, customer, authentication, API and mutation routes. Set `DOCS_ORIGIN` only when using another documentation hostname; production FiveGen recognizes `https://docs.fivegen.ai` by default.
+
+For the existing FiveGen service (`srv-daho9hrm8hqs73cmgt7g`), add `docs.fivegen.ai` under **Settings → Custom Domains**, then add this DNS record at the domain provider:
+
+| Type | Name | Value |
+| --- | --- | --- |
+| CNAME | docs | fivegen.onrender.com |
+
+The target above was read from the owning service's public URLs. Render's owning workspace currently uses its two included domains (apex plus www); another custom domain is billed at the provider's current overage rate. Review that charge before adding it. DNS, Render verification and issued TLS must all succeed before calling the subdomain live. `/docs` works on the main domain independently of this DNS step.
+
+Do not create another service, replace the disk, change `APP_ORIGIN`, expose a secret, or redirect the entire docs host to the authenticated application. This is an additional public hostname on the current service.
+
+## Email delivery operations
+
+The Node runtime derives a purpose-separated automation signing credential from the persistent encryption key when no explicit dispatch secret is supplied. It must stay stable across restarts because unsubscribe links also depend on it; never log, copy or expose it. Existing explicit secrets are preserved. Durable enrollments, provider idempotency and job leases remain in SQLite. `AUTOMATIONS_WORKER_ENABLED=false` remains an explicit operational pause and readiness reports that pause honestly. A configured sender does not override it.
+
+Verify provider configuration and sender ownership, activate only a reviewed sequence, then test with a controlled consenting address. Provider acceptance is not proof of inbox delivery. Purchase and unsubscribe suppression, requested transactional notices and marketing consent are distinct. No deployment or local simulation authorizes sending an unapproved sequence.
+
+## Archive and catalog rollout
+
+Migrations0054–0056 are additive: archive metadata/history, creator catalog/domain state, and a durable relationship-event outbox. Preserve the existing disk and migration history. Archive disables new sales/publication and pauses marketing; it does not cancel subscriptions or remove purchased snapshots. Restoration stays private/paused until explicit review.
+
+Custom creator catalogs are edited at `/account/catalog` and published at `/creator/:slug`. Only currently public, unarchived, owned product pages appear. Owner DNS verification never activates hosting or TLS. Custom-host routing additionally requires trusted platform `connected` and TLS `active` states. Until the platform provisions that hostname and certificate, keep those states pending; the canonical catalog path remains usable. Disconnecting/pause immediately removes that custom-host route and retains product/customer history.

@@ -9,6 +9,7 @@ import type {MarketingPluginId,MarketingPluginState} from '@/lib/marketing-plugi
 import type {Product} from '@/lib/product';
 import {GrowthDashboard} from './growth-dashboard';
 import {JourneyReport} from './journey-report';
+import {ShareLinkResults} from './tracked-share-links';
 import {GrowthVSL} from './growth-vsl';
 import {LeadCaptureWorkspace} from './lead-capture-workspace';
 import {CreatorContextPicker} from './creator-context-picker';
@@ -75,6 +76,7 @@ function MarketingProductWorkspace({product,tab,aiReady,cost,unlimited,onTab,onR
   }
   if(loading)return <div className="marketing-loading" role="status"><Loader2 size={20} className="spin"/>Opening your marketing workspace…</div>;
   if(loadError||!state)return <div className="marketing-load-error" role="alert"><p>{loadError||'Could not load your marketing workspace.'}</p><button className="button secondary" onClick={load}>Try again</button></div>;
+  const selectedCampaign=typeof window==='undefined'?undefined:new URLSearchParams(location.search).get('campaign')||undefined;
   const selected=plugins.find(p=>p.id===active);
   return <section className="marketing-workspace" aria-label="Product marketing">
     <div className="marketing-toolbar">
@@ -90,7 +92,7 @@ function MarketingProductWorkspace({product,tab,aiReady,cost,unlimited,onTab,onR
     </div>
     {notice&&!manager&&<p className="marketing-notice" role="status">{notice}</p>}
     <div id={panelId} role="tabpanel" aria-labelledby={`${panelId}-${active}`} className="marketing-panel">
-      {active==='results'?<><JourneyReport productId={product.id}/><details className="growth-plan-checklist"><summary>Earlier analytics and earnings</summary><p>Legacy event counts and financial reporting have their own date, mode and currency scopes. They are not joined into the session report above.</p><GrowthDashboard productId={product.id}/></details></>:active==='dashboard'?<>
+      {active==='results'?<><JourneyReport productId={product.id} campaignId={selectedCampaign}/><ShareLinkResults productId={product.id} campaignId={selectedCampaign}/><details className="growth-plan-checklist"><summary>Business metrics & earnings for this product</summary><p>This separate report shows sales, net earnings and older marketing-page activity. Its own date, payment mode and currency labels apply; it is not a conversion funnel.</p><GrowthDashboard productId={product.id}/></details></>:active==='dashboard'?<>
         <ConnectedLaunch productId={product.id} onBusyChange={setPanelBusy} onDirtyChange={setPanelDirty} onResults={()=>onTab('results')} onOpen={tool=>onTab(tool)} onToolsChanged={()=>{void settings(product.id).then(next=>{setState(next);window.dispatchEvent(new CustomEvent('fivegen:marketing-plugins-updated',{detail:{productId:product.id,installed:next.installed}}));}).catch(e=>setError(e.message));}}/>
       </>:<>
         <div className="marketing-active-tool"><span><Puzzle size={13}/>{selected?.name} workspace{selected&&!state.installed.includes(selected.id)?' · shortcut hidden':''}</span><button type="button" onClick={openManager} disabled={busy}>Customize shortcuts</button></div>

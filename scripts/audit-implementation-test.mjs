@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
+import {mkdirSync,writeFileSync} from 'node:fs';
+import {resolve} from 'node:path';
+assert.ok(!process.env.RENDER,'Run synthetic regression checks locally, never on the deployed service.');
+const scripts=['product-builder-test','commerce-v2-test','product-studio-commerce-test','product-archive-test','creator-catalog-test','relationship-automation-test','automation-test','checkout-recovery-test','editor-save-registry-test','workspace-audit-usability-test','workspace-example-test','builder-content-handoff-test','content-usability-test','page-editor-audit-test','sales-page-ui-test','shared-public-pages-test','workspace-library-test','creator-launch-test','builder-navigation-ui-test','customer-learning-test','product-learning-test','docs-site-test','docs-host-test','catalog-host-test','automation-worker-test'];
+const env={...process.env};
+for(const name of Object.keys(env))if(/TOKEN|SECRET|API_KEY|PASSWORD|^(STRIPE_|PADDLE_|OPENAI_|ANTHROPIC_|FAL_|RESEND_|EMAIL_|GOOGLE_|NEXT_PUBLIC_|VITE_)|^(FIVEGEN_DATA_DIR|APP_ORIGIN|RENDER_EXTERNAL_URL)$/.test(name))delete env[name];
+const root=resolve('outputs/audit-regressions',String(Date.now()));mkdirSync(root,{recursive:true});
+const results=scripts.map(name=>{const result=spawnSync(process.execPath,['scripts/'+name+'.mjs'],{env,encoding:'utf8',maxBuffer:8*1024*1024});const output=(result.stdout||'')+(result.stderr||'');console.log(`${result.status===0?'PASS':'FAIL'} ${name}`);if(result.status!==0)console.error(output.slice(-3000));return {name,status:result.status,signal:result.signal,error:result.error?.message,output:output.slice(-4500)};});
+writeFileSync(resolve(root,'results.json'),JSON.stringify({synthetic:true,providerCalls:false,results},null,2));
+console.log(`Regression evidence: ${root}`);
+if(results.some(result=>result.status!==0))process.exitCode=1;

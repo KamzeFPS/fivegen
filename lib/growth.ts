@@ -50,6 +50,17 @@ export const growthQuestions: { key: keyof GrowthBrief; label: string; hint: str
   { key: 'tone', label: 'How should it sound?', hint: 'Your language, personality, and words you would or would not use.' },
   { key: 'cta', label: 'What should the viewer do next?', hint: 'One specific next step: join a waitlist, request details, or book a conversation.' },
 ];
+// A useful first draft needs these three facts. Personal stories, evidence and
+// objections remain optional; an empty answer is unknown, never permission to
+// manufacture a claim. The same contract is enforced by the generation server.
+export const growthStartKeys = ['icp', 'promise', 'offer'] as const;
 export function missingGrowthAnswers(brief: GrowthBrief) {
-  return growthQuestions.filter(question => !brief[question.key].trim());
+  return growthQuestions.filter(question => growthStartKeys.includes(question.key as typeof growthStartKeys[number]) && !brief[question.key].trim());
+}
+export function proposeGrowthBrief(brief: GrowthBrief, facts: OfferFacts | undefined, audience = ''): GrowthBrief {
+  return {...brief,
+    icp: brief.icp.trim() ? brief.icp : audience.slice(0,4000),
+    promise: brief.promise.trim() ? brief.promise : facts?.description.slice(0,4000) || '',
+    offer: brief.offer.trim() ? brief.offer : facts ? [facts.title, facts.format, ...facts.inclusions].filter(Boolean).join('\n').slice(0, 4000) : '',
+  };
 }

@@ -34,7 +34,7 @@ async function load(path) {
   const key = 'growthqa' + randomUUID().replaceAll('-', ''); globalThis[key] = { ...deps };
   const source = fs.readFileSync(path, 'utf8').replace(/^import[\s\S]*?;\r?\n/gm, '');
   const code = `const {${Object.keys(deps).join(',')}}=globalThis.${key};\n` + ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 } }).outputText;
-  const module = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64')); delete globalThis[key]; return module;
+  const loadedScript = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64')); delete globalThis[key]; return loadedScript;
 }
 Object.assign(deps, await load('lib/growth.ts'));
 Object.assign(deps, await load('lib/credits.ts'));
@@ -87,8 +87,12 @@ try {
   assert.equal((await generate({ expectedUpdatedAt: current.updatedAt, requestId: randomUUID(), maxCredits: 10 })).status, 409, 'Concurrent generation cannot charge twice');
   release(); response = await active; hold = null; assert.equal(response.status, 200); current = (await response.json()).growth; assert.equal(balance(), 80);
   unlimited = true; response = await generate({ expectedUpdatedAt: current.updatedAt, requestId: randomUUID(), maxCredits: 0 }); assert.equal(response.status, 200); current = (await response.json()).growth; assert.equal(balance(), 80); unlimited = false;
-  response = await patch({ brief: { ...brief, proof: '' }, assets: current.assets, expectedUpdatedAt: current.updatedAt }); current = (await response.json()).growth;
-  assert.equal((await generate({ expectedUpdatedAt: current.updatedAt, requestId: randomUUID(), maxCredits: 10 })).status, 400, 'Missing interview information is rejected without a provider call');
+  response = await patch({ brief: { ...brief, promise: '' }, assets: current.assets, expectedUpdatedAt: current.updatedAt }); current = (await response.json()).growth;
+  assert.equal((await generate({ expectedUpdatedAt: current.updatedAt, requestId: randomUUID(), maxCredits: 10 })).status, 400, 'Missing core outcome is rejected without a provider call');
+  const shortBrief={...deps.emptyGrowthBrief('Independent illustrators'),promise:brief.promise,offer:brief.offer};
+  response=await patch({brief:shortBrief,assets:current.assets,expectedUpdatedAt:current.updatedAt});current=(await response.json()).growth;
+  unlimited=true;response=await generate({expectedUpdatedAt:current.updatedAt,requestId:randomUUID(),maxCredits:0});assert.equal(response.status,200,'A three-answer brief works without inventing required stories or proof');current=(await response.json()).growth;unlimited=false;
+  assert.deepEqual(lastPrompt.brief,shortBrief,'Unknown optional facts stay empty through generation');assert.match(lastSystem,/omit missing personal stories/);assert.equal(balance(),80);
   // A timed-out worker must not overwrite a later manual edit, even after its
   // lease expires while the provider request is still returning.
   response = await patch({ brief, assets: current.assets, expectedUpdatedAt: current.updatedAt }); current = (await response.json()).growth;

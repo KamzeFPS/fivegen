@@ -79,6 +79,7 @@ export type Product = Brief & {
   commerce?: Commerce;
   experience?: Experience;
   pageIconUploadId?: string | null;
+  archivedAt?: number | null;
   createdAt: number;
   updatedAt: number;
 };
