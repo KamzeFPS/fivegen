@@ -40,7 +40,7 @@ No application secrets or production customer data are used for local verificati
 - [x] **R34 · P2 · Remove unsupported outcome promises from UI** — Do not advertise automatic social publishing when only calendar reminders exist; distinguish provider acceptance from delivery, simulation from purchase, research preference from buying intent.
 - [x] **R35 · P2 · Keep creator-authored content and explicit privacy** — Manual creation and empty-library launch remain first-class; private recordings stay separate from public media; no invented proof or ratings; optional AI proposals never silently replace approved copy.
 - [x] **R36 · P2 · Keep the outcome-led overview and clear fee model** — One concrete next launch action stays ahead of graphs; gross/net/orders remain distinct; account payout, plan billing and buyer payments remain named separately.
-- [ ] **R37 · Documentation site** — Searchable FiveGen guides, accessible navigation, mobile layout, truthful product/integration documentation, and docs.fivegen.ai routing/domain configuration. **External/remaining verification:** 25-guide docs site and isolated host routing are built/verified. Render now shows the domain verified and its certificate issued; public DNS points to fivegen.onrender.com. Deployment and live guide verification remain.
+- [x] **R37 · Documentation site** — Searchable FiveGen guides, accessible navigation, mobile layout, truthful product/integration documentation, and docs.fivegen.ai routing/domain configuration. Live HTTPS verification passed for all 25 canonical guide URLs, search manifest, stylesheet, robots, sitemap and AI index. Browser search, article navigation and 390px menu/layout passed. The docs host rejects application/API routes and sets no application cookie. Render reports the domain verified and certificate issued; public DNS points to fivegen.onrender.com.
 
 ## Verification record
 
@@ -62,4 +62,12 @@ Production desktop/390px checks exercised product search/pins/collapse, first ma
 
 Docs keyboard search, mobile navigation, focus return and code copy were verified. Screenshots and the final browser record are under `outputs/audit-implementation-2026-10-25/browser`.
 
+The empty buyer library also has a reversible, explicitly illustrative walkthrough alongside purchase recovery. Keyboard close restores focus; it creates no purchase, customer record or protected access.
+
 The local preview has providers disabled and uses only synthetic records. It does not validate a live Stripe card, deployed provider callbacks, inbox placement, or production DNS/TLS. A formal screen-reader device session remains separate from the semantic/keyboard checks.
+
+### Production rollout
+
+The application release `3c1e4459d358f50df75be5603f5addff8609223a` is live on the existing FiveGen Render service (`dep-dbes2lfb9u1s73ap1f80`). Both `https://www.fivegen.ai/healthz` and `https://www.fivegen.ai/docs` return 200. `https://docs.fivegen.ai` serves the new handbook over verified HTTPS. A live sweep checked all 25 canonical guide URLs and caught a reserved-namespace conflict; the correction is covered by all-guide runtime and actual production-server HTTP regressions before redeployment.
+
+Evidence: `outputs/audit-implementation-2026-10-25/live-docs-verification.json`, `render-integration-route-fix.log`, `release-regressions.log`, and `outputs/audit-regressions/1792917297886/results.json`. Live desktop and phone screenshots are in the browser evidence folder. The only full-acceptance checks still outstanding are R02, R06, R25 and R29, for the external validation explicitly described above.
