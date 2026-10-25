@@ -64,9 +64,9 @@ export async function POST(
     id = crypto.randomUUID();
     await reserveCredits(u.userId,id,d.kind,creditPolicy[d.kind]);
     await reserveAIBudget(d.kind==="image"?60000:700000,u.userId);
-    await db
+    const reservation = await db
       .prepare(
-        "INSERT INTO assets (id,owner,product_id,kind,name,prompt,status,created_at) VALUES (?,?,?,?,?,?,?,?)",
+        "INSERT INTO assets (id,owner,product_id,kind,name,prompt,status,created_at) SELECT ?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM products WHERE id=? AND owner=?)",
       )
       .bind(
         id,
@@ -77,8 +77,11 @@ export async function POST(
         d.prompt,
         "submitting",
         Date.now(),
+        productId,
+        u.userId,
       )
       .run();
+    if (!reservation.meta.changes) throw new ApiError('This product is no longer available. Return to your workspace.', 409);
     const endpoint = d.kind === "image" ? config.imageModel : config.videoModel;
     const r = await fetch(`https://queue.fal.run/${endpoint}`, {
       method: "POST",

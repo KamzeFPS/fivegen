@@ -93,14 +93,15 @@ export async function POST(
     if (!job) {
       await db
         .prepare(
-          "INSERT INTO generation (product_id,owner,brief,stage,status,lease,updated_at) VALUES (?,?,?,-1,?,0,?)",
+          "INSERT INTO generation (product_id,owner,brief,stage,status,lease,updated_at) SELECT ?,?,?,-1,?,0,? WHERE EXISTS(SELECT 1 FROM products WHERE id=? AND owner=?)",
         )
-        .bind(id, owner, JSON.stringify(p), "queued", Date.now())
+        .bind(id, owner, JSON.stringify(p), "queued", Date.now(), id, owner)
         .run();
       job = await db
         .prepare("SELECT * FROM generation WHERE product_id=?")
         .bind(id)
         .first();
+      if (!job) throw new ApiError('Product not found.', 404);
     }
     if (job!.status === "completed")
       return Response.json({ product: p, done: true });

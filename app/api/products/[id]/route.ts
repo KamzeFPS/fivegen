@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { briefSchema, contentSchema } from '@/lib/product';
 import { ApiError, database, failure, identity, ownedProduct, productFromRow, sameOrigin } from '@/lib/server';
+import { deleteProduct } from '@/lib/product-deletion-server';
 const updateSchema = briefSchema.extend({content:contentSchema,expectedUpdatedAt:z.number().int(),status:z.literal('draft').optional()});
 export async function PATCH(req:Request,{params}:{params:Promise<{id:string}>}) {
   try {
@@ -21,4 +22,10 @@ export async function PATCH(req:Request,{params}:{params:Promise<{id:string}>}) 
     if(!result.meta.changes)throw new ApiError('This product changed in another tab. Reload it before saving.',409);
     return Response.json({product:productFromRow(await ownedProduct(id,user.userId))});
   }catch(error){return failure(error);}
+}
+export async function DELETE(req:Request,{params}:{params:Promise<{id:string}>}) {
+  try {
+    sameOrigin(req); const user=await identity(),{id}=await params;
+    return Response.json(await deleteProduct(id,user.userId,await req.json()));
+  } catch(error) { return failure(error); }
 }

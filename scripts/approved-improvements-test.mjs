@@ -14,6 +14,7 @@ const scripts=[
  'partner-pilot-proposal-test','sales-page-ui-test','published-page-overview-test',
  'shared-public-pages-test','campaign-email-identities-test','campaign-email-ui-test','growth-plan-results-test','service-applications-test',
  'customer-context-test','customer-context-ui-test','page-copy-isolation-test','public-page-races-test','marketing-role-ui-test',
+ 'product-deletion-test','product-deletion-ui-test',
 ];
 const results=[];
 for(const name of scripts){

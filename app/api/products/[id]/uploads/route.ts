@@ -52,9 +52,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const purpose = new URL(req.url).searchParams.get('purpose') === 'voice' ? 'voice' : 'product';
     uploadId = crypto.randomUUID(); key = `${purpose === 'voice' ? 'voice' : 'classes'}/${user.userId}/${id}/${uploadId}`;
     const now = Date.now();
-    const reserve = await database().prepare("INSERT INTO uploads (id,owner,product_id,name,mime,size,object_key,status,created_at,updated_at) SELECT ?,?,?,?,?,?,?,?,?,? WHERE (SELECT COALESCE(SUM(size),0) FROM uploads WHERE owner=? AND status!='failed') + ? <= ?")
-      .bind(uploadId, user.userId, id, name, mime, size, key, 'uploading', now, now, user.userId, size, storageLimit).run();
-    if (!reserve.meta.changes) { uploadId = ''; key = ''; throw new ApiError('Your 2 GB upload allowance is full. Remove unused files to make space.', 403); }
+    const reserve = await database().prepare("INSERT INTO uploads (id,owner,product_id,name,mime,size,object_key,status,created_at,updated_at) SELECT ?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM products WHERE id=? AND owner=?) AND (SELECT COALESCE(SUM(size),0) FROM uploads WHERE owner=? AND status!='failed') + ? <= ?")
+      .bind(uploadId, user.userId, id, name, mime, size, key, 'uploading', now, now, id, user.userId, user.userId, size, storageLimit).run();
+    if (!reserve.meta.changes) { uploadId = ''; key = ''; await ownedProduct(id, user.userId); throw new ApiError('Your 2 GB upload allowance is full. Remove unused files to make space.', 403); }
     await recordUploadEvent(id, user.userId, uploadId, 'upload_started');
 
     const validation = createUploadValidator(size, mime);

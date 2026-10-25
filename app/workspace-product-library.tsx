@@ -1,12 +1,13 @@
 'use client';
 
 import {useState,type MouseEvent} from 'react';
-import {ArrowRight,BookOpen,CalendarDays,ChevronDown,ChevronRight,FileText,FolderOpen,GraduationCap,LayoutGrid,Layers3,List,Search,SlidersHorizontal,Upload,Users,X} from 'lucide-react';
+import {ArrowRight,BookOpen,CalendarDays,ChevronDown,ChevronRight,FileText,FolderOpen,GraduationCap,LayoutGrid,Layers3,List,MoreHorizontal,Search,SlidersHorizontal,Trash2,Upload,Users,X} from 'lucide-react';
 import {DropdownMenu,DropdownMenuContent,DropdownMenuItem,DropdownMenuTrigger} from '@/components/ui/dropdown-menu';
 import {Popover,PopoverContent,PopoverTrigger} from '@/components/ui/popover';
 import type {Product} from '@/lib/product';
 import {builderTypeDetails} from '@/lib/builder-contract';
 import {selectWorkspaceProducts,workspaceProductDestination,workspaceProductPublished,workspaceProductCommercialState,type ProductFilter,type ProductSort,type WorkspaceBuilderSummary,type WorkspaceFileSummary} from '@/lib/workspace-library';
+import {ProductDeleteDialog} from './product-delete-dialog';
 
 function ProductFormatIcon({format}:{format:string}){
  if(/course/i.test(format))return <GraduationCap size={24} strokeWidth={1.5}/>;
@@ -28,8 +29,9 @@ export function openWorkspaceProductLink(event:Pick<MouseEvent<HTMLAnchorElement
  event.preventDefault();onOpen(product);
 }
 
-export function WorkspaceProductLibrary({products,builders=[],files=[],onOpen,onCreateFrom}:{products:Product[];builders?:WorkspaceBuilderSummary[];files?:WorkspaceFileSummary[];onOpen:(product:Product)=>void;onCreateFrom:(source:'upload'|'manual')=>void}){
+export function WorkspaceProductLibrary({products,builders=[],files=[],onOpen,onCreateFrom,onDeletedProduct}:{products:Product[];builders?:WorkspaceBuilderSummary[];files?:WorkspaceFileSummary[];onOpen:(product:Product)=>void;onCreateFrom:(source:'upload'|'manual')=>void;onDeletedProduct?:(productId:string)=>void}){
  const [query,setQuery]=useState(''),[status,setStatus]=useState<ProductFilter>('all'),[format,setFormat]=useState('all'),[sort,setSort]=useState<ProductSort>('updated'),[layout,setLayout]=useState<'grid'|'list'>('grid');
+ const [deleteProduct,setDeleteProduct]=useState<Product|null>(null);
  const publicPages=products.filter(product=>(builders.find(item=>item.productId===product.id)||files.find(item=>item.productId===product.id))?.salesPagePublic===true).length;
  const counts={all:products.length,public:publicPages,selling:products.filter(product=>(builders.find(item=>item.productId===product.id)||files.find(item=>item.productId===product.id))?.selling===true).length,draft:selectWorkspaceProducts(products,{status:'draft',builders,files}).length};
  const visible=selectWorkspaceProducts(products,{query,status,format,sort,builders,files});
@@ -49,8 +51,9 @@ export function WorkspaceProductLibrary({products,builders=[],files=[],onOpen,on
    const details=builder?`${builder.unitCount} ${builder.unitCount===1?info?.unit.toLowerCase()||'section':info?.plural||'sections'}${builder.uploadCount?` · ${builder.uploadCount} file${builder.uploadCount===1?'':'s'}`:''}`:file?'Files & private delivery':`${product.content.sections.length} section${product.content.sections.length===1?'':'s'}`;
    const commercial=workspaceProductCommercialState(product,builders,files);
    const href=workspaceProductDestination(product,builders,files)||'/?project='+encodeURIComponent(product.id)+'&area=content';
-   return <a className="library-product" key={product.id} href={href} onClick={event=>openWorkspaceProductLink(event,product,onOpen)} aria-label={`Open ${product.title}`}><ProductArtwork product={product} url={builder?.coverUrl||file?.coverUrl}/><span className="library-product-details"><strong className="library-product-title">{product.title}</strong><span className="library-product-meta">{product.format}<span aria-hidden="true">·</span>{details}</span><span className={`library-status ${commercial.tone==='selling'?'is-selling':isPublished?'is-published':''}`}><i/>{commercial.label}</span><span className="library-product-next">{commercial.detail}<ArrowRight size={12}/></span></span><ChevronRight className="library-product-arrow" size={18} aria-hidden="true"/></a>;
+   return <div className="library-product-card" key={product.id}><a className="library-product" href={href} onClick={event=>openWorkspaceProductLink(event,product,onOpen)} aria-label={`Open ${product.title}`}><ProductArtwork product={product} url={builder?.coverUrl||file?.coverUrl}/><span className="library-product-details"><strong className="library-product-title">{product.title}</strong><span className="library-product-meta">{product.format}<span aria-hidden="true">·</span>{details}</span><span className={`library-status ${commercial.tone==='selling'?'is-selling':isPublished?'is-published':''}`}><i/>{commercial.label}</span><span className="library-product-next">{commercial.detail}<ArrowRight size={12}/></span></span><ChevronRight className="library-product-arrow" size={18} aria-hidden="true"/></a><DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="library-product-menu-trigger" aria-label={`Actions for ${product.title}`} title="Product actions"><MoreHorizontal size={19}/></button></DropdownMenuTrigger><DropdownMenuContent className="library-product-menu" align="end" sideOffset={6} collisionPadding={12}><DropdownMenuItem variant="destructive" onSelect={()=>setDeleteProduct(product)}><Trash2 size={16}/>Delete product…</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>;
   })}</div>
   {!products.length?<div className="gen-empty library-empty"><FolderOpen size={30}/><h2>No products yet</h2><p>Bring your own recordings or files, teach something new, or offer a service. You choose when to use AI.</p></div>:!visible.length?<div className="gen-empty library-empty"><Search size={28}/><h2>No products found</h2><p>Try another search or adjust your filters.</p><button type="button" className="button secondary" onClick={clearFilters}>Clear filters</button></div>:null}
+  {deleteProduct&&<ProductDeleteDialog key={deleteProduct.id} product={deleteProduct} open onOpenChange={open=>{if(!open)setDeleteProduct(null);}} onDeleted={()=>{const deletedId=deleteProduct.id;setDeleteProduct(null);if(onDeletedProduct)onDeletedProduct(deletedId);else window.location.reload();}}/>}
  </section>;
 }

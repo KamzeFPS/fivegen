@@ -23,8 +23,11 @@ export async function getVoiceSource(id: string, owner: string): Promise<VoiceSo
 }
 export async function saveVoiceSource(id: string | null, owner: string, value: unknown) {
   const input = voiceInputSchema.parse(value), db = database();
-  await ownedProduct(input.productId, owner);
+  // A workspace library source survives deletion of its originating product.
+  // Existing sources keep that immutable origin; creating a source still needs
+  // an actual owned product and never accepts an arbitrary orphan origin.
   if (id) { const previous = await getVoiceSource(id, owner); if (previous.productId !== input.productId) throw new ApiError('A source cannot be moved to another product.', 409); }
+  else await ownedProduct(input.productId, owner);
   if (input.uploadId) {
     const upload = await db.prepare("SELECT mime FROM uploads WHERE id=? AND owner=? AND product_id=? AND status='completed'").bind(input.uploadId, owner, input.productId).first();
     if (!upload || !/^(audio|video)\//.test(String(upload.mime))) throw new ApiError('Select one of your audio or video uploads.', 400);
@@ -32,8 +35,10 @@ export async function saveVoiceSource(id: string | null, owner: string, value: u
   }
   const updatedAt = Math.max(Date.now(), input.expectedUpdatedAt + 1), sourceId = id || crypto.randomUUID();
   const args = [input.title, input.kind, input.transcript, input.evidence, input.uploadId, Number(input.permission), Number(input.approved), updatedAt];
-  const result = id ? await db.prepare('UPDATE creator_voice_sources SET title=?,kind=?,transcript=?,evidence=?,upload_id=?,permission=?,approved=?,updated_at=?,lease=0,lease_id=NULL WHERE id=? AND owner=? AND updated_at=? AND lease<?').bind(...args, id, owner, input.expectedUpdatedAt, Date.now()).run()
-    : await db.prepare('INSERT INTO creator_voice_sources (title,kind,transcript,evidence,upload_id,permission,approved,updated_at,id,owner,product_id) SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE ?=0 AND (SELECT COUNT(*) FROM creator_voice_sources WHERE owner=?)<100').bind(...args, sourceId, owner, input.productId, input.expectedUpdatedAt, owner).run();
+  const uploadGuard=" AND (? IS NULL OR EXISTS(SELECT 1 FROM uploads WHERE id=? AND owner=? AND product_id=? AND status='completed'))";
+  const uploadValues=[input.uploadId,input.uploadId,owner,input.productId];
+  const result = id ? await db.prepare('UPDATE creator_voice_sources SET title=?,kind=?,transcript=?,evidence=?,upload_id=?,permission=?,approved=?,updated_at=?,lease=0,lease_id=NULL WHERE id=? AND owner=? AND updated_at=? AND lease<?'+uploadGuard).bind(...args, id, owner, input.expectedUpdatedAt, Date.now(),...uploadValues).run()
+    : await db.prepare('INSERT INTO creator_voice_sources (title,kind,transcript,evidence,upload_id,permission,approved,updated_at,id,owner,product_id) SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE ?=0 AND (SELECT COUNT(*) FROM creator_voice_sources WHERE owner=?)<100 AND EXISTS(SELECT 1 FROM products WHERE id=? AND owner=?)'+uploadGuard).bind(...args, sourceId, owner, input.productId, input.expectedUpdatedAt, owner,input.productId,owner,...uploadValues).run();
   if (!result.meta.changes) throw new ApiError(id ? 'This source changed or AI is still transcribing. Reload it before saving.' : 'Your library is full (100 sources) or this draft is stale.', 409);
   return getVoiceSource(sourceId, owner);
 }

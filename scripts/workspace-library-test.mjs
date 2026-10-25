@@ -45,16 +45,27 @@ assert.equal(helpers.workspaceProductDestination(products[0],[],[{productId:prod
 assert.equal(helpers.workspaceProductDestination(products[0]),null,'Legacy products keep their existing in-workspace editor');
 assert.equal(helpers.workspaceProductPublished(products[0],[],[{productId:products[0].id,pagePublished:true}]),true);
 
-const icon=()=>React.createElement('svg'),icons=Object.fromEntries(['ArrowRight','Banknote','BookOpen','CalendarDays','ChevronDown','ChevronRight','CircleAlert','Coins','CreditCard','ExternalLink','FileText','FolderOpen','GraduationCap','History','LayoutGrid','Layers3','LifeBuoy','Link2','List','LockKeyhole','LogOut','Mail','Menu','MessageSquare','PanelLeftClose','PanelLeftOpen','Plus','Scale','Search','ShieldCheck','SlidersHorizontal','TrendingUp','Upload','Users','X'].map(key=>[key,icon]));
+const icon=()=>React.createElement('svg'),icons=Object.fromEntries(['ArrowRight','Banknote','BookOpen','CalendarDays','ChevronDown','ChevronRight','CircleAlert','Coins','CreditCard','ExternalLink','FileText','FolderOpen','GraduationCap','History','LayoutGrid','Layers3','LifeBuoy','Link2','List','LockKeyhole','LogOut','Mail','Menu','MessageSquare','MoreHorizontal','PanelLeftClose','PanelLeftOpen','Plus','Scale','Search','ShieldCheck','SlidersHorizontal','Trash2','TrendingUp','Upload','Users','X'].map(key=>[key,icon]));
 const passthrough=({children})=>React.createElement('div',null,children),menus=Object.fromEntries(['DropdownMenu','DropdownMenuContent','DropdownMenuItem','DropdownMenuLabel','DropdownMenuSeparator','DropdownMenuTrigger','DropdownMenuSub','DropdownMenuSubContent','DropdownMenuSubTrigger','Popover','PopoverContent','PopoverTrigger','Dialog','DialogContent','DialogDescription','DialogHeader','DialogTitle'].map(name=>[name,passthrough]));
-const ui=load('app/workspace-product-library.tsx',{React,useState:React.useState,...icons,...menus,...helpers,builderTypeDetails:builder.builderTypeDetails});
+const ProductDeleteDialog=()=>null;
+const libraryDeps={React,useState:React.useState,...icons,...menus,...helpers,builderTypeDetails:builder.builderTypeDetails,ProductDeleteDialog};
+const ui=load('app/workspace-product-library.tsx',libraryDeps);
 const html=renderToStaticMarkup(React.createElement(ui.WorkspaceProductLibrary,{products,builders:summaries,onOpen:()=>{},onCreateFrom:()=>{}}));
 assert.match(html,/aria-label="Search products"/);assert.match(html,/aria-label="Product type"/);assert.match(html,/aria-label="Sort products"/);assert.match(html,/<button[^>]*aria-label="Grid view"[^>]*aria-pressed="true"/);
 assert.equal((html.match(/class="library-product"/g)||[]).length,11,'Every supported product type remains available');
+assert.equal((html.match(/aria-label="Actions for /g)||[]).length,11,'Each product exposes a named actions menu');
+assert.equal((html.match(/Delete product…/g)||[]).length,11,'Deletion remains discoverable directly from every product card');
+for(const anchor of html.matchAll(/<a\b[^>]*class="library-product"[^>]*>[\s\S]*?<\/a>/g))assert.doesNotMatch(anchor[0],/<button\b/,'Product action buttons are siblings of links so keyboard and browser navigation stay native');
 assert.match(html,/Upload existing content/);assert.match(html,/Start manually/);assert.doesNotMatch(html,/cover-art|eclipse/i,'Fallback cards do not reuse the same decorative hero image');
 for(const item of products)assert.ok(html.includes('href="/build/'+item.id+'"'),`${item.format} exposes a real link for opening in another tab`);
 const existingFile=renderToStaticMarkup(React.createElement(ui.WorkspaceProductLibrary,{products:[products[0]],files:[{productId:products[0].id}],onOpen:()=>{},onCreateFrom:()=>{}}));assert.ok(existingFile.includes('href="/sell/'+products[0].id+'"'));
 const legacy=renderToStaticMarkup(React.createElement(ui.WorkspaceProductLibrary,{products:[products[0]],onOpen:()=>{},onCreateFrom:()=>{}}));assert.ok(legacy.includes('href="/?project='+products[0].id+'&amp;area=content"'));
+const deleteSelections=[],deleteUI=load('app/workspace-product-library.tsx',{...libraryDeps,useState:initial=>[initial,value=>deleteSelections.push(value)]});
+const deleteTree=deleteUI.WorkspaceProductLibrary({products:[products[0]],onOpen:()=>{},onCreateFrom:()=>{}}),deleteEntry=descendants(deleteTree,node=>typeof node.props.onSelect==='function'&&nodeText(node)==='Delete product…')[0];
+assert.ok(deleteEntry);deleteEntry.props.onSelect();assert.equal(deleteSelections.at(-1).id,products[0].id,'Choosing Delete opens confirmation for that product rather than deleting immediately');
+const deletedProducts=[],confirmUI=load('app/workspace-product-library.tsx',{...libraryDeps,useState:initial=>[initial===null?products[0]:initial,value=>deleteSelections.push(value)]});
+const confirmTree=confirmUI.WorkspaceProductLibrary({products:[products[0]],onOpen:()=>{},onCreateFrom:()=>{},onDeletedProduct:id=>deletedProducts.push(id)}),confirmation=descendants(confirmTree,node=>node.type===ProductDeleteDialog)[0];
+assert.ok(confirmation);assert.equal(confirmation.props.product.id,products[0].id);confirmation.props.onDeleted();assert.deepEqual(deletedProducts,[products[0].id],'A successful confirmed deletion refreshes the parent product list without navigating away');
 for(const modifiers of [{},{ctrlKey:true},{metaKey:true},{shiftKey:true},{altKey:true},{button:1},{button:2},{defaultPrevented:true}]){
  let prevented=0,opened=0;const event={button:0,ctrlKey:false,metaKey:false,shiftKey:false,altKey:false,defaultPrevented:false,...modifiers,preventDefault(){prevented++;}};
  ui.openWorkspaceProductLink(event,products[0],value=>{assert.equal(value.id,products[0].id);opened++;});const ordinary=!Object.keys(modifiers).length;

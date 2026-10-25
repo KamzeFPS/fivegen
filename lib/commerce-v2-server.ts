@@ -166,7 +166,18 @@ export async function createCommerceCheckout(req:Request,input:unknown) {
      db.prepare(`INSERT INTO commerce_orders (id,owner,product_id,account_id,mode,email,amount,currency,title,status,access_hash,created_at,campaign,expected_fee_bps,expected_fee_amount,fee_plan_id) SELECT ?,?,?,?,?,?,?,?,?,'pending',?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM product_builder_publications b JOIN commerce_offers o ON o.product_id=b.product_id WHERE b.product_id=? AND b.version=? AND o.enabled=1 AND o.enabled_mode=? AND o.updated_at=?)`).bind(value.requestId,row.owner,row.product_id,row.account_id,mode,email,row.amount,row.currency,row.title,hash,now,value.campaign,plan.commissionBps,commerceCommission(Number(row.amount),plan.commissionBps),plan.id,row.product_id,row.publication_version,mode,row.updated_at),
      db.prepare('INSERT INTO product_builder_order_snapshots (order_id,product_id,publication_version,snapshot,created_at) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM commerce_orders WHERE id=? AND access_hash=?)').bind(value.requestId,row.product_id,row.publication_version,JSON.stringify(snapshot),now,value.requestId,hash),
     ]);if(!results[0].meta.changes)throw new ApiError('This product changed. Reload the page before paying.',409);
-   }else await db.prepare('INSERT INTO commerce_orders (id,owner,product_id,account_id,mode,email,amount,currency,title,status,access_hash,created_at,campaign,expected_fee_bps,expected_fee_amount,fee_plan_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(value.requestId,row.owner,row.product_id,row.account_id,mode,email,row.amount,row.currency,row.title,'pending',hash,now,value.campaign,plan.commissionBps,commerceCommission(Number(row.amount),plan.commissionBps),plan.id).run();
+   }else {
+    const reserved=await db.prepare(`INSERT INTO commerce_orders (id,owner,product_id,account_id,mode,email,amount,currency,title,status,access_hash,created_at,campaign,expected_fee_bps,expected_fee_amount,fee_plan_id)
+      SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM products p
+      JOIN commerce_offers o ON o.product_id=p.id AND o.owner=p.owner
+      JOIN growth_funnels f ON f.product_id=p.id AND f.owner=p.owner
+      JOIN commerce_accounts a ON a.owner=p.owner AND a.mode=o.enabled_mode
+      WHERE p.id=? AND p.owner=? AND f.slug=? AND f.published_at IS NOT NULL
+      AND o.enabled=1 AND o.enabled_mode=? AND o.updated_at=? AND a.account_id=? AND a.status='ready'
+      AND NOT EXISTS(SELECT 1 FROM product_builder_publications WHERE product_id=p.id))`)
+      .bind(value.requestId,row.owner,row.product_id,row.account_id,mode,email,row.amount,row.currency,row.title,'pending',hash,now,value.campaign,plan.commissionBps,commerceCommission(Number(row.amount),plan.commissionBps),plan.id,row.product_id,row.owner,value.slug,mode,row.updated_at,row.account_id).run();
+    if(!reserved.meta.changes)throw new ApiError('This product changed or was removed. Reload the page before paying.',409);
+   }
   }
   if(row.publication_version){const frozen=await db.prepare('SELECT publication_version FROM product_builder_order_snapshots WHERE order_id=?').bind(value.requestId).first();if(Number(frozen?.publication_version)!==Number(row.publication_version))throw new ApiError('This checkout belongs to an earlier offer. Start a new checkout from the product page.',409);}
   const order=existing||await db.prepare('SELECT * FROM commerce_orders WHERE id=?').bind(value.requestId).first();const origin=new URL(req.url).origin;

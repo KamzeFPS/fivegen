@@ -4,7 +4,11 @@ import { database, ownedProduct, ApiError } from './server';
 import {storageLimit} from './experience';
 import { pageBrandPresetSchema, pageBrandSchema, productPageConfigSchema,productPageLinkSchema,type PageBrandPreset } from './product-page';
 const eligibleIcon="id=? AND product_id=? AND owner=? AND status='completed' AND mime IN ('image/jpeg','image/png','image/webp') AND size BETWEEN 1 AND 10485760 AND object_key NOT LIKE 'voice/%' AND NOT EXISTS(SELECT 1 FROM creator_voice_sources WHERE upload_id=uploads.id)";
-async function sourceIcon(id:string,productId:string,owner:string){await ownedProduct(productId,owner);const row=await database().prepare('SELECT * FROM uploads WHERE '+eligibleIcon).bind(id,productId,owner).first();if(!row)throw new ApiError('Choose a completed product-owned JPEG, PNG or WebP icon up to 10 MB. Private voice files cannot be used as brand assets.',409);return row;}
+async function sourceIcon(id:string,productId:string,owner:string){
+ const scope=await database().prepare('SELECT id FROM products WHERE id=? AND owner=? UNION ALL SELECT id FROM page_brand_presets WHERE source_product_id=? AND icon_upload_id=? AND owner=? LIMIT 1').bind(productId,owner,productId,id,owner).first();
+ if(!scope)throw new ApiError('Product not found.',404);
+ const row=await database().prepare('SELECT * FROM uploads WHERE '+eligibleIcon+' AND (EXISTS(SELECT 1 FROM products WHERE id=? AND owner=?) OR EXISTS(SELECT 1 FROM page_brand_presets WHERE source_product_id=? AND icon_upload_id=? AND owner=?))').bind(id,productId,owner,productId,owner,productId,id,owner).first();if(!row)throw new ApiError('Choose a completed product-owned JPEG, PNG or WebP icon up to 10 MB. Private voice files cannot be used as brand assets.',409);return row;
+}
 export async function getBrandPresets(owner: string):Promise<PageBrandPreset[]> {
   const rows = await database().prepare('SELECT id,name,brand,source_product_id,icon_upload_id,links,updated_at FROM page_brand_presets WHERE owner=? ORDER BY updated_at DESC LIMIT 20').bind(owner).all();
   return rows.results.map(row => ({ id: String(row.id), name: String(row.name), brand: pageBrandSchema.parse(JSON.parse(String(row.brand))),sourceProductId:row.source_product_id==null?null:String(row.source_product_id),iconUploadId:row.icon_upload_id==null?null:String(row.icon_upload_id),links:z.array(productPageLinkSchema).max(8).parse(JSON.parse(String(row.links||'[]'))), updatedAt: Number(row.updated_at) }));
@@ -14,8 +18,8 @@ export async function saveBrandPreset(owner: string, input: unknown) {
   if(value.iconUploadId){if(!value.sourceProductId)throw new ApiError('Choose the product that owns this brand icon.');await sourceIcon(value.iconUploadId,value.sourceProductId,owner);}
   const count = await database().prepare('SELECT COUNT(*) AS n FROM page_brand_presets WHERE owner=?').bind(owner).first();
   if (Number(count?.n) >= 20) throw new ApiError('Your brand library has 20 presets. Use an existing preset before adding more.', 409);
-  const inserted = await database().prepare('INSERT INTO page_brand_presets(id,owner,name,brand,source_product_id,icon_upload_id,links,updated_at) SELECT ?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM page_brand_presets WHERE owner=?)<20').bind(crypto.randomUUID(), owner, value.name, JSON.stringify(value.brand),value.sourceProductId,value.iconUploadId,JSON.stringify(value.links), Date.now(), owner).run();
-  if (!inserted.meta.changes) throw new ApiError('Your brand library has 20 presets. Use an existing preset before adding more.', 409);
+  const inserted = await database().prepare('INSERT INTO page_brand_presets(id,owner,name,brand,source_product_id,icon_upload_id,links,updated_at) SELECT ?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM page_brand_presets WHERE owner=?)<20 AND (? IS NULL OR EXISTS(SELECT 1 FROM uploads WHERE '+eligibleIcon+'))').bind(crypto.randomUUID(), owner, value.name, JSON.stringify(value.brand),value.sourceProductId,value.iconUploadId,JSON.stringify(value.links), Date.now(), owner,value.iconUploadId,value.iconUploadId,value.sourceProductId,owner).run();
+  if (!inserted.meta.changes) throw new ApiError('Your brand library is full or this brand icon changed. Review the original image and try again.', 409);
   return getBrandPresets(owner);
 }
 const applySchema=z.object({presetId:z.string().uuid(),base:productPageConfigSchema,affected:z.object({brand:z.boolean(),icon:z.boolean(),links:z.boolean()}).strict()}).strict();

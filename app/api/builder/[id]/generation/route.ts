@@ -21,7 +21,7 @@ export async function POST(req:Request,context:Context){try{
   const brief=briefSchema.parse(builderBrief(workspace.draft));
   const job=await database().prepare('SELECT * FROM generation WHERE product_id=? AND owner=?').bind(id,user.userId).first();
   if(job?.status==='completed')throw new ApiError('The AI result is ready. Apply it, or keep editing your current product.',409);
-  if(!job)await database().prepare("INSERT OR IGNORE INTO generation (product_id,owner,brief,stage,status,lease,updated_at) VALUES (?,?,?,-1,'queued',0,?)").bind(id,user.userId,JSON.stringify(brief),Date.now()).run();
+  if(!job)await database().prepare("INSERT OR IGNORE INTO generation (product_id,owner,brief,stage,status,lease,updated_at) SELECT ?,?,?,-1,'queued',0,? WHERE EXISTS(SELECT 1 FROM products WHERE id=? AND owner=?)").bind(id,user.userId,JSON.stringify(brief),Date.now(),id,user.userId).run();
  }
  const response=await generationStep(new Request(req.url,{method:'POST',headers:req.headers,body:JSON.stringify({allowCredits:input.allowCredits,maxStepCredits:input.maxStepCredits})}),context);
  if(response.ok){const result=await response.clone().json() as {done?:boolean};if(result.done)await captureGeneratedBuilderResult(id,user.userId);}

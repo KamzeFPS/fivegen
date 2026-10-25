@@ -52,6 +52,7 @@ Object.assign(dependencies, await load('lib/access.ts'));
 Object.assign(dependencies, await load('lib/builder-contract.ts'));
 Object.assign(dependencies, await load('lib/builder-publication-contract.ts'));
 Object.assign(dependencies, await load('lib/builder-delivery-server.ts'));
+Object.assign(dependencies, await load('lib/product-team-server.ts'));
 const uploadRoute = await load('app/api/uploads/[id]/route.ts');
 const productUploadRoute = await load('app/api/products/[id]/uploads/route.ts');
 const commerceCustomer = await load('lib/commerce-v2-server.ts', ['commerceMode', 'commerceHash', 'cookieValue', 'cookieOwns', 'customerOrder', 'customerVideo']);
