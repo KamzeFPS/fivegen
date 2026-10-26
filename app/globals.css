@@ -2911,8 +2911,8 @@ label small {
   min-height: 86px;
 }
 .format-options {
-  max-height: 365px;
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
   padding-right: 3px;
 }
 @media (max-width: 1150px) {

@@ -1,47 +1,38 @@
-# FiveGen hero edge fidelity QA
+# FiveGen continuous page scrolling QA
 
-Date: 26 October 2026, Asia/Ulaanbaatar.
+26 October 2026. Scope: remove unnecessary nested scrolling while preserving the existing design and tasks.
 
-## Findings and fixes
+## Findings and changes
 
-- **[P2, fixed] The hero image had straight top and bottom boundaries.** The selected reference blends the desk into the surrounding page. The previous implementation masked only the figure's left edge; its contained raster still ended abruptly inside that figure. The image now keeps its natural ratio and receives intersecting horizontal and vertical alpha masks. Its center stays sharp and its caption remains outside the mask. Both standard and WebKit mask declarations are included.
-- **[P2, fixed during this check] The pale left edge reduced dark-theme headline contrast.** The first feathered Dark capture still placed some bright desk background behind the end of “your subject.” Dark mode now begins its left fade later and reaches full opacity farther right. The final capture separates the white headline and the bright artwork. On phones the stacked image uses a gentler, symmetric horizontal fade.
+1. Sales page settings and preview had separate viewport-height scrollboxes. Both now grow in document flow, including narrow-width and full-width preview modes. Clicking a preview section deliberately reveals its editing fields. Draft changes and autosaves do not trigger page repositioning.
+2. Funnel Builder combined a fixed-height map, inspector, scrolling idea/checklist body and a separate scheduled-items list. The reading journey and desktop details now expand with the page. Selecting a stage reveals its details below the workspace header. Freeform map editing keeps its intentional pan/zoom canvas.
+3. Source excerpts, historical marketing copy, imported-section reviews, chapter outlines, customer message history, decision diagrams and Calendar notes had unnecessary short vertical caps. Removed those caps. Long-form writing and shared studio fields now measure their text and grow on content or width changes; sales copy uses the same behavior.
+4. Mobile Funnel details and Page tools retain a single bounded dialog scroll. Nested content inside those surfaces expands naturally. Scheduling remains a separate dialog and was closed without saving. Product switching, search, tables and genuine chat/canvas surfaces retain scrolling when their content cannot fit.
+5. Removed the obsolete sticky schedule footer shadow from its source rule as well as the final override, so the Light appearance compatibility layer cannot restore the old scroll-edge shadow.
 
-## Visual truth and evidence
+## Current-run evidence
 
-All paths below are relative to `/Users/kamze/Documents/ChatGPT/fivegen/`.
+All files below are in `/Users/kamze/Documents/ChatGPT/fivegen/outputs/scroll-simplification-2026-10-26/`.
 
-- Source visual truth: `outputs/sparkle-redesign-2026-10-25/concepts/selected-light-dark-revision.png`, 1073 × 1466 pixels, selected Creator's Desk concept, Light.
-- Before: `outputs/sparkle-redesign-2026-10-25/screenshots/24-live-homepage.png`, 1440 × 1024 pixels.
-- Final implementation: `http://localhost:59908/`, anonymous homepage, first example tab, top of page. Light and Dark were selected through the visible Appearance control.
-- Final Light: `outputs/hero-feather-2026-10-26/04-desktop-light-final.png`, 1440 × 1024 pixels and CSS viewport, IAB.
-- Final Dark: `outputs/hero-feather-2026-10-26/03-desktop-dark-final.png`, 1440 × 1024 pixels and CSS viewport, IAB.
-- Combined source/final hero: `outputs/hero-feather-2026-10-26/comparison-source-final.png`. The source's top 1073 × 767 region was proportionally scaled to 1440 × 1029, then cropped by five pixels to the implementation's 1440 × 1024 viewport. Both full hero views appear together in one input.
-- Before/after hero: `outputs/hero-feather-2026-10-26/comparison-before-after.png`.
-- Mobile full captures: `outputs/hero-feather-2026-10-26/05-mobile-light-full.png` and `06-mobile-dark-full.png`, each 390 × 5160 pixels, CSS viewport 390 × 844. The top 1056 pixels appear together in `comparison-mobile.png`, covering copy, image and caption.
-- Tablet: `outputs/hero-feather-2026-10-26/08-tablet-dark-valid.png`, 705 × 900 pixels and CSS viewport, Chrome. The earlier IAB tablet capture was clipped by its panel and is excluded from acceptance evidence.
-- Screenshot output uses CSS-size pixels; screenshots and source crops were not stretched. Original artwork remains the same 1340 × 1174 WebP. No creative raster editing or image regeneration was performed.
-
-## Comparison history
-
-1. **Blocked:** the source/before combined input confirmed the missing top/bottom fade. Applied the mask to the actual image bounds and removed the dark rounded boundary.
-2. **Blocked:** `02-desktop-dark.png` revealed the pale left edge behind the headline. Adjusted the dark horizontal fade; `03-desktop-dark-final.png` shows the corrected separation.
-3. **Passed:** opened the combined source/final and Light/Dark mobile comparisons, plus the actual tablet screenshot. All edges blend into the page; the complete course preview and planning note remain visible and the caption stays crisp. The reference has no separate Dark or mobile composition, so those states were checked for consistent feathering, readable copy and responsive usability rather than invented pixel-exact targets.
-
-This is a focused correction to the hero. The prior complete release QA is preserved at `outputs/hero-feather-2026-10-26/previous-release-qa.md`. The current combined full hero is also the focused region: its image boundaries, caption, copy and central preview are readable without a further crop.
+- Visual baseline/source truth: `01-funnel-before.png` and `02-sales-before.png`, 1440 × 1000 CSS/pixel viewport, anonymous isolated fixture account in the local workspace. This is a behavior correction to the existing design, not a new visual concept.
+- Funnel after: `05-funnel-after.png`, 1440 × 1317 full-page pixels at 1440 × 1000 CSS viewport. The map, inspector and idea body report overflow:visible and equal client/scroll heights. The fifteen-product rail is the only active navigation scroller; it cannot fit vertically in this viewport.
+- Sales after: `03-sales-after.png` and `08-sales-section-reveal.png`, 1440 × 1000. The former is scrolled down to demonstrate one continuous page; the latter shows a selected lower preview section and its focused editing fields beneath the sticky header.
+- Long writing: `04-writing-long.png`; a 7,353-character temporary lesson grew to 6,122 CSS px, and to 7,432 px after narrowing to 705 px. In each case clientHeight equalled scrollHeight. Original text was restored through the UI.
+- Mobile sales: `09-mobile-sales-tools.png`, 390 × 844 CSS/pixel viewport. One inspector scroller, no horizontal page overflow. Closing restores focus with preventScroll; selecting a preview section reopens the appropriate controls.
+- Mobile funnel DOM check: 390 × 844; one inspector scroll surface (842 px high, 1,181 px content), with an expanded idea body (799 px client/content) and schedule footer (193 px client/content). The schedule form was opened, checked and closed without saving.
+- `10-mobile-funnel.png` is rejected evidence: the viewport screenshot was rescaled/clipped during a browser viewport transition. It is not used to judge the mobile layout. Browser viewport changes can reparent funnel details into the mobile portal and reset its local tab; normal node event handlers remain unchanged.
+- Combined source/after evidence: `comparison-funnel.png`, two 1440 × 1000 regions with matching Dark state and no density rescaling. Opened together to check typography, palette, spacing and content preservation.
+- Final updated desktop: `13-funnel-approved.png`, 1470 × 1269 full-page pixels at a 1470 × 745 CSS viewport, Light. The obsolete footer shadow is confirmed `none`; the prior duplicate shadow artifact is resolved. Browser-native desktop checks also covered 1470 × 801; explicit checks also covered 1440 × 1000, 705 × 900 and 390 × 844.
 
 ## Required fidelity surfaces
 
-- **Typography:** existing Inter/Noto Serif hierarchy, line breaks and exact logo are unchanged. Final Dark copy remains readable against its background.
-- **Spacing/layout rhythm:** image retains its natural ratio and centered placement. Desktop headline, CTA and caption positions remain stable. No horizontal document overflow at 1440, 705 or 390 CSS px.
-- **Colors/tokens:** established warm Light and near-black Dark backgrounds remain unchanged. Alpha masks blend into the actual theme background rather than a fixed-color overlay.
-- **Image quality:** real approved artwork, sharp center, no new compression, no whole-image blur. Top, bottom, left and right edges feather; caption is unmasked. The slightly stronger bottom fade directly addresses the requested effect. Existing generated photographic detail differs from the mock as previously accepted.
-- **Copy/content:** unchanged product explanation, example labels, CTA and caption. No backend, payment or publishing behavior changed.
+- Typography, wording, brand assets, colors and creation/payment behavior remain unchanged. Existing cards, stage hierarchy and responsive navigation are retained.
+- Layout now uses the document for ordinary content. No artificial minimum preview filler, cropped content body or small reading scrollbar remains in the changed panels.
+- Real artwork and creator-customized pages remain intact; no replacement assets or image edits.
+- Focused inspection covered section selection, long writing, stage details/checklist, mobile tools, schedule form and close/focus return. Browser snapshots and saved screenshots supplement measured overflow checks; a screenshot alone does not establish scroll behavior.
 
-## Checks and limits
+## Validation and limits
 
-Production build, existing public-home regression check and `git diff --check` passed. Light/Dark switching and theme persistence through reload were checked in the browser. The homepage browser logs returned no entries. Safari-specific runtime verification was not available; prefixed mask syntax is included alongside the standard syntax. No live records, provider calls, credentials or payment settings were changed.
-
-Implementation checklist: raster-bound feathering applied; center/caption preserved; Dark headline contrast repaired; phone fade adapted; browser evidence reviewed; production build and focused checks passed.
+Production build, TypeScript, focused editor/fields lint, existing sales-page UI, product-page, creator studio UI, Funnel Builder, funnel navigation, Calendar UI and appearance tests passed. Appearance compatibility CSS was regenerated. Existing sales editor React lint findings are unchanged from HEAD. Browser console entries observed were warnings from an installed Chrome extension, not app errors. No real AI, payment, email or publishing calls were made. Temporary writing/copy edits were restored, and the funnel was reloaded to its saved strategy with its two original actions intact.
 
 final result: passed

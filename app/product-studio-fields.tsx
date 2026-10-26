@@ -1,6 +1,6 @@
 'use client';
 
-import {useId,type ReactNode} from 'react';
+import {useId,useLayoutEffect,useRef,type ReactNode,type RefObject} from 'react';
 import {Plus,Trash2} from 'lucide-react';
 
 export type StudioData=Record<string,unknown>;
@@ -11,12 +11,29 @@ export const studioText=(value:unknown,fallback='')=>typeof value==='string'?val
 export const studioNumber=(value:unknown,fallback=0)=>typeof value==='number'&&Number.isFinite(value)?value:fallback;
 export const studioDateTime=(value:unknown)=>typeof value==='number'&&value>0?new Date(value-new Date(value).getTimezoneOffset()*60000).toISOString().slice(0,16):'';
 
+export function useStudioTextarea(value:unknown,active=true,forwarded?:RefObject<HTMLTextAreaElement|null>){
+ const fallback=useRef<HTMLTextAreaElement>(null),input=forwarded||fallback;
+ useLayoutEffect(()=>{
+  const field=input.current;if(!field||!active)return;
+  function fit(){
+   if(!field!.clientWidth)return;
+   field!.style.height='auto';
+   field!.style.height=`${field!.scrollHeight+field!.offsetHeight-field!.clientHeight}px`;
+  }
+  fit();let width=field.clientWidth;
+  const observer=new ResizeObserver(()=>{if(field.clientWidth!==width){width=field.clientWidth;fit();}});
+  observer.observe(field);
+  return()=>observer.disconnect();
+ },[value,active,input]);
+ return input;
+}
+
 export function StudioCard({title,description,children,action,eyebrow}:{title:string;description?:string;children:ReactNode;action?:ReactNode;eyebrow?:string}){
  return <section className="ps-card"><header className="ps-card-heading"><div>{eyebrow&&<span className="ps-eyebrow">{eyebrow}</span>}<h2>{title}</h2>{description&&<p>{description}</p>}</div>{action}</header><div className="ps-card-body">{children}</div></section>;
 }
 export function StudioText({label,value,onChange,multiline=false,type='text',help,placeholder,maxLength=6000,min,max,step}:{label:string;value:unknown;onChange:(value:string)=>void;multiline?:boolean;type?:string;help?:string;placeholder?:string;maxLength?:number;min?:number;max?:number;step?:number}){
- const id=useId();
- return <label className="ps-field" htmlFor={id}><span>{label}</span>{multiline?<textarea id={id} rows={4} value={studioText(value)} maxLength={maxLength} placeholder={placeholder} onChange={event=>onChange(event.target.value)}/>:<input id={id} type={type} value={typeof value==='number'?value:studioText(value)} min={min} max={max} step={step} maxLength={maxLength} placeholder={placeholder} onChange={event=>onChange(event.target.value)}/>} {help&&<small>{help}</small>}</label>;
+ const id=useId(),input=useStudioTextarea(value,multiline);
+ return <label className="ps-field" htmlFor={id}><span>{label}</span>{multiline?<textarea ref={input} id={id} rows={4} value={studioText(value)} maxLength={maxLength} placeholder={placeholder} onChange={event=>onChange(event.target.value)}/>:<input id={id} type={type} value={typeof value==='number'?value:studioText(value)} min={min} max={max} step={step} maxLength={maxLength} placeholder={placeholder} onChange={event=>onChange(event.target.value)}/>} {help&&<small>{help}</small>}</label>;
 }
 export function StudioSelect({label,value,onChange,options,help}:{label:string;value:unknown;onChange:(value:string)=>void;options:readonly (readonly [string,string])[];help?:string}){
  const id=useId();return <label className="ps-field" htmlFor={id}><span>{label}</span><select id={id} value={studioText(value,options[0]?.[0]||'')} onChange={event=>onChange(event.target.value)}>{options.map(([key,text])=><option value={key} key={key}>{text}</option>)}</select>{help&&<small>{help}</small>}</label>;

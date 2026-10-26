@@ -7337,7 +7337,6 @@ html[data-appearance='light'] .fj-hypothesis:where(:not(:is(.sales-landing,.prod
 html[data-appearance='light'] .fj-schedule-footer:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
   background: #ffffff;
   border-top: 1px solid #d7d7d0;
-  box-shadow: 0 -12px 20px #20221f3d;
 }
 html[data-appearance='light'] .fj-schedule-footer>small:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
   color: #62665e;

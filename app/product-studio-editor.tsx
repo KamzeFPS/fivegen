@@ -6,12 +6,13 @@ import {ArrowDown,ArrowUp,Bold,ChevronDown,GripVertical,Heading2,ImagePlus,Itali
 import type {BuilderDraft} from '@/lib/builder-contract';
 import type {SectionStudio} from '@/lib/product-studio-contract';
 import {renderStudioMarkdown} from '@/lib/product-studio-markdown';
-import {StudioLines,StudioRows,StudioSelect,StudioText,StudioToggle,studioDateTime} from './product-studio-fields';
+import {StudioLines,StudioRows,StudioSelect,StudioText,StudioToggle,studioDateTime,useStudioTextarea} from './product-studio-fields';
 
 type Section=BuilderDraft['sections'][number];
 type Upload={id:string;name:string;mime:string};
 export function StudioMarkdownEditor({label,value,onChange,goalWords,onGoalChange,images=[]}:{label:string;value:string;onChange:(value:string)=>void;goalWords?:number;onGoalChange?:(goal:number)=>void;images?:Upload[]}){
  const input=useRef<HTMLTextAreaElement>(null),[preview,setPreview]=useState(false),[imageOpen,setImageOpen]=useState(false),[imageUrl,setImageUrl]=useState(''),[imageAlt,setImageAlt]=useState('');
+ useStudioTextarea(value,!preview,input);
  const words=value.trim().match(/\S+/gu)?.length||0,minutes=Math.max(1,Math.ceil(words/200));
  function insert(before:string,after='',sample=''){
   const start=input.current?.selectionStart??value.length,end=input.current?.selectionEnd??value.length,selected=value.slice(start,end)||sample,next=value.slice(0,start)+before+selected+after+value.slice(end);
