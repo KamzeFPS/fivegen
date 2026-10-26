@@ -1,45 +1,47 @@
-# FiveGen Creator’s Desk and appearance QA
+# FiveGen hero edge fidelity QA
 
-Date: 26 October 2026, Asia/Ulaanbaatar. Final result: **passed**.
+Date: 26 October 2026, Asia/Ulaanbaatar.
 
-## Visual truth and implementation
+## Findings and fixes
 
-- Selected option: first displayed concept, Creator’s Desk, revised with the requested appearance selector. Source: `/Users/kamze/Documents/ChatGPT/fivegen/outputs/sparkle-redesign-2026-10-25/concepts/selected-light-dark-revision.png` (1073 × 1466 pixels).
-- Implementation: `http://localhost:59908/`, anonymous, Light, first example tab. Browser: Chrome, used because the in-app viewport override did not hold a requested size.
-- Final browser screenshot: `/Users/kamze/Documents/ChatGPT/fivegen/outputs/sparkle-redesign-2026-10-25/screenshots/19-home-approved-full.png` (1440 × 4384 pixels), CSS viewport 1440 × 1024. Browser screenshot API emits CSS-size pixels despite the display density. No stretched assets.
-- Combined full comparison: `/Users/kamze/Documents/ChatGPT/fivegen/outputs/sparkle-redesign-2026-10-25/comparison-final.png`. The first 1967 implementation pixels were proportionally reduced to the source’s 1073 × 1466 size, then placed beside the source.
-- Focused hero/brand/type comparison: `/Users/kamze/Documents/ChatGPT/fivegen/outputs/sparkle-redesign-2026-10-25/comparison-hero-focus.png`.
+- **[P2, fixed] The hero image had straight top and bottom boundaries.** The selected reference blends the desk into the surrounding page. The previous implementation masked only the figure's left edge; its contained raster still ended abruptly inside that figure. The image now keeps its natural ratio and receives intersecting horizontal and vertical alpha masks. Its center stays sharp and its caption remains outside the mask. Both standard and WebKit mask declarations are included.
+- **[P2, fixed during this check] The pale left edge reduced dark-theme headline contrast.** The first feathered Dark capture still placed some bright desk background behind the end of “your subject.” Dark mode now begins its left fade later and reaches full opacity farther right. The final capture separates the white headline and the bright artwork. On phones the stacked image uses a gentler, symmetric horizontal fade.
+
+## Visual truth and evidence
+
+All paths below are relative to `/Users/kamze/Documents/ChatGPT/fivegen/`.
+
+- Source visual truth: `outputs/sparkle-redesign-2026-10-25/concepts/selected-light-dark-revision.png`, 1073 × 1466 pixels, selected Creator's Desk concept, Light.
+- Before: `outputs/sparkle-redesign-2026-10-25/screenshots/24-live-homepage.png`, 1440 × 1024 pixels.
+- Final implementation: `http://localhost:59908/`, anonymous homepage, first example tab, top of page. Light and Dark were selected through the visible Appearance control.
+- Final Light: `outputs/hero-feather-2026-10-26/04-desktop-light-final.png`, 1440 × 1024 pixels and CSS viewport, IAB.
+- Final Dark: `outputs/hero-feather-2026-10-26/03-desktop-dark-final.png`, 1440 × 1024 pixels and CSS viewport, IAB.
+- Combined source/final hero: `outputs/hero-feather-2026-10-26/comparison-source-final.png`. The source's top 1073 × 767 region was proportionally scaled to 1440 × 1029, then cropped by five pixels to the implementation's 1440 × 1024 viewport. Both full hero views appear together in one input.
+- Before/after hero: `outputs/hero-feather-2026-10-26/comparison-before-after.png`.
+- Mobile full captures: `outputs/hero-feather-2026-10-26/05-mobile-light-full.png` and `06-mobile-dark-full.png`, each 390 × 5160 pixels, CSS viewport 390 × 844. The top 1056 pixels appear together in `comparison-mobile.png`, covering copy, image and caption.
+- Tablet: `outputs/hero-feather-2026-10-26/08-tablet-dark-valid.png`, 705 × 900 pixels and CSS viewport, Chrome. The earlier IAB tablet capture was clipped by its panel and is excluded from acceptance evidence.
+- Screenshot output uses CSS-size pixels; screenshots and source crops were not stretched. Original artwork remains the same 1340 × 1174 WebP. No creative raster editing or image regeneration was performed.
 
 ## Comparison history
 
-1. **Blocked, P2 scale and hierarchy.** The initial combined comparison (`comparison-desktop.png`) showed undersized headline, supporting text, logo and launch heading, plus an inset hero illustration that lost the selected composition. Increased those scales and let the real generated artwork occupy the hero’s right region.
-2. **Blocked, P2 collision/crop.** `comparison-iteration-2.png` showed the enlarged hero reaching the headline. A subsequent cover crop cut the planning note. Reduced headline maximum to 96px and used a full contained raster with a soft edge mask. No replacement CSS illustration was used.
-3. **Passed.** Reopened both source and the final combined comparisons. Headline and artwork are distinct, the complete planning note is visible, and the editorial rhythm, warm palette, supplied brand and primary action match the chosen direction. The functioning “Your product” tab intentionally previews lessons; the funnel is in “Your audience” so the tab and content agree.
+1. **Blocked:** the source/before combined input confirmed the missing top/bottom fade. Applied the mask to the actual image bounds and removed the dark rounded boundary.
+2. **Blocked:** `02-desktop-dark.png` revealed the pale left edge behind the headline. Adjusted the dark horizontal fade; `03-desktop-dark-final.png` shows the corrected separation.
+3. **Passed:** opened the combined source/final and Light/Dark mobile comparisons, plus the actual tablet screenshot. All edges blend into the page; the complete course preview and planning note remain visible and the caption stays crisp. The reference has no separate Dark or mobile composition, so those states were checked for consistent feathering, readable copy and responsive usability rather than invented pixel-exact targets.
 
-Additional theme defects fixed before release: dark Docs translucent surfaces were too pale; protected buyer pages needed the white logo; account appearance controls needed real Radix menu-radio keyboard navigation. Final evidence: `screenshots/20-docs-dark-fixed.png` and `21-account-appearance-menu.png` under the output directory above.
+This is a focused correction to the hero. The prior complete release QA is preserved at `outputs/hero-feather-2026-10-26/previous-release-qa.md`. The current combined full hero is also the focused region: its image boundaries, caption, copy and central preview are readable without a further crop.
 
 ## Required fidelity surfaces
 
-- **Typography:** Inter plus locally served Noto Serif normal/italic. Matched the large sans/italic hierarchy, wrapping, optical weights and line lengths; body and control text remain readable at actual viewport size. The exact uploaded wordmark is an image, not substituted typography.
-- **Spacing/layout:** compared header, hero split, illustration crop, divider, launch heading, three-tab row and example panel in the combined inputs. Verified no document overflow at 1440, 705 and 390 CSS px. Phone content stacks and the appearance selector remains labeled.
-- **Colors:** warm ivory/near-black/orange homepage; actual light and dark application surfaces, readable states and focus rings. Creator-authored sales-page colors, document paper and media are protected from the account appearance override.
-- **Assets:** supplied source preserved byte-for-byte, exact dark/light lockups and sized icons; generated warm desk artwork at its natural ratio, 180 KB WebP. Noto font subsets total about 51 KB. No generic placeholder or fabricated customer proof.
-- **Copy:** original teaching stays the creator’s work; illustrative project is labeled. Calendar demo is a reminder, not an autopublishing claim. Payment availability and email activation remain accurately described.
+- **Typography:** existing Inter/Noto Serif hierarchy, line breaks and exact logo are unchanged. Final Dark copy remains readable against its background.
+- **Spacing/layout rhythm:** image retains its natural ratio and centered placement. Desktop headline, CTA and caption positions remain stable. No horizontal document overflow at 1440, 705 or 390 CSS px.
+- **Colors/tokens:** established warm Light and near-black Dark backgrounds remain unchanged. Alpha masks blend into the actual theme background rather than a fixed-color overlay.
+- **Image quality:** real approved artwork, sharp center, no new compression, no whole-image blur. Top, bottom, left and right edges feather; caption is unmasked. The slightly stronger bottom fade directly addresses the requested effect. Existing generated photographic detail differs from the mock as previously accepted.
+- **Copy/content:** unchanged product explanation, example labels, CTA and caption. No backend, payment or publishing behavior changed.
 
-## Interaction and runtime checks
+## Checks and limits
 
-- Explored lessons, next lesson, both page styles, all funnel stages, Calendar reminder and Undo. Tabs use arrow/Home/End navigation. Primary creation CTA preserves the return destination at sign-in.
-- Switched Light/Dark, reloaded, verified saved preference, automatic wordmark and device/System bootstrap. Account menu Light selection was tested using Left Arrow then Enter; checked state and resulting Light theme were verified.
-- Browser-reviewed workspace Funnel Builder, product overview, shared Calendar, pricing, sign-in and Docs. Checked the 705px navigation and phone homepage. Browser error logs were empty on tested homepage/workspace surfaces.
-- Production build, TypeScript and scoped lint passed (four existing-style image optimization warnings, zero scoped errors). All 76 creator-clarity suites passed across the initial run and the focused rerun of the navigation harness after adding its new appearance dependency. Appearance, public-home, SEO and production Render integration checks passed separately.
-- Payment session creation logic is unchanged; Stripe applies appearance through its supported update API without remounting the session. No real payment, email, AI generation or customer-record edits were performed for these checks.
+Production build, existing public-home regression check and `git diff --check` passed. Light/Dark switching and theme persistence through reload were checked in the browser. The homepage browser logs returned no entries. Safari-specific runtime verification was not available; prefixed mask syntax is included alongside the standard syntax. No live records, provider calls, credentials or payment settings were changed.
 
-## Remaining limits and polish
-
-- Minor photographic details differ from the concept; the independently generated illustration preserves its subject, palette and composition. This is acceptable asset variation.
-- Theme preferences persist per origin; the Docs subdomain keeps its own selection. This is documented behavior.
-- Live third-party wallet/payment authorization was not exercised; this release changes its appearance only.
-
-Implementation checklist: supplied identity applied; chosen landing page implemented; interactive example works; Light/Dark/System preferences and keyboard choices work; responsive checks pass; no actionable P0/P1/P2 findings remain.
+Implementation checklist: raster-bound feathering applied; center/caption preserved; Dark headline contrast repaired; phone fade adapted; browser evidence reviewed; production build and focused checks passed.
 
 final result: passed
