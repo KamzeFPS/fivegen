@@ -1,10 +1,12 @@
 # FiveGen — AI Growth Operator
 
-FiveGen builds the launch around a creator’s expertise. The creator records and writes the actual course or product; AI helps interview them, draft an authentic video sales letter (VSL), prepare landing-page copy, and write a follow-up draft. A published landing page captures real leads in the creator’s CRM.
+FiveGen builds the launch around a creator’s expertise. The creator supplies their expertise and recordings; AI helps plan the work, draft written product content and launch materials, and prepare an authentic video sales letter (VSL). The creator reviews the work before publishing. A published landing page captures real leads in the creator’s CRM.
 
 ## Current product
 
-One **Create your product** action opens the creator workflow. Workspace navigation is **Dashboard, Products, Customers, Creator library, Calendar**. Each selected product has **Overview, Content, Sales page, Price & access, Marketing, Customers and Settings**. Overview explains the next action; a separate **Launch review** destination owns required-content checks, editorial approval and delivery publication. **Price & access** owns commercial terms, payment setup, service availability and the explicit sales switch. Missing requirements have direct repair actions.
+One **Create your product** action opens the creator workflow. Workspace navigation is **Chat with Gen, Dashboard, Products, Customers, Creator library, Calendar**. Each selected product has **Overview, Content, Sales page, Price & access, Marketing, Customers and Settings**. Overview explains the next action; a separate **Launch review** destination owns required-content checks, editorial approval and delivery publication. **Price & access** owns commercial terms, payment setup, service availability and the explicit sales switch. Missing requirements have direct repair actions.
+
+**Chat with Gen** supports ordinary conversation and starting from a rough idea. For creation requests, Gen proposes an ordered plan with a sketch, the reason for each step, required inputs, and the exact draft to review. Separate approval buttons save written product drafts in **Products**, campaign drafts in **Marketing → Campaigns**, and internal events in **Calendar**. Only the next step can be approved; typing approval in a message never executes a step. The conversation stays open, saved-work links survive revised plans, and the product editor’s **Chat** button returns to the conversation. Execution uses the reviewed content without another AI generation charge. Planning uses the existing message allowance and displayed credit ceiling. External publishing, sending and recording remain separate actions.
 
 New mini/video courses open directly in **Curriculum** with **Upload recording, Write a lesson or Add a resource**. Original teaching stays private until deliberately reviewed and published. Saved product audience, Outcome, tone and inclusions provide defaults for one shared marketing brief; saved shared answers are overrides. Existing marketing drafts and approved copy are preserved when that brief changes. An unset paid price reads **Price not set** in sales-page previews and public rendering; **Free** requires an explicitly free offer or tier.
 
@@ -72,6 +74,8 @@ Configure `RESEND_API_KEY` and a verified `EMAIL_FROM` address (no display name)
 
 - `npx tsc --noEmit`
 - `npm run build:render`
+- `npm run test:workspace-chat` — persistent chat and plan revisions, per-step approval, owner/revision checks, native draft saves, retry recovery, credit consent and retained resource links; AI transport uses fixtures.
+- `node scripts/workspace-assistant-preview.mjs --check` — after a Render build, verify planning, all three native saves and continued chat through real local HTTP with isolated storage and synthetic AI responses. `npm run preview:workspace-chat` keeps the same fixture flow open for browser review; it prints a local sign-in entry URL and blocks external requests.
 - `npm run test:growth` — actual SQLite and routes, fixture AI transport, credit charging/refunds, snapshots, CRM isolation, uploads, and curriculum behavior.
 - `npm run test:growth:suite:runtime` — built-app HTTP checks for all six feature APIs, authentication, data isolation, survey exports, and missing-provider states; blocks external calls.
 - `npm run test:growth:suite` — real SQLite creator commerce, automation queue, voice/campaign, Offer Lab, and analytics tests; external providers use fixtures.

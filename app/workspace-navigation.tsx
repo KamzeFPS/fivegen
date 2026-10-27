@@ -25,6 +25,7 @@ type Props={
   creditsLabel:string;
   history:{id:string;title:string}[];
   onCreate:()=>void;
+  onChat?:()=>void;
   onHome?:()=>void;
   onView:(view:NavigationView)=>void;
   onProduct:(id:string)=>void;
@@ -33,8 +34,13 @@ type Props={
   onSignOut:()=>void;
 };
 
-export function WorkspaceNavigation({user,view,label,admin,products,creditsLabel,history,onCreate,onHome,onView,onProduct,onConversation,onVisit,onSignOut}:Props){
+export function WorkspaceNavigation({user,view,label,admin,products,creditsLabel,history,onCreate,onChat,onHome,onView,onProduct,onConversation,onVisit,onSignOut}:Props){
   const [supportOpen,setSupportOpen]=useState(false);
+  function visitChat(){
+    if(onChat){onChat();return;}
+    let id='';try{if(user)id=sessionStorage.getItem('fivegen:last-assistant-conversation:'+user.email)||'';}catch{}
+    onVisit(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id)?'/?conversation='+encodeURIComponent(id):'/?view=create');
+  }
   const initials=(user?.name.trim().split(/\s+/).slice(0,2).map(word=>word[0]).join('')||user?.email[0]||'F').toUpperCase();
   return <>
     <a className="workspace-skip" href="#workspace-content">Skip to content</a>
@@ -43,6 +49,7 @@ export function WorkspaceNavigation({user,view,label,admin,products,creditsLabel
         <button type="button" className="workspace-brand" onClick={onHome||onCreate} aria-label="FiveGen home"><Brand/></button>
         <WorkspaceSearch products={products} history={history} admin={admin} onView={onView} onProduct={onProduct} onConversation={onConversation} onCreate={onCreate} onVisit={onVisit}/>
         <div className="workspace-header-actions">
+          {!onChat&&<button type="button" className="workspace-chat-return" onClick={visitChat} aria-label="Return to chat with Gen" title="Return to chat with Gen"><MessageSquare size={18}/><span>Chat</span></button>}
           <div id="workspace-gen-slot" className="workspace-gen-slot"/>
           <button type="button" className="workspace-credit-button" onClick={()=>onView('credits')} aria-label={`AI credits: ${creditsLabel}`} title="AI credits"><Coins size={17}/><span>{creditsLabel}</span></button>
           <button type="button" className="workspace-help-trigger workspace-attention-trigger" onClick={()=>onVisit('/operations')} aria-label="Attention & support" title="Attention & support"><CircleAlert size={20}/></button>
@@ -84,12 +91,13 @@ export function WorkspaceNavigation({user,view,label,admin,products,creditsLabel
       </div>
       <div className="workspace-nav-row">
         <nav className="workspace-primary-nav" aria-label="Main navigation">
+          <button type="button" aria-current={view==='create'?'page':undefined} onClick={visitChat}><MessageSquare size={17}/><span>Chat with Gen</span></button>
           {navigation.map(({id,label:navLabel,icon:Icon})=><button type="button" key={id} aria-current={view===id?'page':undefined} onClick={()=>onView(id)}><Icon size={17}/><span>{navLabel}</span>{id==='library'&&products.length>0&&<small>{products.length}</small>}</button>)}
         </nav>
         <span className="sr-only">Current workspace: {label}</span>
         <div className="workspace-secondary-actions">
           {history.length>0&&<DropdownMenu>
-            <DropdownMenuTrigger asChild><button type="button" className="workspace-history-trigger"><History size={16}/><span>Recent plans</span><ChevronDown size={12}/></button></DropdownMenuTrigger>
+            <DropdownMenuTrigger asChild><button type="button" className="workspace-history-trigger"><History size={16}/><span>Recent chats</span><ChevronDown size={12}/></button></DropdownMenuTrigger>
             <DropdownMenuContent className="workspace-history-menu" align="end" sideOffset={10} collisionPadding={12}>
               <DropdownMenuLabel>Pick up where you left off</DropdownMenuLabel><DropdownMenuSeparator/>
               {history.slice(0,8).map(item=><DropdownMenuItem key={item.id} onSelect={()=>onConversation(item.id)}><MessageSquare/><span>{item.title}</span></DropdownMenuItem>)}

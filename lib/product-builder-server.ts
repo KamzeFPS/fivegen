@@ -138,13 +138,14 @@ export async function restoreBuilderRevision(productId:string,owner:string,input
  let draft:BuilderDraft;try{draft=restoreBuilderEditorialRevision(workspace.draft,previous);}catch(error){throw new ApiError(error instanceof Error?error.message:'This revision cannot be restored safely.',409);}
  return saveBuilderWorkspace(productId,owner,{expectedVersion:value.expectedVersion,draft,revisionKind:'restore'});
 }
-export async function adoptBuilderWorkspace(productId:string,owner:string){
+export async function adoptBuilderWorkspace(productId:string,owner:string,options:{language?:string;source?:'ai'|'manual'}={}){
  const existing=await database().prepare('SELECT product_id FROM product_builder_workspaces WHERE product_id=? AND owner=?').bind(productId,owner).first();if(existing)return getBuilderWorkspace(productId,owner);
+ const settings=z.object({language:z.string().trim().min(1).max(50).optional(),source:z.enum(['ai','manual']).optional()}).strict().parse(options);
  const product=productFromRow(await ownedProduct(productId,owner));
  if(await database().prepare('SELECT product_id FROM file_sale_drafts WHERE product_id=?').bind(productId).first())throw new ApiError('This file offer keeps its protected editor and purchase revisions. Open it from My products.',409);
  if(await database().prepare("SELECT id FROM orders WHERE owner=? AND (product_id=? OR EXISTS(SELECT 1 FROM json_each(CASE WHEN json_valid(items) THEN items ELSE '[]' END) item WHERE json_extract(item.value,'$.id')=?)) LIMIT 1").bind(owner,productId,productId).first()||await database().prepare('SELECT id FROM commerce_orders WHERE product_id=? LIMIT 1').bind(productId).first())throw new ApiError('This product has existing purchases and keeps its original protected editor. Open it from My products.',409);
- const draft=defaultBuilderDraft(builderTypeForFormat(product.format),'manual');
- Object.assign(draft,{title:product.title,description:product.description,audience:product.audience,priceCents:Math.round(product.price*100),sections:product.content.sections,files:product.content.files||[]});
+ const draft=defaultBuilderDraft(builderTypeForFormat(product.format),settings.source||'manual');
+ Object.assign(draft,{title:product.title,description:product.description,audience:product.audience,language:settings.language||draft.language,priceCents:Math.round(product.price*100),sections:product.content.sections,files:product.content.files||[]});
  await database().prepare('INSERT OR IGNORE INTO product_builder_workspaces (product_id,owner,version,data,updated_at) VALUES (?,?,1,?,?)').bind(productId,owner,JSON.stringify(builderDraftSchema.parse(draft)),Date.now()).run();
  return getBuilderWorkspace(productId,owner);
 }

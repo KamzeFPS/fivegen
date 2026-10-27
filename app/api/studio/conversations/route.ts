@@ -6,6 +6,7 @@ import { refundCredits, reserveCredits } from '@/lib/credits';
 import { textCredits } from '@/lib/credit-policy';
 import {hasUnlimitedGeneration} from '@/lib/generation-access';
 import { planningAllowance, planningResponseSchema, type StudioMessage } from '@/lib/studio-plan';
+import {assistantResourceReceipts,readAssistantEnvelope} from '@/lib/workspace-assistant';
 
 export async function GET(req: Request) {
   try {
@@ -16,7 +17,8 @@ export async function GET(req: Request) {
     if (id) {
       const row = await db.prepare('SELECT * FROM studio_conversations WHERE id=? AND owner=?').bind(id, user.userId).first();
       if (!row) throw new ApiError('This conversation was not found in your workspace.', 404);
-      return Response.json({ conversation: { id: row.id, messages: JSON.parse(String(row.messages)), plan: row.plan ? JSON.parse(String(row.plan)) : null, productId: row.product_id, updatedAt: row.updated_at }, remaining });
+      const savedPlan = row.plan ? JSON.parse(String(row.plan)) : null, envelope = readAssistantEnvelope(savedPlan);
+      return Response.json({ conversation: { id: row.id, messages: JSON.parse(String(row.messages)), plan: envelope ? null : savedPlan, workflow: envelope?.workflow ?? null, resources: assistantResourceReceipts(envelope), productId: row.product_id, updatedAt: row.updated_at }, remaining });
     }
     const rows = await db.prepare("SELECT id,title,product_id,updated_at FROM studio_conversations WHERE owner=? AND id NOT LIKE 'builder:%' ORDER BY updated_at DESC LIMIT 50").bind(user.userId).all();
     return Response.json({ conversations: rows.results, remaining });

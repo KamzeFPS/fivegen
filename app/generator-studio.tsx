@@ -1,7 +1,7 @@
 'use client';
 
 import {useCallback,useEffect,useRef,useState} from 'react';
-import {Banknote,Megaphone,TrendingUp,ArrowDownToLine,ArrowLeft,ArrowRight,BookOpen,Check,FileText,ImagePlus,Loader2,Plus,ShieldCheck,Sparkles,Upload,Users,X} from 'lucide-react';
+import {Banknote,Megaphone,TrendingUp,ArrowDownToLine,ArrowLeft,BookOpen,Check,FileText,ImagePlus,Loader2,Plus,Users,X} from 'lucide-react';
 import {toast} from 'sonner';
 import {Toaster} from '@/components/ui/sonner';
 import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
@@ -9,7 +9,7 @@ import {AIProviders,MediaStudio} from './ai-components';
 import {CreditsPanel} from './credits-panel';
 import {ConnectionsPanel} from './connections-panel';
 import {FileWorkbench} from './file-workbench';
-import {StudioChat} from './studio-chat';
+import {WorkspaceChat} from './workspace-chat';
 import {CreatorContent} from './creator-content';
 import {CreatorLibrary} from './creator-library';
 import {WorkspaceCalendar} from './workspace-calendar';
@@ -25,7 +25,8 @@ import {ProductDeletePanel} from './product-delete-dialog';
 import {GenCompanion} from './gen-companion';
 import {EditorSaveProvider,useEditorSaveRegistry,useRegisterEditorSave} from './editor-save-registry';
 import {productTypes,type Product} from '@/lib/product';
-import {studioFormats,type StudioConversation} from '@/lib/studio-plan';
+import {studioFormats} from '@/lib/studio-plan';
+import type {AssistantConversation} from '@/lib/workspace-assistant';
 import type {CreditBalance} from '@/lib/credit-policy';
 import {marketingWorkspaceAreas} from '@/lib/marketing-plugins';
 import {clearWorkspaceDrafts} from '@/lib/workspace-drafts';
@@ -36,11 +37,12 @@ type View='create'|'overview'|'library'|'crm'|'credits'|'connections'|'creator-l
 type EditorTab=ProductArea|MarketingTab|'overview'|'customers'|'settings';
 type HistoryItem={id:string;title:string;product_id:string|null;updated_at:number};
 async function request<T>(url:string,body?:unknown,method=body?'POST':'GET'):Promise<T>{
-  const response=await fetch(url,{method,headers:body?{'Content-Type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined});
+  const response=await fetch(url,{method,cache:'no-store',headers:body?{'Content-Type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined});
   if(response.status===401||response.status===428){location.assign('/welcome?return_to='+encodeURIComponent(location.pathname+location.search));throw new Error('Please sign in to continue.');}
-  const data=await response.json() as T&{error?:string};if(!response.ok)throw new Error(data.error||'Something went wrong. Please try again.');return data;
+  const data=await response.json() as T&{error?:string;requestState?:string};if(!response.ok)throw Object.assign(new Error(data.error||'Something went wrong. Please try again.'),{status:response.status,requestState:data.requestState});return data;
 }
 function readMessageDraft(id?:string|null){try{return sessionStorage.getItem('fivegen:idea:'+(id||'new'))||'';}catch{return '';}}
+function rememberChat(email:string,id:string|null){try{const key='fivegen:last-assistant-conversation:'+email;if(id)sessionStorage.setItem(key,id);else sessionStorage.removeItem(key);}catch{}}
 const marketingTabs:EditorTab[]=[...marketingWorkspaceAreas];
 const tabs:[EditorTab,typeof FileText,string][]=[['page',BookOpen,'Product home'],['content',BookOpen,'Content'],['commerce',Banknote,'Checkout & access'],['files',FileText,'Resources'],['media',ImagePlus,'Creative assets']];
 function editorArea(area:string|null):EditorTab{if(['overview','customers','settings'].includes(area||''))return area as EditorTab;return marketingTabs.includes(area as EditorTab)?area as EditorTab:tabs.some(([key])=>key===area)?area as EditorTab:'page';}
@@ -50,15 +52,14 @@ function GeneratorWorkspace({user}:{user:{name:string;email:string}|null}){
   const editorSaves=useEditorSaveRegistry();
   const pageSaver=useRef<(()=>Promise<void>)|null>(null);
   const registerPageSaver=useCallback((save:(()=>Promise<void>)|null)=>{pageSaver.current=save;},[]);
-  const [planning,setPlanning]=useState(false);
   const [workspace,setWorkspace]=useState<Workspace|null>(null),[loading,setLoading]=useState(!!user),[error,setError]=useState('');
-  const [view,setView]=useState<View>('create'),[conversation,setConversation]=useState<StudioConversation|null>(null),[history,setHistory]=useState<HistoryItem[]>([]),[remaining,setRemaining]=useState(20);
+  const [view,setView]=useState<View>('create'),[conversation,setConversation]=useState<AssistantConversation|null>(null),[history,setHistory]=useState<HistoryItem[]>([]),[remaining,setRemaining]=useState(20);
   const [draftReady,setDraftReady]=useState(false),[message,setMessage]=useState(''),[busy,setBusy]=useState(''),[sent,setSent]=useState('');
   const [product,setProduct]=useState<Product|null>(null),[baseline,setBaseline]=useState(''),[editorTab,setEditorTab]=useState<EditorTab>('content');
   const [pageMode,setPageMode]=useState<'creator'|'member'>('creator'),[pageTab,setPageTab]=useState<'home'|'content'|'reviews'>('home'),[editingPage,setEditingPage]=useState(0),[productDetailsOpen,setProductDetailsOpen]=useState(false);
   const [childDirty,setChildDirty]=useState(false),[childBusy,setChildBusy]=useState(false);
   const [manual,setManual]=useState(false),[manualTitle,setManualTitle]=useState(''),[manualFormat,setManualFormat]=useState<(typeof studioFormats)[number]>('Video course');
-  const inputRef=useRef<HTMLTextAreaElement>(null),busyRef=useRef(false),initialRoute=useRef(false),routeRevision=useRef(0),leavingWorkspace=useRef(false);
+  const busyRef=useRef(false),initialRoute=useRef(false),routeRevision=useRef(0),leavingWorkspace=useRef(false);
   const dirty=!!product&&JSON.stringify(product)!==baseline;
   const receiveProduct=useCallback((p:Product)=>{setProduct(p);setBaseline(JSON.stringify(p));setWorkspace(w=>w?{...w,products:[{...p,pageIconUploadId:p.pageIconUploadId??w.products.find(item=>item.id===p.id)?.pageIconUploadId},...w.products.filter(v=>v.id!==p.id)]}:w);},[]);
   const load=useCallback(async()=>{
@@ -76,7 +77,7 @@ function GeneratorWorkspace({user}:{user:{name:string;email:string}|null}){
       const [workspaceResult,plansResult,conversationResult]=await Promise.allSettled([
         user?request<Workspace>('/api/workspace'):Promise.resolve(null),
         user?request<{conversations:HistoryItem[];remaining:number}>('/api/studio/conversations'):Promise.resolve(null),
-        user&&id?request<{conversation:StudioConversation;remaining:number}>('/api/studio/conversations?id='+encodeURIComponent(id)):Promise.resolve(null),
+        user&&id?request<{conversation:AssistantConversation;remaining:number}>('/api/studio/assistant?id='+encodeURIComponent(id)):Promise.resolve(null),
       ]);
       if(!active)return;
       const data=workspaceResult.status==='fulfilled'?workspaceResult.value:null;
@@ -84,9 +85,8 @@ function GeneratorWorkspace({user}:{user:{name:string;email:string}|null}){
       if(plansResult.status==='fulfilled'&&plansResult.value){setHistory(plansResult.value.conversations);setRemaining(plansResult.value.remaining);}
       if(!initialRoute.current&&routeRevision.current===revision){
         initialRoute.current=true;
-        setPlanning(query.get('planning')==='1');
         setMessage(draft);
-        if(conversationResult.status==='fulfilled'&&conversationResult.value){setConversation(conversationResult.value.conversation);setRemaining(conversationResult.value.remaining);}
+        if(conversationResult.status==='fulfilled'&&conversationResult.value){setConversation(conversationResult.value.conversation);if(user)rememberChat(user.email,conversationResult.value.conversation.id);setRemaining(conversationResult.value.remaining);}
         const p=data?.products.find(value=>value.id===query.get('project'));
         const requestedView=query.get('view')||'';
         if(query.has('billing'))setView('credits');else if(query.get('connect')==='mcp')setView('connections');
@@ -129,8 +129,6 @@ function GeneratorWorkspace({user}:{user:{name:string;email:string}|null}){
     if(product?.id===id){setProduct(null);setBaseline('');setView('library');window.history.replaceState(null,'','/?view=library');}
     toast.success('Product deleted.');void load();
   }
-  function buildFromIdea(){try{sessionStorage.setItem('fivegen:builder-new-idea',message);}catch{}leaveWorkspace('/build/new?source=ai');}
-  function continueFromIdea(){if(message.trim().length<3||busyRef.current)return;if(planning)void send();else buildFromIdea();}
   function leaveWorkspace(path:string,clearDrafts=false){navigate(()=>{
     if(clearDrafts)clearWorkspaceDrafts();
     leavingWorkspace.current=true;
@@ -160,13 +158,36 @@ function GeneratorWorkspace({user}:{user:{name:string;email:string}|null}){
   function syncProductIcon(iconUploadId:string|null){if(!product)return;const id=product.id;setWorkspace(current=>current?{...current,products:current.products.map(item=>item.id===id?{...item,pageIconUploadId:iconUploadId}:item)}:current);setProduct(current=>current?.id===id?{...current,pageIconUploadId:iconUploadId}:current);setBaseline(current=>current?JSON.stringify({...JSON.parse(current),pageIconUploadId:iconUploadId}):current);}
   function switchTab(tab:EditorTab){if(tab==='page'){openPage('creator');return;}if(product&&workspace?.builders?.some(builder=>builder.productId===product.id)&&['content','commerce','files','media'].includes(tab)){leaveWorkspace(`/build/${encodeURIComponent(product.id)}?area=${tab==='files'?'resources':tab==='commerce'?'commerce':tab==='media'?'appearance':tab}`);return;}if(product&&isFileSale(product)&&!marketingTabs.includes(tab)){leaveWorkspace(`/sell/${encodeURIComponent(product.id)}${tab==='commerce'?'?stage=1':''}`);return;}navigate(()=>{setEditorTab(tab);setView('library');replaceRoute(tab,product?.id);});}
   function resolveMarketingTab(tab:MarketingTab){setEditorTab(tab);replaceRoute(tab,product?.id);}
-  function openConversation(id:string){navigate(()=>{setDraftReady(false);setBusy('history');busyRef.current=true;void request<{conversation:StudioConversation;remaining:number}>('/api/studio/conversations?id='+encodeURIComponent(id)).then(data=>{setConversation(data.conversation);setMessage(readMessageDraft(data.conversation.id));setRemaining(data.remaining);setProduct(null);setView('create');setError('');window.history.replaceState(null,'','/?conversation='+encodeURIComponent(id));}).catch(e=>setError(e.message)).finally(()=>{setDraftReady(true);setBusy('');busyRef.current=false;});});}
+  function openConversation(id:string){navigate(()=>{setDraftReady(false);setBusy('history');busyRef.current=true;void request<{conversation:AssistantConversation;remaining:number}>('/api/studio/assistant?id='+encodeURIComponent(id)).then(data=>{setConversation(data.conversation);if(user)rememberChat(user.email,data.conversation.id);setMessage(readMessageDraft(data.conversation.id));setRemaining(data.remaining);setProduct(null);setView('create');setError('');window.history.replaceState(null,'','/?conversation='+encodeURIComponent(id));}).catch(e=>setError(e.message)).finally(()=>{setDraftReady(true);setBusy('');busyRef.current=false;});});}
+  function newChat(){navigate(()=>{try{sessionStorage.removeItem('fivegen:idea:new');sessionStorage.removeItem('fivegen:workspace-chat:new');}catch{}if(user){rememberChat(user.email,null);try{sessionStorage.removeItem(`fivegen:assistant-request:${user.email}:new`);}catch{}}setConversation(null);setMessage('');setProduct(null);setView('create');setError('');window.history.replaceState(null,'','/?view=create');window.scrollTo({top:0,behavior:'instant'});});}
+  function resumeChat(){
+    if(!conversation&&user){let id='';try{id=sessionStorage.getItem('fivegen:last-assistant-conversation:'+user.email)||'';}catch{}if(/^[a-f0-9-]{36}$/i.test(id)){openConversation(id);return;}}
+    navigate(()=>{setProduct(null);setView('create');setError('');window.history.replaceState(null,'',conversation?'/?conversation='+encodeURIComponent(conversation.id):'/?view=create');});
+  }
   async function send(promptValue=message):Promise<boolean>{
-    const prompt=promptValue.trim();if(busyRef.current||prompt.length<3||prompt.length>3000)return false;
-    if(!user){location.assign('/signin-with-chatgpt?return_to='+encodeURIComponent(planning?'/?view=create&planning=1':'/?view=create'));return false;}
+    const prompt=promptValue.trim();if(busyRef.current||prompt.length<1||prompt.length>3000)return false;
+    if(!user){location.assign('/signin-with-chatgpt?return_to='+encodeURIComponent('/?view=create'));return false;}
+    const pendingKey=`fivegen:assistant-request:${user.email}:${conversation?.id||'new'}`;
+    type Turn={id:string;requestId:string;message:string;expectedUpdatedAt:number;maxCredits:number;timezone:string};
+    let payload:Turn={id:conversation?.id||crypto.randomUUID(),requestId:crypto.randomUUID(),message:prompt,expectedUpdatedAt:conversation?.updatedAt||0,maxCredits:remaining>0?0:workspace?.textCost||10,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'};
+    try{const pending=JSON.parse(sessionStorage.getItem(pendingKey)||'null') as Turn|null;if(pending?.message===prompt&&pending.expectedUpdatedAt===payload.expectedUpdatedAt&&(!conversation||pending.id===conversation.id))payload=pending;sessionStorage.setItem(pendingKey,JSON.stringify(payload));}catch{/* Retry protection also works on the server when storage is unavailable. */}
     const draft=message;routeRevision.current++;busyRef.current=true;setBusy('planning');setError('');setSent(prompt);setMessage('');
-    try{const data=await request<{conversation:StudioConversation;remaining:number}>('/api/studio/conversations',{id:conversation?.id||crypto.randomUUID(),requestId:crypto.randomUUID(),message:prompt,expectedUpdatedAt:conversation?.updatedAt||0,maxCredits:remaining>0?0:workspace?.textCost||10});setConversation(data.conversation);window.history.replaceState(null,'','/?conversation='+encodeURIComponent(data.conversation.id));setRemaining(data.remaining);void load();return true;}
-    catch(e){setError((e as Error).message);setMessage(draft);return false;}finally{setBusy('');setSent('');busyRef.current=false;}
+    try{const data=await request<{conversation:AssistantConversation;remaining:number}>('/api/studio/assistant',payload);setConversation(data.conversation);if(user)rememberChat(user.email,data.conversation.id);window.history.replaceState(null,'','/?conversation='+encodeURIComponent(data.conversation.id));setRemaining(data.remaining);try{sessionStorage.removeItem(pendingKey);sessionStorage.removeItem('fivegen:idea:new');}catch{}void load();return true;}
+    catch(e){
+      const {status,requestState}=e as Error&{status?:number;requestState?:string};
+      if(status===409||status===402){
+        try{const data=await request<{conversation:AssistantConversation;remaining:number}>('/api/studio/assistant?id='+encodeURIComponent(payload.id));if(requestState==='pending'){try{const resolvedKey=`fivegen:assistant-request:${user.email}:${data.conversation.id}`;sessionStorage.setItem(resolvedKey,JSON.stringify(payload));if(resolvedKey!==pendingKey)sessionStorage.removeItem(pendingKey);}catch{}}setConversation(data.conversation);if(user)rememberChat(user.email,data.conversation.id);setRemaining(data.remaining);window.history.replaceState(null,'','/?conversation='+encodeURIComponent(data.conversation.id));if(data.conversation.messages.some(item=>item.id===payload.requestId)){try{sessionStorage.removeItem(pendingKey);}catch{}void load();return true;}}catch{/* Preserve the original error and draft. */}
+      }
+      if(status&&(status!==409||requestState!=='pending'))try{sessionStorage.removeItem(pendingKey);}catch{}
+      setError((e as Error).message);setMessage(draft);return false;
+    }finally{setBusy('');setSent('');busyRef.current=false;}
+  }
+  async function approveStep(stepId:string,decision:'approve'|'skip'):Promise<boolean>{
+    if(!user||!conversation?.workflow||busyRef.current)return false;
+    routeRevision.current++;busyRef.current=true;setBusy('action:'+stepId);setError('');
+    try{const data=await request<{conversation:AssistantConversation}>('/api/studio/assistant/actions',{conversationId:conversation.id,planId:conversation.workflow.id,stepId,expectedUpdatedAt:conversation.updatedAt,decision,requestId:crypto.randomUUID()});setConversation(data.conversation);if(user)rememberChat(user.email,data.conversation.id);void load();return true;}
+    catch(e){setError((e as Error).message);try{const data=await request<{conversation:AssistantConversation;remaining:number}>('/api/studio/assistant?id='+encodeURIComponent(conversation.id));setConversation(data.conversation);if(user)rememberChat(user.email,data.conversation.id);setRemaining(data.remaining);const recovered=data.conversation.workflow?.id===conversation.workflow.id&&data.conversation.workflow.steps.find(step=>step.id===stepId)?.status===(decision==='approve'?'completed':'skipped');if(recovered){setError('');void load();return true;}}catch{/* Keep the reviewed plan if refresh is interrupted. */}return false;}
+    finally{setBusy('');busyRef.current=false;}
   }
   async function create(manualMode=false){
     if(busyRef.current)return;if(!user){location.assign('/signin-with-chatgpt?return_to=%2F%3Fview%3Dcreate');return;}
@@ -183,12 +204,12 @@ function GeneratorWorkspace({user}:{user:{name:string;email:string}|null}){
   useRegisterEditorSave({label:'Sales page draft',dirty:editorTab==='page'&&childDirty,busy:editorTab==='page'&&childBusy,priority:20,save:async()=>{if(!pageSaver.current)return false;try{await pageSaver.current();return true;}catch(reason){setError((reason as Error).message);return false;}}});
   useRegisterEditorSave({label:'Product content',dirty,busy:!!busy,save,priority:30});
   const costs=workspace?.textCost||10,unlimited=!!workspace?.credits.unlimited;
-  const label=product?product.title:{create:'Create your product',overview:'Dashboard',library:'My products',crm:'Your CRM',credits:'AI credits',connections:'Connected assistants','creator-library':'Creator library',calendar:'Calendar',admin:'Platform settings'}[view];
-  return <div onClick={event=>{if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;const anchor=(event.target as HTMLElement).closest?.('a[href]') as HTMLAnchorElement|null;if(!anchor||anchor.target==='_blank'||anchor.hasAttribute('download')||anchor.getAttribute('href')?.startsWith('#'))return;const url=new URL(anchor.href,location.href);if(url.origin!==location.origin||(!dirty&&!childDirty&&!editorSaves?.registry.hasDirty()&&!editorSaves?.registry.isBusy()))return;event.preventDefault();leaveWorkspace(url.pathname+url.search+url.hash);}} className={`gen-app growth-app ${view==='create'&&!product&&(conversation||sent)?'gen-chat-active':''}`}>
+  const label=product?product.title:{create:'Chat with Gen',overview:'Dashboard',library:'My products',crm:'Your CRM',credits:'AI credits',connections:'Connected assistants','creator-library':'Creator library',calendar:'Calendar',admin:'Platform settings'}[view];
+  return <div onClick={event=>{if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;const anchor=(event.target as HTMLElement).closest?.('a[href]') as HTMLAnchorElement|null;if(!anchor||anchor.target==='_blank'||anchor.hasAttribute('download')||anchor.getAttribute('href')?.startsWith('#'))return;const url=new URL(anchor.href,location.href);if(url.origin!==location.origin||(!dirty&&!childDirty&&!editorSaves?.registry.hasDirty()&&!editorSaves?.registry.isBusy()))return;event.preventDefault();leaveWorkspace(url.pathname+url.search+url.hash);}} className="gen-app growth-app">
     <Toaster position="bottom-right" richColors/>
-    {user&&view!=='calendar'&&!(product&&editorTab==='funnel-builder')&&<GenCompanion defaultMinimized={!!product} mood={busy==='planning'||childBusy?'thinking':busy?'helping':error?'concerned':view==='create'&&message.trim()?'curious':'idle'} status={busy==='planning'?'Thinking through your next step…':busy==='create'?'Getting your workspace ready…':''} onOpen={()=>{const composer=view==='create'?document.querySelector<HTMLTextAreaElement>('.chat-composer textarea, #creation-idea'):null;if(composer){composer.focus();composer.scrollIntoView({behavior:'auto',block:'center'});}else leaveWorkspace('/?view=create&planning=1');}}/>}
+    {user&&view!=='calendar'&&!(product&&editorTab==='funnel-builder')&&<GenCompanion defaultMinimized={!!product} mood={busy==='planning'||childBusy?'thinking':busy?'helping':error?'concerned':view==='create'&&message.trim()?'curious':'idle'} status={busy==='planning'?'Thinking through your next step…':busy==='create'?'Getting your workspace ready…':''} onOpen={()=>{const composer=view==='create'?document.querySelector<HTMLTextAreaElement>('.wa-composer textarea, .chat-composer textarea, #creation-idea'):null;if(composer){composer.focus();composer.scrollIntoView({behavior:'auto',block:'center'});}else leaveWorkspace('/?view=create&planning=1');}}/>}
     <div className="gen-main">
-      <WorkspaceNavigation user={user} view={view} label={label} admin={!!workspace?.admin} products={(workspace?.products||[]).filter(item=>!item.archivedAt)} creditsLabel={unlimited?'Unlimited':workspace?`${workspace.credits.total.toLocaleString()} credits`:'AI credits'} history={history} onCreate={newIdea} onHome={()=>leaveWorkspace('/')} onView={changeView} onProduct={openProductId} onConversation={openConversation} onVisit={path=>leaveWorkspace(path)} onSignOut={()=>leaveWorkspace('/signout-with-chatgpt',true)}/>
+      <WorkspaceNavigation user={user} view={view} label={label} admin={!!workspace?.admin} products={(workspace?.products||[]).filter(item=>!item.archivedAt)} creditsLabel={unlimited?'Unlimited':workspace?`${workspace.credits.total.toLocaleString()} credits`:'AI credits'} history={history} onCreate={newIdea} onChat={resumeChat} onHome={()=>leaveWorkspace('/')} onView={changeView} onProduct={openProductId} onConversation={openConversation} onVisit={path=>leaveWorkspace(path)} onSignOut={()=>leaveWorkspace('/signout-with-chatgpt',true)}/>
       <div className={`workspace-shell ${product?'has-product':''}`}><WorkspaceProductRail products={workspace?.products||[]} selectedId={product?.id} onProduct={openProductId} onLibrary={()=>changeView('library')} onCreate={newIdea}/>{product&&<WorkspaceProductSidebar product={{...product,pageIconUploadId:workspace?.products.find(item=>item.id===product.id)?.pageIconUploadId??product.pageIconUploadId}} products={workspace?.products||[]} tab={(['overview','customers','settings'].includes(editorTab)?'content':editorTab) as ProductArea} activeDestination={editorTab==='overview'?'overview':editorTab==='customers'?'customers':editorTab==='settings'?'settings':undefined} onDestination={openProductDestination} mode={pageMode} onProduct={openProductId} onTab={switchTab} onMode={mode=>{if(mode==='member')leaveWorkspace(`/build/${encodeURIComponent(product.id)}?area=content&mode=member`);else openPage('creator');}} onCustomize={()=>openPage('creator','home',true)} onReviews={()=>openPage('creator','reviews')}/>}<div className="workspace-stage"><main className="workspace-content" id="workspace-content" tabIndex={-1}>
       {error&&<div className="gen-error" role="alert"><span>{error}</span><button aria-label="Dismiss error" onClick={()=>setError('')}><X size={16}/></button></div>}
       {loading||busy==='history'?<div className="gen-loading"><Loader2 size={28} className="spin"/><p>Opening your workspace…</p></div>:product?<div className={`gen-editor gen-enter ${editorTab==='page'?'is-product-page':editorTab==='funnel-builder'?'gen-marketing-editor gen-funnel-editor':marketingTabs.includes(editorTab)?'gen-marketing-editor':''}`}>
@@ -207,16 +228,7 @@ function GeneratorWorkspace({user}:{user:{name:string;email:string}|null}){
           {editorTab==='files'&&<fieldset disabled={!!busy}><FileWorkbench product={product} onChange={setProduct}/><div className="gen-download-links">{product.content.files?.map((f,i)=><button className="button secondary" key={i} disabled={dirty} onClick={()=>location.assign(`/api/products/${product.id}/files/${i}`)}><ArrowDownToLine size={15}/>{f.name}</button>)}{dirty&&<p>Save your changes before downloading updated resources.</p>}</div></fieldset>}
           {editorTab==='media'&&<MediaStudio key={product.id} product={product} onSetup={()=>changeView('credits')}/>}
         </div></>}
-      </div>:view==='create'&&(conversation||sent)?<StudioChat key={conversation?.id||'new-chat'} conversation={conversation} message={message} sent={sent} busy={busy} name={user?.name||'You'} remaining={remaining} cost={costs} unlimited={unlimited} credits={workspace?.credits.total} allowance={workspace?.credits.products.remaining??3} aiReady={!!workspace?.capabilities.ai} onMessage={editMessage} onSend={send} onGenerate={()=>void create()} onOpenProduct={()=>{const p=workspace?.products.find(p=>p.id===conversation?.productId);if(p)openProduct(p);else void load();}}/>:view==='create'?<div className="gen-create gen-enter workspace-create-entry">
-        <header className="creation-heading"><h1>{planning?'Not sure what to create?':'Create a product'}</h1><p>{planning?'We’ll help you find an idea and choose a product type.':'Turn an idea into a book, course, resource, or service.'}</p></header>
-        <form className="creation-idea" onSubmit={event=>{event.preventDefault();continueFromIdea();}}>
-          <label htmlFor="creation-idea"><Sparkles size={17}/>{planning?'What are you good at?':'Start with an idea'}</label>
-          <textarea id="creation-idea" ref={inputRef} aria-label="Your product idea" placeholder={planning?'Tell us about your skills, experience, or who you’d like to help.':'What do you want to create, and who will it help?'} value={message} maxLength={3000} disabled={!!busy} onChange={event=>editMessage(event.target.value)} onKeyDown={event=>{if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)&&!event.nativeEvent.isComposing){event.preventDefault();continueFromIdea();}}}/>
-          <div className="creation-idea-footer"><p>{planning?(unlimited?'Planning is included with your access.':remaining>0?`${remaining} free planning messages left this month.`:`${costs} AI credits per planning message.`):'Choose your product type next. Review the plan before you generate anything.'}</p><button type="submit" disabled={message.trim().length<3||!!busy}>{planning?'Help me choose':'Continue with AI'}<ArrowRight size={16}/></button></div>
-        </form>
-        <div className="creation-sources" aria-label="Other ways to create"><button type="button" disabled={!!busy} onClick={()=>leaveWorkspace('/build/new?source=upload')}><Upload size={19}/><span><strong>Upload existing content</strong><small>Bring your PDF, manuscript, lessons, or resources.</small></span><ArrowRight size={16}/></button><button type="button" disabled={!!busy} onClick={()=>leaveWorkspace('/build/new?source=manual')}><FileText size={19}/><span><strong>Start manually</strong><small>Choose a format and add your own content.</small></span><ArrowRight size={16}/></button></div>
-        <p className="creation-private-note"><ShieldCheck size={14}/>Your work stays private until you publish.</p>
-      </div>:view==='library'?<WorkspaceProductLibrary products={workspace?.products||[]} builders={workspace?.builders} files={workspace?.fileSales} onDeletedProduct={removeDeletedProduct} onOpen={p=>{const destination=workspaceProductDestination(p,workspace?.builders,workspace?.fileSales);if(destination)leaveWorkspace(destination);else openProduct(p,'content');}} onCreateFrom={source=>leaveWorkspace('/build/new?source='+source)}/>:<div className={`gen-settings gen-enter${view==='calendar'?' gen-calendar-host':''}`}>{view==='overview'?(user?<GrowthDashboard/>:<div className="gen-empty"><TrendingUp size={32}/><h2>See your launch grow.</h2><p>Sign in to track visits, customers, and sales.</p><a className="button primary" href="/signin-with-chatgpt?return_to=%2F%3Fview%3Doverview">Sign in</a></div>):view==='crm'?(user?<GrowthCRM onDirtyChange={setChildDirty} onBusyChange={setChildBusy}/>:<div className="gen-empty"><Users size={32}/><h2>Your next customer starts here.</h2><p>Sign in to capture leads and manage your follow-up.</p><a className="button primary" href="/signin-with-chatgpt?return_to=%2F%3Fview%3Dcrm">Sign in</a></div>):view==='calendar'?(user?<WorkspaceCalendar products={workspace?.products||[]}/>:<div className="gen-empty"><h2>Your schedule, in one place.</h2><p>Sign in to plan content and events across your accounts.</p><a className="button primary" href="/signin-with-chatgpt?return_to=%2F%3Fview%3Dcalendar">Sign in</a></div>):view==='creator-library'?<CreatorLibrary products={workspace?.products||[]} aiReady={!!workspace?.capabilities.ai} cost={costs} unlimited={unlimited} onUpdate={()=>void load()} onDirtyChange={setChildDirty} onBusyChange={setChildBusy}/>:view==='credits'?<CreditsPanel signedIn={!!user}/>:view==='connections'?<ConnectionsPanel signedIn={!!user}/>:workspace?.admin?<AIProviders signedIn={!!user} onUpdate={()=>void load()}/>:null}</div>}
+      </div>:view==='create'?<WorkspaceChat conversation={conversation} message={message} sent={sent} busy={busy} name={user?.name||'You'} remaining={remaining} cost={costs} unlimited={unlimited} credits={workspace?.credits.total} aiReady={!!workspace?.capabilities.ai} onMessage={editMessage} onSend={send} onAction={approveStep} onNewChat={newChat} products={workspace?.products} onVisit={path=>leaveWorkspace(path)}/>:view==='library'?<WorkspaceProductLibrary products={workspace?.products||[]} builders={workspace?.builders} files={workspace?.fileSales} onDeletedProduct={removeDeletedProduct} onOpen={p=>{const destination=workspaceProductDestination(p,workspace?.builders,workspace?.fileSales);if(destination)leaveWorkspace(destination);else openProduct(p,'content');}} onCreateFrom={source=>leaveWorkspace('/build/new?source='+source)}/>:<div className={`gen-settings gen-enter${view==='calendar'?' gen-calendar-host':''}`}>{view==='overview'?(user?<GrowthDashboard/>:<div className="gen-empty"><TrendingUp size={32}/><h2>See your launch grow.</h2><p>Sign in to track visits, customers, and sales.</p><a className="button primary" href="/signin-with-chatgpt?return_to=%2F%3Fview%3Doverview">Sign in</a></div>):view==='crm'?(user?<GrowthCRM onDirtyChange={setChildDirty} onBusyChange={setChildBusy}/>:<div className="gen-empty"><Users size={32}/><h2>Your next customer starts here.</h2><p>Sign in to capture leads and manage your follow-up.</p><a className="button primary" href="/signin-with-chatgpt?return_to=%2F%3Fview%3Dcrm">Sign in</a></div>):view==='calendar'?(user?<WorkspaceCalendar products={workspace?.products||[]}/>:<div className="gen-empty"><h2>Your schedule, in one place.</h2><p>Sign in to plan content and events across your accounts.</p><a className="button primary" href="/signin-with-chatgpt?return_to=%2F%3Fview%3Dcalendar">Sign in</a></div>):view==='creator-library'?<CreatorLibrary products={workspace?.products||[]} aiReady={!!workspace?.capabilities.ai} cost={costs} unlimited={unlimited} onUpdate={()=>void load()} onDirtyChange={setChildDirty} onBusyChange={setChildBusy}/>:view==='credits'?<CreditsPanel signedIn={!!user}/>:view==='connections'?<ConnectionsPanel signedIn={!!user}/>:workspace?.admin?<AIProviders signedIn={!!user} onUpdate={()=>void load()}/>:null}</div>}
       </main>
       <footer className="gen-footer"><span>FiveGen</span><div><a href="/pricing">Plans & credits</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refund">Refunds</a><a href="mailto:kamzewac@gmail.com">Contact</a></div></footer></div></div>
     </div>

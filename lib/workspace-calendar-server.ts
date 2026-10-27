@@ -22,11 +22,11 @@ async function referenceGuard(owner:string,event:{accountId:string|null;productI
  }else if(event.source!=='funnel-builder'&&(event.funnelNodeId||event.funnelIdeaId))throw new ApiError('Funnel references are only valid for a funnel schedule.',400);
  return guard;
 }
-export async function createCalendarEvent(owner:string,value:unknown){
+export async function createCalendarEvent(owner:string,value:unknown,actorGuard:Guard={sql:'',values:[]}){
  const input=calendarEventCreateSchema.parse(value),{requestId,source,funnelNodeId,funnelIdeaId,...raw}=input,fields=calendarEventFieldsSchema.parse(raw),requestHash=await hash({...fields,source,funnelNodeId,funnelIdeaId}),db=database(),previous=await db.prepare('SELECT * FROM calendar_events WHERE id=?').bind(requestId).first();
  if(previous){if(previous.owner!==owner||previous.request_hash!==requestHash)throw new ApiError('This schedule request reference was already used. Check the calendar before creating another event.',409);return eventRow(previous);}
  const guard=await referenceGuard(owner,{...fields,source,funnelNodeId,funnelIdeaId}),now=Date.now(),sourceId=source==='funnel-builder'?`${fields.productId}:${funnelIdeaId||funnelNodeId}`:null;
- await db.prepare(`INSERT OR IGNORE INTO calendar_events(id,owner,title,start_at,end_at,timezone,all_day,account_id,product_id,kind,status,notes,source,source_id,funnel_node_id,funnel_idea_id,request_hash,updated_at,created_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE 1=1${guard.sql}`).bind(requestId,owner,fields.title,fields.startAt,fields.endAt,fields.timezone,+fields.allDay,fields.accountId,fields.productId,fields.kind,fields.status,fields.notes,source,sourceId,funnelNodeId,funnelIdeaId,requestHash,now,now,...guard.values).run();
+ await db.prepare(`INSERT OR IGNORE INTO calendar_events(id,owner,title,start_at,end_at,timezone,all_day,account_id,product_id,kind,status,notes,source,source_id,funnel_node_id,funnel_idea_id,request_hash,updated_at,created_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE 1=1${guard.sql}${actorGuard.sql}`).bind(requestId,owner,fields.title,fields.startAt,fields.endAt,fields.timezone,+fields.allDay,fields.accountId,fields.productId,fields.kind,fields.status,fields.notes,source,sourceId,funnelNodeId,funnelIdeaId,requestHash,now,now,...guard.values,...actorGuard.values).run();
  const row=await db.prepare('SELECT * FROM calendar_events WHERE id=?').bind(requestId).first();if(!row||row.owner!==owner||row.request_hash!==requestHash)throw new ApiError('The selected account, product or funnel changed while scheduling. Your calendar was not duplicated; refresh before trying again.',409);return eventRow(row);
 }
 export async function updateCalendarEvent(owner:string,value:unknown){

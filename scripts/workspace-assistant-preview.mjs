@@ -1,0 +1,77 @@
+import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
+import {createHash,randomBytes,randomUUID} from 'node:crypto';
+import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
+import {createServer} from 'node:http';
+import {createRequire,syncBuiltinESMExports} from 'node:module';
+import {resolve,sep} from 'node:path';
+
+// Local, isolated browser evidence: all records and AI responses are synthetic.
+assert.ok(!process.env.RENDER,'Run this preview locally.');
+const safeEnvironment=new Set(['PATH','HOME','TMPDIR','TMP','TEMP','LANG','LC_ALL','LC_CTYPE','TZ','SystemRoot','SYSTEMROOT','WINDIR']);
+for(const key of Object.keys(process.env))if(!safeEnvironment.has(key))delete process.env[key];
+const appRoot=resolve('.'),port=5218,entryPort=5219,owner='synthetic-design-preview',email='creator@example.test';
+const seeded=spawnSync(process.execPath,['scripts/design-refresh-preview.mjs','--seed-only'],{cwd:appRoot,env:{...process.env},encoding:'utf8',maxBuffer:4*1024*1024,timeout:120000});
+assert.equal(seeded.status,0,seeded.stderr);
+const fixture=JSON.parse(seeded.stdout.trim().split('\n').findLast(line=>line.startsWith('{'))),dataRoot=resolve(fixture.root);
+assert.equal(fixture.synthetic,true);assert.ok(dataRoot.startsWith(resolve('outputs')+sep+'design-refresh-preview-'));
+assert.match(readFileSync(resolve(dataRoot,'fixture-only.txt'),'utf8'),/All users, money, files and products are local fixtures/);
+Object.assign(process.env,{FIVEGEN_RUNTIME:'render',NODE_ENV:'production',FIVEGEN_DATA_DIR:dataRoot,APP_ORIGIN:`http://localhost:${port}`,DOCS_ORIGIN:`http://docs.localhost:${port}`,PORT:String(port),ADMIN_EMAILS:email,FIVEGEN_FILE_SALES_ENABLED:'false',STRIPE_COMMERCE_ENABLED:'false',STRIPE_WALLET_CHECKOUT_ENABLED:'false',AUTOMATIONS_WORKER_ENABLED:'false',PURCHASE_EMAILS_WORKER_ENABLED:'false',PRODUCT_REMINDERS_WORKER_ENABLED:'false',SERVICE_INTEGRATIONS_WORKER_ENABLED:'false',STRIPE_MODE:'test',PADDLE_ENVIRONMENT:'sandbox',GOOGLE_CLIENT_ID:'synthetic-chat-preview',GOOGLE_CLIENT_SECRET:'synthetic-chat-preview',CREDENTIAL_ENCRYPTION_KEY:randomBytes(32).toString('base64url'),OPENAI_API_KEY:'synthetic-no-provider-key'});
+const {createStorage}=await import('../runtime/render/storage.mjs'),storage=createStorage(dataRoot),session=randomBytes(32).toString('base64url');
+storage.sqlite.prepare('INSERT INTO render_sessions(hash,user_id,email,name,expires) VALUES(?,?,?,?,?)').run(createHash('sha256').update(session).digest('base64url'),owner,email,'Alex Morgan',Date.now()+86400000);storage.close();
+
+function modelFixture(input){
+ if(input.message==='Hi'||input.message==='Thanks')return {answer:'Hello! We can talk through an idea, make a plan from scratch, or work on something in your workspace. What would you like to do?',questions:[],plan:null};
+ return {answer:'Let’s build this from the beginning. First we’ll prepare a useful onboarding guide, then write a small campaign for it, and finally add your launch review to Calendar. I’ve included the exact draft content below. Review the plan and approve the first step when you’re ready; each next step waits for its own approval.',questions:[],plan:{title:'Your freelancer onboarding launch',summary:'A practical guide, three ready-to-review campaign drafts, and a launch review. Each is saved in its own section while we work here in chat.',assumptions:['This is a private draft for independent freelance designers.','You will review the copy and add your own examples before publishing.'],steps:[
+  {id:'onboarding-guide',title:'Create your onboarding guide',description:'Draft a short guide that helps freelance designers start projects with a clear brief, shared expectations, and an agreed next step.',why:'A clear handoff reduces uncertainty before the project starts and gives your campaign something useful to describe.',needs:['Your own examples can be added in the product editor.'],action:{type:'create_product',title:'A Clear Start: Your Freelancer Onboarding Guide',description:'A practical, editable guide to briefing a new client, setting expectations, and starting the first week of a freelance design project.',audience:'Independent freelance designers onboarding their first clients',format:'Guide',language:'English',sections:[
+   {title:'1. Get the project into one clear brief',body:'Before quoting or starting, ask the client to describe the problem in their own words. Capture the audience, the deliverable, the decision maker, and the deadline.\n\nTry this opening: “What should be different for your audience when this project is finished?”\n\nWrite a one-page brief with four headings: Purpose, Audience, Deliverables, and Decisions. Send it back for confirmation. Keep anything you have not agreed in an Open questions list.'},
+   {title:'2. Agree how you will work together',body:'Document what is included, what is outside the scope, and who signs off each milestone. Agree where feedback will be collected and when you will reply.\n\nA practical review request: “Please collect your team’s feedback in one document by Thursday. I will use that version for the next revision.”\n\nBefore the first week, check that the client has provided access, assets, the confirmed brief, and the agreed payment arrangements.'},
+   {title:'3. Send a calm first-week plan',body:'Give the client a short list of what happens next.\n\nMonday: Confirm the brief and check missing materials.\nTuesday–Wednesday: Prepare the first agreed direction.\nThursday: Share work for the agreed review.\nFriday: Confirm decisions and the next milestone.\n\nReplace these sample days with dates agreed with your client. End with one clear action: “Please confirm the brief and share the missing assets before we start.”'},
+  ]}},
+  {id:'launch-campaign',title:'Write the launch campaign drafts',description:'Prepare a social post, a short-video script, and an email introducing the guide. Save all three as editable campaign drafts.',why:'The copy can be reviewed together with the actual product, so the promise stays specific and accurate.',needs:['The product from step 1.','Your review before posting or sending.'],action:{type:'create_campaign',productId:null,productStepId:'onboarding-guide',title:'A Clear Start launch drafts',goal:'Introduce the onboarding guide with one useful practical example.',items:[
+   {channel:'social',title:'The first client question',subject:'',body:'Before you open your design tool, ask: “What should be different for your audience when this is finished?”\n\nThat answer belongs at the top of your project brief. The rest of the brief becomes easier to check against it.\n\nI’m preparing A Clear Start, a practical guide to freelance client onboarding. Review the guide details when it is ready.'},
+   {channel:'short_video',title:'A 30-second briefing tip',subject:'',body:'Opening: “A project brief can start with one useful question.”\nShow: Write Purpose, Audience, Deliverables, Decisions on a page.\nExplain: “Confirm these four points with your client before you start. Keep unknowns in a separate list.”\nClose: “Save this for your next client conversation.”\nCreator records and publishes this script after review.'},
+   {channel:'email',title:'Introduce your onboarding guide',subject:'A clearer start for your next client project',body:'A new client project is easier to start when everyone can see what has been agreed.\n\nA Clear Start brings the first brief, working expectations, and first-week plan into one practical guide. Add your own examples and use the prompts in your next project conversation.\n\nReview the guide details once the product page is ready.\n\nSend only to recipients who have agreed to hear from you.'},
+  ]}},
+  {id:'launch-review',title:'Add your launch review to Calendar',description:'Keep a 30-minute internal review for the guide and campaign. This is a reminder for you to review the work.',why:'A deliberate review gives you time to check the content and decide when it is ready to share.',needs:['Review the date, time, and timezone below.'],action:{type:'create_calendar_event',productId:null,productStepId:'onboarding-guide',title:'Review the onboarding guide launch',startAt:Date.UTC(2026,9,29,2),endAt:Date.UTC(2026,9,29,2,30),timezone:'Asia/Ulaanbaatar',kind:'task',notes:'Review the product draft and campaign copy. Confirm your examples, claims, destination links, and next action.'}},
+ ]}};
+}
+const local=host=>['localhost','127.0.0.1','[::1]','::1'].includes(host),originalFetch=globalThis.fetch;
+globalThis.fetch=async(input,init)=>{
+ const target=new URL(typeof input==='string'||input instanceof URL?input:input.url);
+ if(local(target.hostname))return originalFetch(input,init);
+ if(target.href==='https://api.openai.com/v1/responses'){
+  const body=JSON.parse(init.body);assert.match(body.instructions,/helpful conversational assistant inside FiveGen/);
+  const marker='Request:\n',payload=JSON.parse(body.input.slice(body.input.lastIndexOf(marker)+marker.length));
+  if(payload.message.includes('[fixture-fail]'))return Response.json({error:{code:'synthetic_failure'}},{status:503});
+  return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(modelFixture(payload))}]}]});
+ }
+ throw new Error('External network is disabled in this synthetic chat preview.');
+};
+const require=createRequire(import.meta.url);
+for(const name of ['node:http','node:https']){const transport=require(name);for(const operation of ['request','get']){const original=transport[operation];transport[operation]=function(input,...args){const host=typeof input==='string'||input instanceof URL?new URL(input).hostname:String(input?.hostname||input?.host||'localhost').split(':')[0];assert.ok(local(host),'External HTTP(S) disabled.');return original.call(this,input,...args);};}}
+syncBuiltinESMExports();
+const evidenceRoot=resolve('outputs',`workspace-assistant-preview-${Date.now()}`);mkdirSync(evidenceRoot,{recursive:true});
+const info={synthetic:true,providerCalls:false,entryURL:`http://localhost:${entryPort}/chat-preview`,appURL:`http://localhost:${port}/?view=create`,dataRoot,evidenceRoot};
+writeFileSync(resolve(evidenceRoot,'preview-info.json'),JSON.stringify(info,null,2));
+await (await import('../runtime/render/server.mjs')).start();
+const entry=createServer((req,res)=>{if(req.headers.host!==`localhost:${entryPort}`||req.url!=='/chat-preview'){res.writeHead(404);res.end();return;}res.writeHead(303,{'Set-Cookie':`fivegen-local-session=${session}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`,Location:info.appURL,'Cache-Control':'no-store'});res.end();});
+await new Promise((done,reject)=>{entry.once('error',reject);entry.listen(entryPort,'127.0.0.1',done);});
+if(process.argv.includes('--check')){
+ const call=async(path,body)=>{const response=await fetch(`http://localhost:${port}${path}`,{method:body?'POST':'GET',headers:{Cookie:`fivegen-local-session=${session}`,Origin:`http://localhost:${port}`,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const result=await response.json();assert.ok(response.ok,JSON.stringify({status:response.status,result}));return result;};
+ const first=await call('/api/studio/assistant',{id:randomUUID(),requestId:randomUUID(),message:'Create my onboarding guide, campaign drafts, and a launch review on October 29 at 10 AM Asia/Ulaanbaatar for 30 minutes.',expectedUpdatedAt:0,maxCredits:0,timezone:'Asia/Ulaanbaatar'});
+ let conversation=first.conversation;assert.equal(conversation.workflow.steps.length,3);
+ for(const step of conversation.workflow.steps){
+  const approved=await call('/api/studio/assistant/actions',{conversationId:conversation.id,planId:conversation.workflow.id,stepId:step.id,expectedUpdatedAt:conversation.updatedAt,requestId:randomUUID(),decision:'approve'});
+  conversation=approved.conversation;assert.ok(approved.result.resourceId);
+  if(step.action.type==='create_product'){const workspace=await call('/api/builder/'+approved.result.productId);assert.equal(workspace.draft.sections.length,3);assert.equal(workspace.product.status,'draft');}
+  if(step.action.type==='create_campaign'){const campaign=await call(`/api/products/${approved.result.productId}/campaigns?campaignId=${approved.result.resourceId}`);assert.equal(campaign.campaign.items.length,3);assert.ok(campaign.campaign.items.every(item=>item.status==='draft'&&item.scheduledAt===null));}
+ }
+ const continued=await call('/api/studio/assistant',{id:conversation.id,requestId:randomUUID(),message:'Thanks',expectedUpdatedAt:conversation.updatedAt,maxCredits:0,timezone:'Asia/Ulaanbaatar'});
+ assert.equal(continued.conversation.workflow.steps.filter(step=>step.status==='completed').length,3);
+ assert.equal(continued.conversation.productId,conversation.productId);
+ writeFileSync(resolve(evidenceRoot,'http-check.json'),JSON.stringify({passed:true,conversationId:conversation.id,steps:conversation.workflow.steps.map(step=>({id:step.id,status:step.status,result:step.result})),providerCalls:false},null,2));
+ console.log('Passed: native HTTP planning → approved product with builder sections → native campaign drafts → calendar item → continued chat. Synthetic model transport, isolated real storage.');
+ console.log(JSON.stringify(info));process.exit(0);
+}
+console.log(JSON.stringify(info));
