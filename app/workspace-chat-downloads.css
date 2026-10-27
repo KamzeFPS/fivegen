@@ -1,0 +1,16 @@
+.workspace-chat-downloads{min-width:0;border:1px solid var(--wa-border,var(--fg-border,#383a40));border-radius:12px;padding:16px;display:grid;gap:12px;margin:18px 0;background:color-mix(in srgb,currentColor 2%,transparent)}
+.workspace-chat-downloads strong{font-size:14px;line-height:1.5}
+.workspace-chat-downloads p{margin:5px 0 0;font-size:12px;line-height:1.65;color:var(--wa-muted,var(--fg-muted,#a6a9b1));overflow-wrap:anywhere}
+.workspace-chat-download-actions{display:flex;gap:8px;flex-wrap:wrap}
+.workspace-chat-download-actions button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;max-width:100%;padding:9px 12px;border:1px solid var(--wa-border,var(--fg-border,#42444c));border-radius:8px;color:inherit;background:transparent;font:inherit;font-size:12px;cursor:pointer}
+.workspace-chat-download-actions button:hover{background:color-mix(in srgb,currentColor 6%,transparent)}
+.workspace-chat-download-actions button:focus-visible{outline:2px solid #ff995d;outline-offset:3px}
+.workspace-chat-download-actions button>span{font-size:10px;opacity:.65}
+.workspace-chat-downloads>small{font-size:11px;line-height:1.6;color:var(--wa-muted,var(--fg-muted,#a6a9b1))}
+.workspace-chat-downloads .workspace-chat-download-error{color:#ce795a}
+.chat-reply-download{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
+.chat-reply-download>button{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:6px 0;border:0;border-radius:4px;background:transparent;color:var(--wa-muted,var(--fg-muted,#a6a9b1));font:inherit;font-size:11px;cursor:pointer}
+.chat-reply-download>button:hover{color:var(--wa-text,var(--fg-text,inherit))}
+.chat-reply-download>button:focus-visible{outline:2px solid var(--wa-accent,#ff995d);outline-offset:3px}
+.chat-reply-download>button>span{font-size:10px;opacity:.7}
+.chat-reply-download>p{font-size:12px;line-height:1.5;color:#ce795a;margin:0}

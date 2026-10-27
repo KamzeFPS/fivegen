@@ -26,7 +26,7 @@
     "test:paddle:live": "node scripts/paddle-live-test.mjs",
     "start:paddle:staging": "node --env-file=.env.render.local --env-file=.env.paddle-live.local scripts/paddle-staging.mjs",
     "test:studio": "node scripts/studio-planning-test.mjs && node scripts/studio-subscription-test.mjs",
-    "test:workspace-chat": "node scripts/workspace-assistant-planning-test.mjs && node scripts/workspace-assistant-actions-test.mjs",
+    "test:workspace-chat": "node scripts/workspace-assistant-planning-test.mjs && node scripts/workspace-assistant-actions-test.mjs && node scripts/workspace-assistant-downloads-test.mjs && node scripts/chat-composer-ui-test.mjs",
     "preview:workspace-chat": "node scripts/workspace-assistant-preview.mjs",
     "test:growth": "node scripts/growth-ai-test.mjs && node scripts/growth-funnel-test.mjs && node scripts/creator-content-test.mjs",
     "test:growth:runtime": "node scripts/growth-runtime-test.mjs",
@@ -53,7 +53,7 @@
     "test:audit": "node scripts/audit-implementation-test.mjs",
     "test:clarity": "node scripts/creator-clarity-preflight.mjs",
     "test:seo": "node scripts/seo-metadata-test.mjs && node scripts/public-home-test.mjs && node scripts/search-indexing-boundary-test.mjs",
-    "test:funnel-builder": "node scripts/funnel-builder-test.mjs && node scripts/funnel-builder-navigation-test.mjs",
+    "test:funnel-builder": "node scripts/funnel-builder-test.mjs && node scripts/funnel-builder-navigation-test.mjs && node scripts/funnel-journey-ui-test.mjs",
     "test:calendar": "node scripts/workspace-calendar-test.mjs && node scripts/workspace-calendar-ui-test.mjs",
     "test:appearance": "node scripts/appearance-test.mjs && node scripts/generate-appearance-surfaces.cjs --check"
   },

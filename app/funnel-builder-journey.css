@@ -108,3 +108,56 @@
 .fj-idea,.fj-stage-checklist,.fj-audience-details,.fj-action-details{padding-right:3px}
 .fj-idea{padding-bottom:15px}
 .fj-schedule-footer{position:static;flex-shrink:0;margin-top:0;box-shadow:none}
+
+/* The default journey is a compact stage chooser; the editable canvas is optional. */
+.fj-builder>.fj-heading{border-bottom:1px solid #303844;padding:22px 26px 18px}
+.fj-builder>.fj-heading .fj-heading-actions{max-width:none;align-items:center}
+.fj-purpose{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:18px 26px;border-bottom:1px solid #303844;background:#171b20}
+.fj-purpose strong{font-size:15px;line-height:1.5;color:#edf0f5;font-weight:550}
+.fj-purpose p{font-size:12px;line-height:1.6;color:#aeb8c7;margin:4px 0 0;max-width:62ch}
+.fj-purpose ol{list-style:none;display:flex;align-items:center;gap:16px;padding:0;margin:0;flex-shrink:0}
+.fj-purpose li{display:flex;align-items:center;gap:7px;font-size:11px;line-height:1.5;color:#c8cdd6;white-space:nowrap}
+.fj-purpose li b{width:23px;height:23px;border:1px solid #5c4a3b;border-radius:50%;display:grid;place-items:center;color:#ffb67d;background:#30251f;font-size:11px}
+.fj-shell{grid-template-columns:minmax(0,1fr)}
+.fj-shell.has-inspector{grid-template-columns:minmax(270px,.8fr) minmax(0,1.65fr)}
+.fj-main{min-height:0;background:#111416}
+.fj-map{background-image:none;padding:20px 22px}
+.fj-map-instruction{justify-content:space-between;font-size:11px;gap:8px;margin-bottom:15px}
+.fj-path{max-width:440px}
+.fj-node{padding:12px 15px 0;border-radius:10px}
+.fj-node-kicker{font-size:10px;gap:10px;margin-bottom:9px}
+.fj-node-kicker b{font-size:12px}
+.fj-node-content{gap:11px;margin-bottom:11px}
+.fj-node-content .fj-node-icon{width:36px;height:36px}
+.fj-node-content .fj-node-icon svg{width:19px;height:19px}
+.fj-node-content strong{font-size:16px;margin-bottom:4px}
+.fj-node-purpose{font-size:11px;line-height:1.55;max-width:32ch}
+.fj-node-footer{font-size:11px;padding:9px 0;gap:8px}
+.fj-audience-node{padding:12px 14px;gap:10px}
+.fj-audience-node .fj-node-icon{width:33px;height:33px}
+.fj-audience-node .fj-node-icon svg{width:19px;height:19px}
+.fj-audience-copy strong{font-size:14px;margin-bottom:3px}
+.fj-audience-copy>span,.fj-audience-copy small{font-size:10px}
+.fj-connector{height:31px}
+.fj-connector>span{font-size:9px}
+.fj-inspector{padding:0 28px 22px}
+.fj-inspector-header{padding:23px 0 17px;gap:12px}
+.fj-detail-icon{width:43px;height:43px}
+.fj-detail-icon svg{width:22px;height:22px}
+.fj-inspector-header h3{font-size:22px;margin-bottom:5px}
+.fj-inspector-header p{max-width:none;font-size:12px}
+.fj-idea-pagination{padding-top:0;margin-bottom:12px}
+.fj-idea-picker{display:flex;flex-direction:column;gap:7px;font-size:11px;color:#b5bfcd;margin-bottom:10px}
+.fj-idea-picker select{width:100%;min-width:0;min-height:42px;padding:10px 12px;border:1px solid #444e5b;border-radius:7px;background:#1c2128;color:#e3e8ef;font-size:13px;text-overflow:ellipsis}
+.funnel-builder .fj-more-ideas{width:100%;display:flex;justify-content:flex-start;gap:8px;font-size:12px;min-height:38px;margin-bottom:24px;color:#ffbf91;border-color:#69503d;background:#2b211b}
+.fj-more-ideas>span{font-size:10px;margin-left:auto;color:#b7a393;font-weight:400}
+.fj-idea-title{font-size:clamp(23px,2vw,29px);line-height:1.25}
+.fj-request-note{font-size:12px;line-height:1.7;color:#b6bfcc;margin:18px 0}
+.fj-more-dialog form{min-width:0}
+.fj-more-dialog textarea{resize:vertical}
+.fj-more-dialog .fb-field small{font-weight:400}
+.fj-builder.is-editing-map .fj-shell.has-inspector{grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr)}
+@media(min-width:901px) and (max-height:850px){.fj-main,.fj-inspector{min-height:0}}
+@media(max-width:1180px){.fj-purpose{align-items:flex-start;flex-direction:column;gap:12px}.fj-purpose ol{flex-wrap:wrap}.fj-shell.has-inspector{grid-template-columns:minmax(240px,.8fr) minmax(0,1.4fr)}.fj-map{padding:18px 16px}.fj-inspector{padding-left:20px;padding-right:20px}}
+@media(max-width:900px){.fj-shell.has-inspector,.fj-builder.is-editing-map .fj-shell.has-inspector{grid-template-columns:minmax(0,1fr)}.fj-builder>.fj-heading{padding:20px}.fj-heading{flex-wrap:wrap}.fj-heading-actions{justify-content:flex-start;padding-top:0}.fj-purpose{padding:16px 20px}.fj-purpose ol{gap:12px}.fj-purpose li{font-size:10px}.fj-map{padding:18px 20px}.fj-path{max-width:520px}.fj-node-purpose{max-width:none}.fj-idea-title{font-size:26px}.fj-mobile-dialog .fj-inspector{padding-left:20px;padding-right:20px}.fj-mobile-dialog .fj-inspector-header{padding-top:20px}.fj-map-instruction{max-width:520px;margin-left:auto;margin-right:auto}}
+@media(prefers-reduced-motion:reduce){.fj-node{transition:none}}

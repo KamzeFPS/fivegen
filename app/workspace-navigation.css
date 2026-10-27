@@ -75,11 +75,13 @@
 .workspace-support-note{font-size:11px;color:#98908b;line-height:1.8;margin:0}
 .gen-chat-active .workspace-header{flex-shrink:0}
 @media(max-width:1000px){.workspace-toolbar{grid-template-columns:minmax(150px,1fr) minmax(200px,360px) auto;gap:20px;padding:0 22px}.workspace-header-actions{gap:8px}.workspace-credit-button{padding:10px}.workspace-credit-button>span{display:none}.workspace-nav-row{padding:0 22px}}
-/* Reserve the create action before the five destinations run out of space. */
+/* Reserve the create action before the six destinations run out of space. */
 @media(min-width:701px) and (max-width:1000px){
   .workspace-nav-row{gap:12px}
-  .workspace-primary-nav{gap:12px}
-  .workspace-primary-nav>button{gap:6px}
+  .workspace-primary-nav{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+  .workspace-primary-nav>button{min-width:0;flex-direction:column;gap:3px;padding:3px 0;font-size:11px;line-height:1.2}
+  .workspace-primary-nav>button>span{white-space:normal;text-align:center}
+  .workspace-primary-nav small{display:none}
   .workspace-history-trigger{display:none}
   .workspace-create-button{width:44px;height:44px;min-height:44px;padding:10px}
   .workspace-create-button>span{display:none}
@@ -126,6 +128,8 @@
 .library-products-list .library-product-next{grid-column:1;grid-row:3;margin-top:2px}
 .library-filters{flex-wrap:wrap}.library-filters>button{min-height:44px}
 .workspace-help-trigger.workspace-attention-trigger{display:grid;min-height:44px;min-width:44px}
-/* Four global destinations remain readable beside the create action on phones. */
-@media(max-width:700px){.workspace-primary-nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;max-width:none}.workspace-primary-nav>button{min-width:0;flex-direction:column;gap:3px;padding:4px 0;font-size:10px;line-height:1.15}.workspace-primary-nav>button>span{white-space:normal;text-align:center}.workspace-secondary-actions{flex:none}}
+/* Keep every global destination in one phone row beside the create action. */
+@media(max-width:700px){.workspace-primary-nav{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:3px;max-width:none}.workspace-primary-nav>button{min-width:0;flex-direction:column;gap:3px;padding:4px 0;font-size:10px;line-height:1.15}.workspace-primary-nav>button>span{white-space:normal;text-align:center}.workspace-secondary-actions{flex:none}}
 @media(max-width:700px){.workspace-help-trigger.workspace-attention-trigger{display:none}.workspace-header-actions{gap:4px}}
+
+@media(max-width:400px){.workspace-nav-row{gap:8px;padding-left:10px;padding-right:10px}.workspace-primary-nav>button{font-size:9px;letter-spacing:-.1px}.workspace-primary-nav>button>span{max-width:100%}}

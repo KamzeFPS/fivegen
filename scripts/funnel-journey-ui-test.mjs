@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import ts from 'typescript';
+import React from 'react';
+import * as icons from 'lucide-react';
+const all=node=>Array.isArray(node)?node.flatMap(all):React.isValidElement(node)?[node,...all(node.props.children)]:[];
+const text=node=>Array.isArray(node)?node.map(text).join(''):React.isValidElement(node)?text(node.props.children):typeof node==='string'||typeof node==='number'?String(node):'';
+let cursor=0;const hooks=[],calls=[],downloads=[];
+const scope={React,...Object.fromEntries(Object.entries(icons).filter(([key])=>/^[A-Z]/.test(key))),useState:initial=>{const index=cursor++;if(!(index in hooks))hooks[index]=typeof initial==='function'?initial():initial;return [hooks[index],value=>hooks[index]=typeof value==='function'?value(hooks[index]):value];},formatCalendarLocal:()=>'',Blob,URL:{createObjectURL:blob=>{downloads.push(blob);return 'blob:local-test';},revokeObjectURL(){}},document:{createElement:()=>({click(){}})},setTimeout:fn=>fn()};
+const exports={};new Function('exports',...Object.keys(scope),ts.transpileModule(fs.readFileSync('app/funnel-builder-journey.tsx','utf8').replace(/^import[^\n]*\n/gm,''),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React}}).outputText)(exports,...Object.values(scope));
+const ideas=Array.from({length:6},(_,i)=>({id:`idea-${i}`,title:`Video ${i}`,hook:`Hook ${i}`,angle:`Angle ${i}`,outline:[`Real example ${i}`],cta:`Next action ${i}`,format:'Talking head',metric:'Observe questions',experiment:'Compare openings'}));
+const props={node:{id:'tofu',type:'tofu',title:'Get discovered',body:''},brief:{platforms:[]},strategy:{stages:[{id:'tofu',ideas,actions:[],handoff:'Build trust'}],engagementChecklist:[],conversionChecklist:[]},panelRef:{current:null},disabled:false,events:[],accounts:[],productId:'fixture',aiReady:true,ideaCost:12,onMoreIdeas:stage=>calls.push(['more',stage]),onSchedule:(node,idea)=>calls.push(['schedule',node.id,idea.id]),onClose(){},onStrategy(){},onCopy(){},onAddAction(){},onEdit(){},initialIdeaId:'idea-3'};
+function render(change={}){cursor=0;return exports.FunnelStageDetails({...props,...change});}
+let tree=render();
+assert.match(text(tree),/Idea 4 of 6/,'A newly appended batch is revealed without paging through older ideas');
+all(tree).find(node=>node.type==='select').props.onChange({target:{value:'idea-5'}});tree=render();assert.match(text(tree),/Idea 6 of 6/);
+all(tree).find(node=>node.type==='button'&&text(node)==='Schedule video').props.onClick();assert.deepEqual(calls.at(-1),['schedule','tofu','idea-5'],'Scheduling uses the selected idea, including an appended idea');
+all(tree).find(node=>node.type==='button'&&text(node).startsWith('More video ideas')).props.onClick();assert.deepEqual(calls.at(-1),['more','tofu']);
+all(tree).find(node=>node.type==='button'&&text(node)==='Download outline').props.onClick();assert.match(await downloads[0].text(),/Video 5[\s\S]*Hook 5[\s\S]*Real example 5/,'Download is a real file with selected script content');
+assert.equal(all(render({disabled:true})).find(node=>node.type==='button'&&text(node).startsWith('More video ideas')).props.disabled,true);
+assert.equal(all(render({strategy:{...props.strategy,stages:[{...props.strategy.stages[0],ideas:Array.from({length:30},(_,i)=>({...ideas[0],id:`idea-${i}`}))}]}})).find(node=>node.type==='button'&&text(node).startsWith('More video ideas')).props.disabled,true,'Capacity cannot silently discard previous ideas');
+assert.equal(props.strategy.stages[0].ideas.length,6,'Browsing and downloading do not mutate saved materials');
+console.log('Funnel journey UI passed: appended-batch reveal, direct idea selection, correct scheduling identity, additive stage intent, actual script file, busy/capacity guards and immutable browsing.');

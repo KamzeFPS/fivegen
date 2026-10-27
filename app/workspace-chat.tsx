@@ -4,6 +4,9 @@ import {useEffect,useId,useLayoutEffect,useRef,useState} from 'react';
 import {ArrowDown,ArrowRight,ArrowUp,BookOpen,CalendarDays,Check,CheckCircle2,ChevronDown,ClipboardList,CornerDownLeft,ExternalLink,Lightbulb,Loader2,MessageCircle,Package,PenLine,Plus,ShieldCheck,SkipForward,Sparkles} from 'lucide-react';
 import {assistantDestination,assistantResourceReceipts,nextAssistantStep} from '@/lib/workspace-assistant';
 import type {AssistantAction,AssistantConversation,AssistantResourceReceipt,AssistantStep,AssistantWorkflow} from '@/lib/workspace-assistant';
+import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
+import {ChatQuestionStepper} from './chat-question-stepper';
+import {ChatReplyDownload,WorkspaceChatDownloads} from './workspace-chat-downloads';
 import './workspace-chat.css';
 
 type Props={
@@ -14,7 +17,7 @@ type Props={
   onNewChat?:()=>void;
   products?:{id:string;title:string}[];
 };
-type AnswerDraft={id:string;values:Record<string,string>};
+type AnswerDraft={id:string;values:Record<string,string>;index?:number};
 type SavedDraft={message:string;answers:AnswerDraft;updatedAt:number};
 type ProductDestination={title:string;id?:string;detail?:string};
 
@@ -59,14 +62,17 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
   const [acting,setActing]=useState(false);
   const [sending,setSending]=useState(false);
   const [showLatest,setShowLatest]=useState(false);
+  const [planOpen,setPlanOpen]=useState(false);
+  const [noteOpen,setNoteOpen]=useState(false);
   const shellRef=useRef<HTMLDivElement>(null);
+  const scrollRef=useRef<HTMLDivElement>(null);
   const inputRef=useRef<HTMLTextAreaElement>(null);
   const latestRef=useRef<HTMLDivElement>(null);
   const nextRef=useRef<HTMLElement>(null);
-  const planDetailsRef=useRef<HTMLDetailsElement>(null);
   const submitRef=useRef(false);
   const actionRef=useRef(false);
-  const followRef=useRef(false);
+  const followRef=useRef(true);
+  const firstScrollRef=useRef(true);
   const messageChangeRef=useRef(onMessage);
   const inputId=useId();
   const helpId=useId();
@@ -75,6 +81,8 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
   const currentAnswers=loadedKey===draftKey&&answers.id===latest?.id?answers.values:{};
   const answerFor=(index:number)=>currentAnswers[String(index)]||'';
   const answered=questions.filter((_,index)=>answerFor(index).trim()).length;
+  const questionIndex=answers.id===latest?.id?Math.max(0,Math.min(answers.index||0,questions.length-1)):0;
+  const showMessage=!questions.length||noteOpen;
   const answerText=questions.map((question,index)=>answerFor(index).trim()?`${question}\nMy answer: ${answerFor(index).trim()}`:'').filter(Boolean).join('\n\n');
   const reply=[answerText,message.trim()].filter(Boolean).join('\n\n');
   const tooLong=reply.length>MAX_MESSAGE;
@@ -92,16 +100,12 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
     const restored:Record<string,string>={};
     if(saved?.answers?.values&&typeof saved.answers.values==='object')Object.entries(saved.answers.values).slice(0,3).forEach(([key,value])=>{if(/^[0-2]$/.test(key)&&typeof value==='string')restored[key]=value.slice(0,600);});
     const frame=window.requestAnimationFrame(()=>{
-      setAnswers({id:typeof saved?.answers?.id==='string'?saved.answers.id:'',values:restored});
+      setAnswers({id:typeof saved?.answers?.id==='string'?saved.answers.id:'',values:restored,index:Math.max(0,Math.min(2,Number(saved?.answers?.index)||0))});
       if(typeof saved?.message==='string')messageChangeRef.current(saved.message.slice(0,MAX_MESSAGE));
-      setLoadedKey(draftKey);setLocalError('');setShowLatest(false);followRef.current=false;
+      setLoadedKey(draftKey);setLocalError('');setShowLatest(false);setNoteOpen(typeof saved?.message==='string'&&Boolean(saved.message.trim()));followRef.current=true;firstScrollRef.current=true;
     });
     return()=>window.cancelAnimationFrame(frame);
   },[draftKey]);
-
-  useEffect(()=>{
-    if(planDetailsRef.current&&window.matchMedia('(max-width: 1100px)').matches)planDetailsRef.current.open=false;
-  },[workflow?.id]);
 
   useEffect(()=>{
     if(loadedKey!==draftKey)return;
@@ -109,54 +113,55 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
   },[draftKey,loadedKey,message,answers]);
 
   useEffect(()=>{
-    function trackScroll(){
-      const anchor=latestRef.current;if(!anchor)return;
-      // The page remains the scroll surface, including when a long draft is expanded.
-      const bottom=anchor.getBoundingClientRect().bottom;
-      followRef.current=bottom>=-160&&bottom<window.innerHeight+160;
-    }
-    window.addEventListener('scroll',trackScroll,{passive:true});
-    return()=>window.removeEventListener('scroll',trackScroll);
+    const pane=scrollRef.current;if(!pane)return;
+    function trackScroll(){if(pane)followRef.current=pane.scrollHeight-pane.scrollTop-pane.clientHeight<120;}
+    pane.addEventListener('scroll',trackScroll,{passive:true});
+    return()=>pane.removeEventListener('scroll',trackScroll);
   },[]);
 
   useLayoutEffect(()=>{
     const input=inputRef.current;if(!input)return;
     input.style.height='auto';input.style.height=`${Math.min(input.scrollHeight,168)}px`;
-  },[message]);
+  },[message,showMessage]);
 
   useEffect(()=>{
     if(!latest?.id&&!sent)return;
-    if(followRef.current){
-      latestRef.current?.scrollIntoView({block:'end',behavior:'instant'});
+    if(firstScrollRef.current||followRef.current){
+      const pane=scrollRef.current;if(pane)pane.scrollTo({top:pane.scrollHeight,behavior:'instant'});
+      firstScrollRef.current=false;
       setShowLatest(false);
     }else setShowLatest(true);
-  },[latest?.id,sent]);
+  },[latest?.id,sent,loadedKey,conversation?.updatedAt]);
 
   useEffect(()=>{
     const viewport=window.visualViewport;
+    const app=shellRef.current?.closest<HTMLElement>('.gen-app');
     function fit(){
       const keyboard=Boolean(viewport&&viewport.height<window.innerHeight*.75);
       shellRef.current?.classList.toggle('wa-keyboard-open',keyboard);
       shellRef.current?.style.setProperty('--wa-viewport-height',`${viewport?.height||window.innerHeight}px`);
-      if(keyboard&&document.activeElement===inputRef.current)inputRef.current?.scrollIntoView({block:'nearest',behavior:'instant'});
+      app?.style.setProperty('--chat-viewport',`${viewport?.height||window.innerHeight}px`);
+      app?.classList.toggle('chat-keyboard-open',keyboard);
     }
     fit();viewport?.addEventListener('resize',fit);window.addEventListener('resize',fit);
-    return()=>{viewport?.removeEventListener('resize',fit);window.removeEventListener('resize',fit);};
+    return()=>{viewport?.removeEventListener('resize',fit);window.removeEventListener('resize',fit);app?.style.removeProperty('--chat-viewport');app?.classList.remove('chat-keyboard-open');};
   },[]);
 
-  function updateAnswer(index:number,value:string){setAnswers({id:latest?.id||'',values:{...currentAnswers,[String(index)]:value.slice(0,600)}});setLocalError('');}
+  function updateAnswer(index:number,value:string){setAnswers({id:latest?.id||'',values:{...currentAnswers,[String(index)]:value.slice(0,600)},index});setLocalError('');}
+  function selectQuestion(index:number){setAnswers({id:latest?.id||'',values:currentAnswers,index});}
   function focusMessage(value?:string){
     if(value!==undefined)onMessage(value);
-    inputRef.current?.focus({preventScroll:true});
-    inputRef.current?.scrollIntoView({block:'nearest',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+    setNoteOpen(true);
+    window.requestAnimationFrame(()=>inputRef.current?.focus({preventScroll:true}));
   }
-  function jumpLatest(){followRef.current=true;setShowLatest(false);latestRef.current?.scrollIntoView({block:'end',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});}
+  function jumpLatest(){followRef.current=true;setShowLatest(false);const pane=scrollRef.current;if(pane)pane.scrollTo({top:pane.scrollHeight,behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});}
+  function reviewNext(){setPlanOpen(false);window.requestAnimationFrame(()=>{const pane=scrollRef.current,node=nextRef.current;if(pane&&node)pane.scrollTo({top:node.getBoundingClientRect().top-pane.getBoundingClientRect().top+pane.scrollTop-16,behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});node?.focus({preventScroll:true});});}
   async function submit(){
     if(!canSend||submitRef.current)return;
     submitRef.current=true;setSending(true);setLocalError('');followRef.current=true;
     try{
       if(await onSend(reply)){
-        setAnswers({id:'',values:{}});onMessage('');
+        setAnswers({id:'',values:{}});setNoteOpen(false);onMessage('');
         try{sessionStorage.removeItem(draftKey);}catch{}
         inputRef.current?.focus({preventScroll:true});
       }else setLocalError('Your message wasn’t sent. Your draft is saved here so you can try again.');
@@ -174,11 +179,11 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
   return <div className="workspace-assistant" ref={shellRef}>
     <header className="wa-heading">
       <div><span className="wa-eyebrow"><Sparkles size={14} aria-hidden="true"/>CHAT WITH GEN</span><h1>{messages.length?'Let’s keep things moving.':'What would you like to work on?'}</h1><p>Think it through here. Create it in the right part of your workspace.</p></div>
-      <div className="wa-heading-actions"><span className="wa-approval-note"><ShieldCheck size={16} aria-hidden="true"/>You approve every step</span>{onNewChat&&messages.length>0&&<button type="button" className="wa-new-chat" onClick={onNewChat} disabled={isBusy}><Plus size={15} aria-hidden="true"/>New chat</button>}</div>
+      <div className="wa-heading-actions">{workflow&&<button type="button" className="wa-new-chat wa-plan-toggle" onClick={()=>setPlanOpen(true)}><ClipboardList size={15} aria-hidden="true"/><span>View plan</span><span className="wa-plan-progress">{workflow.steps.length-pendingCount}/{workflow.steps.length}</span></button>}{onNewChat&&messages.length>0&&<button type="button" className="wa-new-chat" aria-label="New chat" title="New chat" onClick={onNewChat} disabled={isBusy}><Plus size={15} aria-hidden="true"/><span>New chat</span></button>}</div>
     </header>
-    <div className={`wa-layout${workflow?' wa-has-plan':''}`}>
+    <div className="wa-layout">
       <section className="wa-thread" aria-label="Workspace assistant conversation" aria-busy={isBusy}>
-        <div className="wa-transcript">
+        <div className="wa-transcript" ref={scrollRef} tabIndex={0} aria-label="Conversation history">
           {!messages.length&&!sent&&<section className="wa-welcome" aria-label="Start a conversation">
             <span className="wa-welcome-icon"><MessageCircle size={24} aria-hidden="true"/></span>
             <h2>A rough idea is enough.</h2><p>Ask a question, tell me what you want to make, or say you’re starting from zero. We’ll work out the details and a clear plan together.</p>
@@ -189,11 +194,8 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
           {messages.map((item,index)=><article key={item.id} className={`wa-message wa-${item.role}`}>
             <span className="wa-avatar" aria-hidden="true">{item.role==='assistant'?<Sparkles size={17}/>:name.slice(0,1).toUpperCase()||'Y'}</span>
             <div className="wa-message-body"><strong>{item.role==='assistant'?'Gen':name||'You'}</strong><div className="wa-message-copy">{item.content}</div>
-              {item.role==='assistant'&&index===messages.length-1&&questions.length>0?<div className="wa-questions">
-                <div className="wa-questions-heading"><div><h2>A few details to guide the plan</h2><p>Answer any of these together, or use your own words below.</p></div><span>{answered}/{questions.length}</span></div>
-                <fieldset disabled={isBusy}><legend className="wa-sr-only">Questions from Gen</legend>{questions.map((question,questionIndex)=><label className="wa-question" key={`${item.id}-${questionIndex}`}><span><b>{questionIndex+1}</b>{question}{answerFor(questionIndex).trim()&&<Check size={15} aria-hidden="true"/>}</span><textarea rows={2} maxLength={600} value={answerFor(questionIndex)} onChange={event=>updateAnswer(questionIndex,event.target.value)} placeholder="Your answer (optional)…"/></label>)}</fieldset>
-                <p className="wa-questions-hint">Your answers are included when you send your next message.</p>
-              </div>:item.questions?.length?<details className="wa-earlier-questions"><summary>Questions from this reply</summary><ul>{item.questions.slice(0,3).map((question,questionIndex)=><li key={questionIndex}>{question}</li>)}</ul></details>:null}
+              {item.questions?.length&&!(item.role==='assistant'&&index===messages.length-1&&questions.length>0)?<details className="wa-earlier-questions"><summary>Questions from this reply</summary><ul>{item.questions.slice(0,3).map((question,questionIndex)=><li key={questionIndex}>{question}</li>)}</ul></details>:null}
+              {item.role==='assistant'&&<ChatReplyDownload messageId={item.id} content={item.content} questions={item.questions}/>}
             </div>
           </article>)}
           {sent&&<article className="wa-message wa-user"><span className="wa-avatar" aria-hidden="true">{name.slice(0,1).toUpperCase()||'Y'}</span><div className="wa-message-body"><strong>{name||'You'}</strong><div className="wa-message-copy">{sent}</div></div></article>}
@@ -217,21 +219,21 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
         </div>
         <div className="wa-compose-dock">
           {showLatest&&<button type="button" className="wa-jump" onClick={jumpLatest}><ArrowDown size={14} aria-hidden="true"/>Jump to latest</button>}
-          {answered>0&&<p className="wa-answer-summary"><CheckCircle2 size={14} aria-hidden="true"/>{answered} {answered===1?'answer':'answers'} included in your next message</p>}
           <form className="wa-composer" onSubmit={event=>{event.preventDefault();void submit();}}>
-            <label htmlFor={inputId}>Message Gen</label>
-            <textarea id={inputId} ref={inputRef} rows={2} value={message} maxLength={MAX_MESSAGE} disabled={isBusy} placeholder={answered?'Add anything else, or send your answers…':workflow?'Ask anything, refine the plan, or start something new…':'Tell me what’s on your mind…'} aria-describedby={`${helpId}${tooLong||localError?` ${errorId}`:''}`} aria-invalid={tooLong||Boolean(localError)} onChange={event=>{onMessage(event.target.value);setLocalError('');}} onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing&&event.nativeEvent.keyCode!==229&&!window.matchMedia('(pointer: coarse)').matches){event.preventDefault();void submit();}}}/>
+            {questions.length>0&&<>{!showMessage&&<ChatQuestionStepper questions={questions} index={questionIndex} answered={answered} value={answerFor(questionIndex)} disabled={isBusy} onAnswer={value=>updateAnswer(questionIndex,value)} onIndex={selectQuestion} onSubmit={()=>void submit()}/>}<button type="button" className="wa-note-toggle" aria-expanded={showMessage} onClick={()=>{setNoteOpen(open=>!open);if(!showMessage)window.requestAnimationFrame(()=>inputRef.current?.focus({preventScroll:true}));}} disabled={isBusy}>{showMessage?`Back to questions · ${answered}/${questions.length} answered`:message.trim()?'Review your added note':'Add a note or reply in your own words'}<ChevronDown size={13} aria-hidden="true"/></button></>}
+            <label htmlFor={inputId} hidden={!showMessage}>{questions.length?'Anything else?':'Message Gen'}</label>
+            <textarea id={inputId} ref={inputRef} hidden={!showMessage} rows={2} value={message} maxLength={MAX_MESSAGE} disabled={isBusy} placeholder={answered?'Add anything else, or send your answers…':workflow?'Ask anything, refine the plan, or start something new…':'Tell me what’s on your mind…'} aria-describedby={`${helpId}${tooLong||localError?` ${errorId}`:''}`} aria-invalid={tooLong||Boolean(localError)} onChange={event=>{onMessage(event.target.value);setNoteOpen(true);setLocalError('');}} onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing&&event.nativeEvent.keyCode!==229&&!window.matchMedia('(pointer: coarse)').matches){event.preventDefault();void submit();}}}/>
             <div className="wa-composer-bottom"><span>{!aiReady?'AI is not connected yet':isBusy?acting?'Saving your approved step…':'Gen is working…':unlimited?'Unlimited planning':remaining>0?`${remaining} included ${remaining===1?'message':'messages'} left`:`${cost} credits per message`}</span><button type="submit" disabled={!canSend} className="wa-send">{sending||busy==='planning'?<Loader2 size={17} className="wa-spin" aria-hidden="true"/>:<ArrowUp size={17} aria-hidden="true"/>}<span>{sending||busy==='planning'?'Thinking…':answered?'Send answers':'Send'}</span></button></div>
           </form>
-          <div className="wa-composer-help" id={helpId}><span>Planning uses your message allowance. Each creation needs its own approval.</span><span className="wa-keyboard-hint"><CornerDownLeft size={12} aria-hidden="true"/>Enter to send · Shift + Enter for a new line</span></div>
+          <div className="wa-composer-help" id={helpId}><span>Planning uses your message allowance. Each creation needs its own approval.</span><span className="wa-keyboard-hint"><CornerDownLeft size={12} aria-hidden="true"/>{questions.length&&!showMessage&&questionIndex<questions.length-1?'Enter for next question':'Enter to send'} · Shift + Enter for a new line</span></div>
           {(tooLong||localError||!hasCredits)&&<p className="wa-inline-error" role="alert" id={errorId}>{tooLong?`Your combined reply is ${reply.length-MAX_MESSAGE} characters too long. Shorten your message or answers to send it.`:localError||'You need more credits to send another planning message.'}</p>}
         </div>
       </section>
-      {workflow&&<aside className="wa-plan" aria-label="Current plan">
-        <details ref={planDetailsRef} className="wa-plan-disclosure" open>
-          <summary><span><ClipboardList size={17} aria-hidden="true"/>Your working plan</span><span className="wa-plan-count" aria-label={`${workflow.steps.length-pendingCount} of ${workflow.steps.length} steps reviewed`}>{workflow.steps.length-pendingCount}/{workflow.steps.length}</span><ChevronDown size={16} className="wa-plan-chevron" aria-hidden="true"/></summary>
+    </div>
+      {workflow&&<Dialog open={planOpen} onOpenChange={setPlanOpen}><DialogContent className="wa-plan-dialog"><DialogHeader><DialogTitle>Your working plan</DialogTitle><DialogDescription>{workflow.steps.length-pendingCount} of {workflow.steps.length} steps reviewed. Each creation still needs your approval in the conversation.</DialogDescription></DialogHeader>
           <div className="wa-plan-inner">
             <h2>{workflow.title}</h2><p className="wa-plan-summary">{workflow.summary}</p><Roadmap workflow={workflow}/>
+            <WorkspaceChatDownloads workflow={workflow}/>
             <ol className="wa-plan-steps">{workflow.steps.map((step,index)=><li key={step.id} className={`wa-plan-step is-${step.status}${step.id===next?.id?' is-next':''}`}>
               <details open={step.id===next?.id}>
                 <summary><span className="wa-step-number">{step.status==='completed'?<Check size={14} aria-label="Completed"/>:step.status==='skipped'?<SkipForward size={13} aria-label="Skipped"/>:index+1}</span><span><strong>{step.title}</strong><small>{step.status==='completed'?'Completed':step.status==='skipped'?'Skipped':step.id===next?.id?index===0?'First: ready for your review':'Now: ready for your review':'Next: waiting for the previous step'}</small></span><ChevronDown size={14} aria-hidden="true"/></summary>
@@ -245,12 +247,10 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
             </li>)}</ol>
             {previousResources.length>0&&<details className="wa-saved-items"><summary>Previously saved items ({previousResources.length})<ChevronDown size={14} aria-hidden="true"/></summary><div>{previousResources.map(receipt=><Result key={`${receipt.planId}:${receipt.stepId}`} step={receipt} onVisit={onVisit}/>)}</div></details>}
             {workflow.assumptions.length>0&&<details className="wa-assumptions"><summary>Working assumptions<ChevronDown size={14} aria-hidden="true"/></summary><ul>{workflow.assumptions.map((assumption,index)=><li key={index}>{assumption}</li>)}</ul></details>}
-            {next&&<button type="button" className="wa-review-next" onClick={()=>{nextRef.current?.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});nextRef.current?.focus({preventScroll:true});}}>Review step {workflow.steps.indexOf(next)+1}<ArrowRight size={15} aria-hidden="true"/></button>}
+            {next&&<button type="button" className="wa-review-next" onClick={reviewNext}>Review step {workflow.steps.indexOf(next)+1}<ArrowRight size={15} aria-hidden="true"/></button>}
             <p className="wa-plan-footnote"><ShieldCheck size={14} aria-hidden="true"/>Only the next step can be approved. You can revise the plan by chatting.</p>
           </div>
-        </details>
-      </aside>}
-    </div>
+      </DialogContent></Dialog>}
     <p className="wa-sr-only" role="status" aria-live="polite" aria-atomic="true">{latest?.role==='assistant'?`Gen replied. ${latest.content.slice(0,180)}`:''}</p>
   </div>;
 }

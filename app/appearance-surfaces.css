@@ -2876,6 +2876,11 @@ html[data-appearance='light'] .gen-mobile-nav button.active:where(:not(:is(.sale
 html[data-appearance='light'] .chat-heading>div>span:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
   color: #b3470d;
 }
+html[data-appearance='light'] .chat-plan-toggle:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  border: 1px solid var(--fg-border,#d7d7d0);
+  background: var(--fg-panel,#ecebe6);
+  color: var(--fg-text,#b3470d);
+}
 html[data-appearance='light'] .chat-transcript:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
   scrollbar-color: #20221f transparent;
 }
@@ -2960,6 +2965,9 @@ html[data-appearance='light'] .chat-composer:focus-within:where(:not(:is(.sales-
 }
 html[data-appearance='light'] .gen-app .chat-composer textarea:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
   color: #20221f;
+}
+html[data-appearance='light'] .chat-note-toggle:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  color: var(--fg-muted,#62665e);
 }
 html[data-appearance='light'] .chat-composer textarea:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *))::placeholder {
   color: #62665e;
@@ -3900,6 +3908,17 @@ html[data-appearance='light'] .workspace-header:where(:not(:is(.sales-landing,.p
 }
 html[data-appearance='light'] .workspace-toolbar:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
   border-bottom: 1px solid #20221f09;
+}
+html[data-appearance='light'] .workspace-chat-return:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  border: 1px solid var(--fg-border,#d7d7d0);
+  background: var(--fg-panel,#ecebe6);
+  color: var(--fg-text,#20221f);
+}
+html[data-appearance='light'] .workspace-chat-return:hover:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  border-color: var(--fg-accent,#e4c3a1);
+}
+html[data-appearance='light'] .workspace-chat-return:focus-visible:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  outline: 2px solid var(--fg-accent,#e4c3a1);
 }
 html[data-appearance='light'] .workspace-credit-button:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
   background: #ecebe6;
@@ -5714,6 +5733,40 @@ html[data-appearance='light'] .builder-agent-credit-link:where(:not(:is(.sales-l
   color: #b3470d;
 }
 
+/* chat-question-stepper.css — existing component color compatibility. */
+html[data-appearance='light'] .chat-followup:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  border-bottom: 1px solid var(--fg-border,#d7d7d0);
+}
+html[data-appearance='light'] .chat-followup-top:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  color: var(--fg-muted,#62665e);
+}
+html[data-appearance='light'] .chat-followup-top svg:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  color: var(--fg-accent,#b3470d);
+}
+html[data-appearance='light'] .chat-followup>label:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  color: var(--fg-text,#20221f);
+}
+html[data-appearance='light'] .gen-app .chat-composer .chat-followup>textarea:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)),
+html[data-appearance='light'] .gen-app .wa-composer .chat-followup>textarea:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  border: 1px solid var(--fg-border,#d7d7d0);
+  background: var(--fg-bg,#ffffff);
+  color: var(--fg-text,#20221f);
+}
+html[data-appearance='light'] .chat-followup>textarea:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *))::placeholder {
+  color: var(--fg-muted,#62665e);
+}
+html[data-appearance='light'] .chat-followup-navigation>span:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  color: var(--fg-muted,#62665e);
+}
+html[data-appearance='light'] .chat-followup-navigation button:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  border: 1px solid var(--fg-border,#d7d7d0);
+  background: var(--fg-surface,#ecebe6);
+  color: var(--fg-text,#20221f);
+}
+html[data-appearance='light'] .chat-followup-navigation button:focus-visible:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  outline: 2px solid var(--fg-accent,#e4c3a1);
+}
+
 /* creator-collaboration.css — existing component color compatibility. */
 html[data-appearance='light'] .collab-shell:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
   color: #20221f;
@@ -7416,6 +7469,49 @@ html[data-appearance='light'] .fj-idea-fit summary:where(:not(:is(.sales-landing
 }
 html[data-appearance='light'] .fj-mobile-dialog[data-slot=dialog-content]:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
   background: #ffffff !important;
+}
+html[data-appearance='light'] .fj-builder>.fj-heading:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  border-bottom: 1px solid #d7d7d0;
+}
+html[data-appearance='light'] .fj-purpose:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  border-bottom: 1px solid #d7d7d0;
+  background: #ecebe6;
+}
+html[data-appearance='light'] .fj-purpose strong:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  color: #20221f;
+}
+html[data-appearance='light'] .fj-purpose p:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  color: #62665e;
+}
+html[data-appearance='light'] .fj-purpose li:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  color: #20221f;
+}
+html[data-appearance='light'] .fj-purpose li b:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  border: 1px solid #d7d7d0;
+  color: #b3470d;
+  background: #ecebe6;
+}
+html[data-appearance='light'] .fj-main:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  background: #ffffff;
+}
+html[data-appearance='light'] .fj-idea-picker:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  color: #62665e;
+}
+html[data-appearance='light'] .fj-idea-picker select:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  border: 1px solid #d7d7d0;
+  background: #ecebe6;
+  color: #20221f;
+}
+html[data-appearance='light'] .funnel-builder .fj-more-ideas:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  color: #b3470d;
+  border-color: #d7d7d0;
+  background: #ecebe6;
+}
+html[data-appearance='light'] .fj-more-ideas>span:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  color: #62665e;
+}
+html[data-appearance='light'] .fj-request-note:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  color: #62665e;
 }
 
 /* funnel-builder.css — existing component color compatibility. */
@@ -10501,6 +10597,45 @@ html[data-appearance='light'] .cal-close-review:where(:not(:is(.sales-landing,.p
 }
 html[data-appearance='light'] .cal-close-review p:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
   color: #62665e;
+}
+
+/* workspace-chat-downloads.css — existing component color compatibility. */
+html[data-appearance='light'] .workspace-chat-downloads:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  border: 1px solid var(--wa-border,var(--fg-border,#d7d7d0));
+}
+html[data-appearance='light'] .workspace-chat-downloads p:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  color: var(--wa-muted,var(--fg-muted,#62665e));
+}
+html[data-appearance='light'] .workspace-chat-download-actions button:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  border: 1px solid var(--wa-border,var(--fg-border,#d7d7d0));
+}
+html[data-appearance='light'] .workspace-chat-download-actions button:focus-visible:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  outline: 2px solid #e4c3a1;
+}
+html[data-appearance='light'] .workspace-chat-downloads>small:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  color: var(--wa-muted,var(--fg-muted,#62665e));
+}
+html[data-appearance='light'] .workspace-chat-downloads .workspace-chat-download-error:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  color: #9b3525;
+}
+html[data-appearance='light'] .chat-reply-download>button:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  color: var(--wa-muted,var(--fg-muted,#62665e));
+}
+html[data-appearance='light'] .chat-reply-download>button:focus-visible:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  outline: 2px solid var(--wa-accent,#e4c3a1);
+}
+html[data-appearance='light'] .chat-reply-download>p:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  color: #9b3525;
+}
+
+/* workspace-chat.css — existing component color compatibility. */
+html[data-appearance='light'] .wa-primary:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)),
+html[data-appearance='light'] .wa-send:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  border: 1px solid #e4c3a1;
+  color: #b3470d;
+}
+html[data-appearance='light'] .workspace-assistant .wa-inline-error:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  color: var(--destructive, #9b3525);
 }
 
 /* workspace-example.css — existing component color compatibility. */

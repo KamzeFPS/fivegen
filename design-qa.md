@@ -36,3 +36,21 @@ All files below are in `/Users/kamze/Documents/ChatGPT/fivegen/outputs/scroll-si
 Production build, TypeScript, focused editor/fields lint, existing sales-page UI, product-page, creator studio UI, Funnel Builder, funnel navigation, Calendar UI and appearance tests passed. Appearance compatibility CSS was regenerated. Existing sales editor React lint findings are unchanged from HEAD. Browser console entries observed were warnings from an installed Chrome extension, not app errors. No real AI, payment, email or publishing calls were made. Temporary writing/copy edits were restored, and the funnel was reloaded to its saved strategy with its two original actions intact.
 
 final result: passed
+
+# Chat and Funnel Builder clarity QA
+
+27 October 2026. Pulled origin/main by fast-forward to 295e8b9 before editing.
+
+- Chat is a fixed viewport with a docked composer and one conversation scrollbar. Active questions are in the composer, one at a time; notes and answers remain draft-safe and send together. The plan is an optional dialog. No floating Gen overlay covers the input.
+- Fixed the mobile wrapped-flex cross-axis bug discovered at 390 × 500: stage and composer now end at y=500; Send ends at y=482; transcript shrinks to96px while its326px content scrolls. This is a browser viewport check, not a physical iOS/Android keyboard test.
+- Six global navigation destinations fit a single row at390px and705px. Tablet measurements put Calendar’s right edge at627 and Create’s left edge at639 (12px separation), with no document overflow. Restored temporary viewport overrides after checking.
+- Actual browser downloads were opened as files: an8,860-byte materials ZIP with ten entries, full three-chapter product draft, separate social/video/email copy, workflow sketch and UTC calendar import. The selected Funnel outline also downloaded as Markdown. No plan approval, real publishing, emails or payments were triggered by downloads.
+- Funnel Builder now explains its purpose and the choose-stage → pick-video → record/schedule flow. Compact journey selection leaves the recording material readable. Direct idea selection, visible More video ideas, optional focus and quoted credit cost are available.
+- Browser synthetic additive generation appended three ideas (3→6) only to the chosen stage, revealed idea4, retained the other stages and both existing custom notes. Reload retained the six ideas. Scheduled references and creator edits are covered by actual SQLite integration tests. Local synthetic records were retained; no external provider request occurred.
+- Generation preserves graph, old ideas, calendar references and freshness snapshot. Durable intent rejects request-ID reuse for a different stage/focus; uncertain running retries retain the request ID. Credits/leases/CAS/archive and failure-refund checks pass. The0059 migration is additive and verifies upgrade/default replay. Large multilingual libraries save within a bounded8MiB request; existing-idea prompt excerpts stay within the provider input budget without truncating saved material.
+
+Evidence: outputs/chat-funnel-clarity-2026-10-27/. Accepted screenshots include funnel-desktop-final.png, funnel-light-final.png, funnel-mobile.png, chat-desktop.png, chat-mobile-final.png, chat-short-viewport-final.png, chat-light-short-final.png and navigation-tablet-final.png. compact-chat-metrics.json and navigation-tablet-metrics.json record measured bounds. chat-short-viewport.png is rejected pre-fix evidence (composer clipped); chat-desktop-final.png is a390px viewport capture despite its filename and is not desktop evidence. The accepted chat-desktop.png is1440 ×1000. Local fixture text/images describe synthetic examples, not real creator results.
+
+Validation: production build; TypeScript; targeted ESLint (0errors; existing location.assign/unused-variable warnings); chat composer, workspace planning/actions/downloads, legacy planning/subscription, Funnel Builder persistence/navigation/idea-selection, appearance reproducibility and docs tests passed. Physical-device keyboard behavior and live AI quality are not claimed. Existing Render secrets were left closed.
+
+Final local result: passed.
