@@ -83,6 +83,31 @@ try{
  assert.equal((await deps.customerProduct(req(cookie(nextBundle)),nextIncluded)).sections[0].body,'NEW REVIEWED INCLUDED RESOURCE');assert.equal(db.prepare('SELECT publication_version FROM product_builder_order_snapshots WHERE order_id=?').get(nextIncluded).publication_version,2,'Each included product retains the publication reviewed for that checkout');
  const publicJson=JSON.stringify(deps.publicStudio({pricing:{model:'one-time',coupons:[{code:'PRIVATE20',percentOff:20}]},service:{meetingUrl:'https://private.example.test'}}));assert.ok(!publicJson.includes('PRIVATE20')&&!publicJson.includes('private.example'),'Coupons and private meeting links never leak into public sales metadata');
  const flexible=product({pricing:{model:'pwyw',minimumCents:0,suggestedCents:1900}});const noCharge=await checkout(flexible,{amount:0});assert.equal(providerCalls,0);assert.equal(db.prepare('SELECT amount FROM commerce_orders WHERE id=?').get(noCharge.id).amount,0);
+ // A private discount code may waive one buyer's payment without changing the
+ // published price or making the purchased content public.
+ const friendProduct=product({amount:2900,pricing:{model:'one-time',coupons:[{code:'FRIEND100',percentOff:100}]},files:[{name:'friend-notes.txt',description:'Private companion notes.',content:'PRIVATE_FRIEND_NOTES'}]});
+ const friendUpload=await upload(friendProduct,'friend-workbook.txt','PRIVATE_FRIEND_WORKBOOK');refreshPublication(friendProduct);
+ const callsBeforeFriend=providerCalls,sessionsBeforeFriend=sessions.size;
+ const friendAccess=await checkout(friendProduct,{coupon:'friend100',email:'friend@example.test'});
+ const friendOrder=db.prepare('SELECT amount,status,email FROM commerce_orders WHERE id=?').get(friendAccess.id);
+ assert.deepEqual({...friendOrder},{amount:0,status:'paid',email:'friend@example.test'},'A valid 100% one-time coupon activates an actual zero-amount order');
+ assert.equal(providerCalls,callsBeforeFriend,'A 100% coupon does not initialize the Stripe payment client');
+ assert.equal(sessions.size,sessionsBeforeFriend,'A 100% coupon does not create a Stripe payment session');
+ assert.equal(requests.has(friendAccess.id),false);
+ assert.ok(cookie(friendAccess),'The claimant receives a private purchase credential');
+ assert.equal((await deps.customerProduct(req(cookie(friendAccess)),friendAccess.id)).sections[0].body,friendProduct.snapshot.sections[0].body);
+ assert.equal(await (await deps.customerFile(req(cookie(friendAccess)),friendAccess.id,'friend-notes.txt')).text(),'PRIVATE_FRIEND_NOTES');
+ assert.equal(await (await deps.customerUpload(req(cookie(friendAccess)),friendAccess.id,friendUpload)).text(),'PRIVATE_FRIEND_WORKBOOK','The claimant can download the owned original upload');
+ friendProduct.snapshot.sections[0].body='LATER PUBLICATION CONTENT';refreshPublication(friendProduct);
+ assert.equal((await deps.customerProduct(req(cookie(friendAccess)),friendAccess.id)).sections[0].body,'Private original instructions and a practical exercise.','Free coupon access retains the actual checkout snapshot');
+ user={userId:'unrelated-friend',email:'unrelated@example.test'};
+ await assert.rejects(()=>deps.customerProduct(req(),friendAccess.id),error=>error.status===403,'An unrelated signed-in identity cannot use an order ID to read the product');
+ await assert.rejects(()=>deps.customerFile(req(),friendAccess.id,'friend-notes.txt'),error=>error.status===403);
+ await assert.rejects(()=>deps.customerUpload(req(),friendAccess.id,friendUpload),error=>error.status===403,'Original uploads remain protected from unrelated identities');
+ user=null;
+ assert.equal(db.prepare('SELECT price FROM products WHERE id=?').get(friendProduct.id).price,2900);
+ assert.equal(db.prepare('SELECT amount FROM commerce_offers WHERE product_id=?').get(friendProduct.id).amount,2900);
+ assert.equal(JSON.parse(db.prepare('SELECT public_snapshot FROM product_builder_publications WHERE product_id=?').get(friendProduct.id).public_snapshot).priceCents,2900,'The main published price is unchanged by a free coupon checkout');
  await assert.rejects(()=>checkout(product({pricing:{model:'pwyw',minimumCents:500,suggestedCents:900}}),{amount:499}),/minimum/);
  config.STRIPE_COMMERCE_ENABLED='true';
  const discount=product({pricing:{model:'one-time',coupons:[{code:'SAVE20',percentOff:20}]}}),sale=await checkout(discount,{coupon:'save20',amount:1});assert.equal(requests.get(sale.id).line_items[0].price_data.unit_amount,1520,'Discount and final price are derived on the server');assert.equal(requests.get(sale.id).payment_intent_data.application_fee_amount,76);

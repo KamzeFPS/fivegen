@@ -6708,6 +6708,9 @@ html[data-appearance='light'] .buyer-unsaved-response:where(:not(:is(.sales-land
   border: 1px solid #e4c3a1;
   color: var(--buyer-text,#20221f);
 }
+html[data-appearance='light'] .buyer-file-link:focus-visible:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.buyer-simulation-preview.buyer-library,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)) {
+  outline: 2px solid var(--fg-accent,#e4c3a1);
+}
 
 /* customer/product-resources.css — existing component color compatibility. */
 html[data-appearance='light'] .buyer-template-toolkit:where(:not(:is(.sales-landing,.product-page-view,.fs-public,.storefront,.studio-storefront,.flow-body,.published-funnel,.pb-writing-canvas,.ps-markdown-preview,.ps-editor-label,.ps-writing-stats,.written-reader,.buyer-reader-paper,.buyer-simulation-preview.buyer-library,.ps-theme-sample,.ps-cover-canvas canvas,.product-cover,.buyer-cover,.asset-preview,.gen-public-preview,.public-home,.docs-code) *)),

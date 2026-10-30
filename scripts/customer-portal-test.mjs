@@ -5,6 +5,8 @@ import React from 'react';
 import ts from 'typescript';
 import * as icons from 'lucide-react';
 import {loadStudioMarkdownFixture} from './product-studio-fixture-deps.mjs';
+import {loadProductDownloadList} from './product-download-list-fixture.mjs';
+const ProductDownloadList=loadProductDownloadList();
 const {renderStudioMarkdown}=await loadStudioMarkdownFixture();
 const writtenKey='writtenFixture'+randomUUID().replaceAll('-','');
 globalThis[writtenKey]={React,renderStudioMarkdown,...Object.fromEntries(['ArrowRight','BookOpen','Check','ChevronDown','Clock3','ListChecks'].map(name=>[name,icons[name]]))};
@@ -49,7 +51,7 @@ async function harness(search = '') {
   };
   const dependencies = {
     ...Object.fromEntries(['ArrowDownToLine','ArrowLeft','ArrowRight','BookOpen','CalendarDays','CheckCircle2','ChevronDown','Clock3','FileText','GraduationCap','Layers','LockKeyhole','Play','Users'].map(name=>[name,icons[name]])),...presentation,renderStudioMarkdown,CustomerLearning:()=>null,CustomerCommunity:()=>null,CustomerService:()=>null,PurchasedProductResources:()=>null,ProductReminders:()=>null,ProductPushReminders:()=>null,ProductFulfillment:()=>null,ProductUpdateNotice:()=>null,TeamContent:()=>null,WrittenContent,BuyerSubscription:()=>null,
-    WorkspaceExample:'workspace-example',PurchaseRecovery:'purchase-recovery',PurchaseHelp:'purchase-help',Dialog:()=>null,DialogContent:()=>null,DialogHeader:()=>null,DialogTitle:()=>null,DialogDescription:()=>null,DialogFooter:()=>null,
+    ProductDownloadList,WorkspaceExample:'workspace-example',PurchaseRecovery:'purchase-recovery',PurchaseHelp:'purchase-help',Dialog:()=>null,DialogContent:()=>null,DialogHeader:()=>null,DialogTitle:()=>null,DialogDescription:()=>null,DialogFooter:()=>null,
     React, useState, useRef, useCallback, useEffect, Link:'a', AppearanceControl:()=>null,Brand:()=>React.createElement('span',null,'FiveGen'), location:browserLocation,
     window:{location:browserLocation,history:{replaceState(_state,_title,url){browserLocation.href=String(url);browserLocation.search=new URL(String(url)).search;}}},
     commerceMoney:amount => `$${(amount / 100).toFixed(2)}`,
@@ -61,7 +63,7 @@ async function harness(search = '') {
   globalThis[key] = dependencies;
   const loaded = await import('data:text/javascript;base64,' + Buffer.from(`const {${Object.keys(dependencies).join(',')}}=globalThis.${key};\n${componentCode}`).toString('base64'));
   delete globalThis[key]; Component = loaded.CustomerPortal;
-  function expandWritten(value){if(Array.isArray(value))return value.map(expandWritten);if(!React.isValidElement(value))return value;if(value.type===WrittenContent)return expandWritten(WrittenContent(value.props));return value.props.children===undefined?value:React.cloneElement(value,{children:expandWritten(value.props.children)});}
+  function expandWritten(value){if(Array.isArray(value))return value.map(expandWritten);if(!React.isValidElement(value))return value;if(value.type===WrittenContent||value.type===ProductDownloadList)return expandWritten(value.type(value.props));return value.props.children===undefined?value:React.cloneElement(value,{children:expandWritten(value.props.children)});}
   function render() {
     for (let attempt = 0; dirty && attempt < 30; attempt++) {
       dirty = false; cursor = 0; tree = expandWritten(Component());
