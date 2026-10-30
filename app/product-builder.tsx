@@ -274,7 +274,27 @@ function ProductBuilderWorkspace({initialId,user=null}:{initialId:string;user?:{
  });}
  async function applyGenerated(){await run('Applying generated content',async()=>{const current=await saveDraft();receive(await api<BuilderWorkspace>(`/api/builder/${current.product.id}/generation`,{action:'apply',expectedVersion:current.version}));setActivePanel('content');setActiveSection(0);setStage(1);setGeneration(await api<GenerationState>(`/api/builder/${current.product.id}/generation`));setNotice('Generated content is now in your builder. Review every section before publishing.');});}
  async function stopGeneration(){stopRef.current=true;if(busyRef.current){setNotice('Stopping after the current generation step.');return;}await run('Stopping generation',async()=>{const current=wsRef.current!;await api(`/api/builder/${current.product.id}/generation`,{action:'stop',expectedVersion:current.version});setGeneration(null);setNotice('Generation stopped. Your saved builder draft is preserved.');});}
- async function downloadProduct(format:string){await run('Preparing your download',async()=>{const current=await saveDraft(),originalOnly=!current.draft.sections.some(section=>!!section.body.trim())&&!current.draft.files.some(file=>!!file.content.trim())&&!current.draft.studio?.design,originals=(current.uploads||[]).filter(file=>file.status==='completed'&&current.draft.uploadIds.includes(file.id));if(originalOnly&&originals.length===1){location.assign('/api/uploads/'+encodeURIComponent(originals[0].id)+'?download=1');return;}const designMode=current.draft.studio?.design&&(activePanel==='design'||!current.draft.sections.length&&!current.draft.files.length);location.assign(`/api/builder/${current.product.id}/${designMode?'design/export':'export'}?format=${encodeURIComponent(originalOnly&&originals.length>1?'zip':format)}`);});}
+ async function downloadProduct(format:string){await run('Preparing your download',async()=>{
+  const current=await saveDraft(),originalOnly=!current.draft.sections.some(section=>!!section.body.trim())&&!current.draft.files.some(file=>!!file.content.trim())&&!current.draft.studio?.design,originals=(current.uploads||[]).filter(file=>file.status==='completed'&&current.draft.uploadIds.includes(file.id));
+  if(originalOnly&&originals.length===1){location.assign('/api/uploads/'+encodeURIComponent(originals[0].id)+'?download=1');return;}
+  const designMode=current.draft.studio?.design&&(activePanel==='design'||!current.draft.sections.length&&!current.draft.files.length),outputFormat=originalOnly&&originals.length>1?'zip':format,url=`/api/builder/${current.product.id}/${designMode?'design/export':'export'}?format=${encodeURIComponent(outputFormat)}`;
+  // Large original-file archives keep their existing streamed download. The
+  // generated document formats are checked before offering a file to save.
+  if(!['pdf','epub','html','markdown'].includes(outputFormat)){location.assign(url);return;}
+  const response=await fetch(url,{cache:'no-store',credentials:'same-origin',signal:AbortSignal.timeout(120000)});
+  if(!response.ok||response.headers.get('Content-Type')?.includes('application/json')){
+   const result:unknown=await response.json().catch(()=>null),message=result&&typeof result==='object'&&'error' in result&&typeof result.error==='string'?result.error.trim():'';
+   throw new Error(message||'Your download could not be prepared. Your product is saved; please try again.');
+  }
+  const file=await response.blob();if(!file.size)throw new Error('The exported file was empty. Your product is saved; please try the download again.');
+  const disposition=response.headers.get('Content-Disposition')||'',encodedName=/filename\*=UTF-8''([^;]+)/i.exec(disposition),plainName=/filename="([^"]+)"|filename=([^;\s]+)/i.exec(disposition);
+  let filename=plainName?.[1]||plainName?.[2]||`${current.product.slug||current.product.id}.${outputFormat==='markdown'?'md':outputFormat}`;
+  if(encodedName)try{filename=decodeURIComponent(encodedName[1]);}catch{/* Use the plain name when an encoded filename is malformed. */}
+  filename=filename.replace(/[<>:"/\\|?*\u0000-\u001f]/g,'-');
+  const objectUrl=URL.createObjectURL(file),link=document.createElement('a');
+  try{link.href=objectUrl;link.download=filename;document.body.appendChild(link);link.click();}
+  finally{link.remove();setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);}
+ });}
  async function publish(){await run('Publishing your delivery version',async()=>{const current=await saveDraft();receive(await api<BuilderWorkspace>(`/api/builder/${current.product.id}/publish`,{expectedVersion:current.version}));setNotice('Product content published. Set your price and sales page when you want to accept orders. Existing buyers keep their purchased content.');});}
  function downloadNextStep(){return <ProductDownloadNextStep overview title={draft.title} format={downloadFormat} fileLabel={originalFileLabel} downloadLabel={originalFileLabel?(originalDownloads.length===1?'Download '+originalFileLabel.toLowerCase():'Download original files'):undefined} busy={!!busy||saving} hasContent={hasDownloadContent} onDownload={downloadProduct} onPreview={openMemberPreview} onEdit={()=>openBuilderPanel('content')} onSell={()=>{if(workspace)setPublishReviewFor(workspace.product.id);openBuilderPanel('review');}}/>;}
  function navigateLaunch(action:'details'|'content'|'review'|'payments'|'price'|'preview'|'publish'|'sales-page'){

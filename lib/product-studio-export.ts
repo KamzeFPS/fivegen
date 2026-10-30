@@ -1,7 +1,7 @@
 import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {createRequire} from 'node:module';
-import {PDFDocument,rgb,type PDFFont,type PDFPage} from 'pdf-lib';
+import {PDFDocument,PDFDict,PDFName,StandardFonts,rgb,type PDFFont,type PDFPage} from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import {zipSync,strToU8} from 'fflate';
 import {escapeHtml} from './export';
@@ -82,7 +82,24 @@ export async function studioExportPdf(input:StudioExportDocument){
   const family=input.writing?.font==='sans'?'NotoSans':'NotoSerif';
   const fonts=await Promise.all(['Regular','Bold','Italic'].map(style=>readFile(resolve('public/fonts',`${family}-${style}.ttf`)))).catch(()=>{throw new ProductDocumentError('PDF fonts are unavailable on this server. Export EPUB or HTML, or ask the administrator to include the bundled document fonts.',503);});
   const [normal,bold,italic]=await Promise.all(fonts.map(bytes=>doc.embedFont(bytes,{subset:true})));
-  const supported=new Set(normal.getCharacterSet()),allText=studioExportMarkdown(input);for(const character of allText){const code=character.codePointAt(0)!;if(code>31&&!supported.has(code))throw new ProductDocumentError(`The PDF font cannot render U+${code.toString(16).toUpperCase()}. Use EPUB/HTML for this script, or replace that character before exporting PDF.`);}
+  // The bundled Noto text fonts omit arrows and checklist symbols. PDF's
+  // standard symbol fonts cover these real Unicode glyphs without a download.
+  const symbolFonts=await Promise.all([StandardFonts.Symbol,StandardFonts.ZapfDingbats].map(name=>doc.embedFont(name)));
+  const symbolCharacters=new Map(symbolFonts.map(font=>[font,new Set<string>()]));
+  const supported=new Map([normal,bold,italic,...symbolFonts].map(font=>[font,new Set(font.getCharacterSet())]));
+  const compatibleSymbols:Record<string,string>={'☐':'[ ]','☑':'[x]','☒':'[x]','✅':'[check]','❎':'[x]','❌':'[cross]','↖':'<up-left>','↗':'<up-right>','↘':'<down-right>','↙':'<down-left>','□':'[ ]','▪':'•','▫':'[ ]','○':'( )','◯':'( )','☆':'*','⚠':'[!]','⚡':'[!]','\ufe0e':'','\ufe0f':''};
+  function fontRuns(source:string,preferred:PDFFont){
+    const result:{text:string;font:PDFFont}[]=[];
+    const append=(text:string,font:PDFFont)=>{if(result.at(-1)?.font===font)result[result.length-1].text+=text;else result.push({text,font});};
+    for(const character of source){
+      const code=character.codePointAt(0)!,font=[preferred,...symbolFonts,normal].find(candidate=>supported.get(candidate)!.has(code));
+      if(font){symbolCharacters.get(font)?.add(character);append(character,font);continue;}
+      const replacement=compatibleSymbols[character];
+      if(replacement!==undefined){if(replacement)append(replacement,preferred);continue;}
+      throw new ProductDocumentError(`The PDF font cannot render U+${code.toString(16).toUpperCase()}. Use EPUB/HTML for this script, or replace that character before exporting PDF.`);
+    }
+    return result;
+  }
   const width=595.28,height=841.89,margin=54,usable=width-2*margin;let page:PDFPage,y=0;
   const next=()=>{page=doc.addPage([width,height]);y=height-margin;};next();
   const check=(amount:number)=>{if(y-amount<margin)next();};
@@ -94,9 +111,10 @@ export async function studioExportPdf(input:StudioExportDocument){
       const flush=()=>{check(size*1.6);let x=margin+indent;for(const piece of pieces){page.drawText(piece.text,{x,y,font:piece.font,size,color});x+=piece.font.widthOfTextAtSize(piece.text,size);}y-=size*1.6;pieces.length=0;lineWidth=0;};
       const runs=paragraph.split(/(\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|`[^`]+`)/g);
       for(const run of runs){const runFont=/^(?:\*\*|__)/.test(run)?bold:/^\*[^*]/.test(run)?italic:font,clean=run.replace(/^\*\*|\*\*$|^__|__$|^\*|\*$|^`|`$/g,'');for(const token of clean.split(/(\s+)/).filter(Boolean)){
-        const measure=runFont.widthOfTextAtSize(token,size);if(lineWidth+measure>usable-indent&&pieces.length)flush();
-        if(measure>usable-indent){let part='';for(const character of token){if(runFont.widthOfTextAtSize(part+character,size)>usable-indent){pieces.push({text:part,font:runFont});flush();part='';}part+=character;}if(part){pieces.push({text:part,font:runFont});lineWidth=runFont.widthOfTextAtSize(part,size);}}
-        else if(lineWidth||token.trim()){pieces.push({text:token,font:runFont});lineWidth+=measure;}
+        const tokenPieces=fontRuns(token,runFont),measure=tokenPieces.reduce((sum,piece)=>sum+piece.font.widthOfTextAtSize(piece.text,size),0);if(lineWidth+measure>usable-indent&&pieces.length)flush();
+        const append=(text:string,font:PDFFont)=>{if(pieces.at(-1)?.font===font)pieces[pieces.length-1].text+=text;else pieces.push({text,font});};
+        if(measure>usable-indent){for(const piece of tokenPieces)for(const character of piece.text){const characterWidth=piece.font.widthOfTextAtSize(character,size);if(lineWidth+characterWidth>usable-indent&&pieces.length)flush();if(lineWidth||character.trim()){append(character,piece.font);lineWidth+=characterWidth;}}}
+        else if(lineWidth||token.trim()){for(const piece of tokenPieces)append(piece.text,piece.font);lineWidth+=measure;}
       }}flush();
     }y-=5;
   }
@@ -118,6 +136,15 @@ export async function studioExportPdf(input:StudioExportDocument){
   for(const section of input.sections){next();if(section.category)text(section.category,10,italic);text(section.title,24,bold);await markdown(enrichedBody(section));}
   for(const [heading,body] of back(input)){next();text(heading,24,bold);await markdown(body);}
   const pages=doc.getPages();pages.forEach((entry,index)=>entry.drawText(`${index+1} / ${pages.length}`,{x:width-margin-40,y:28,font:normal,size:8,color:rgb(.45,.45,.45)}));
+  // Base-14 symbol fonts need an explicit Unicode map: without it some PDF
+  // readers extract the encoded checkmark as "3" instead of the authored ✓.
+  for(const [font,characters] of symbolCharacters){
+    if(!characters.size)continue;
+    const mappings=[...characters].map(character=>{const encoded=Array.from(font.encodeText(character).asBytes(),byte=>byte.toString(16).padStart(2,'0')).join('');let unicode='';for(let index=0;index<character.length;index++)unicode+=character.charCodeAt(index).toString(16).padStart(4,'0');return `<${encoded}> <${unicode}>`;});
+    const groups:string[]=[];for(let index=0;index<mappings.length;index+=100){const group=mappings.slice(index,index+100);groups.push(`${group.length} beginbfchar\n${group.join('\n')}\nendbfchar`);}
+    const cmap=`/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n/CMapName /FiveGenSymbols def\n/CMapType 2 def\n1 begincodespacerange\n<00> <ff>\nendcodespacerange\n${groups.join('\n')}\nendcmap\nCMapName currentdict /CMap defineresource pop\nend\nend`;
+    await font.embed();doc.context.lookup(font.ref,PDFDict).set(PDFName.of('ToUnicode'),doc.context.register(doc.context.flateStream(cmap)));
+  }
   return doc.save();
 }
 export async function createStudioExport(doc:StudioExportDocument,format:StudioExportFormat){
