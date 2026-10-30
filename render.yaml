@@ -12,6 +12,7 @@ services:
     domains:
       - www.fivegen.ai
       - docs.fivegen.ai
+      - "*.fivegen.ai"
     # Disk-backed services do not support a custom shutdown delay.
     autoDeployTrigger: off
     disk:
@@ -29,6 +30,10 @@ services:
         value: https://www.fivegen.ai
       - key: DOCS_ORIGIN
         value: https://docs.fivegen.ai
+      - key: FIVEGEN_WORKSPACE_DOMAIN
+        value: fivegen.ai
+      - key: FIVEGEN_WORKSPACE_SUBDOMAINS_READY
+        value: "true"
       - key: FIVEGEN_DATA_DIR
         value: /var/data/fivegen
       - key: CREDENTIAL_ENCRYPTION_KEY
