@@ -13,6 +13,16 @@ export type CreatorLaunchState={
  testPurchase:{complete:boolean;detail:string;action:CreatorLaunchAction};
 };
 
+/** Dashboard links open the existing task surface; manual launch actions still
+ * belong to Overview rather than being executed by a navigation link. */
+export function creatorLaunchActionHref(productId:string,action:CreatorLaunchAction){
+ const productPath='/build/'+encodeURIComponent(productId);
+ if(action.kind!=='navigate')return productPath+'?area=overview';
+ if(action.navigate==='payments')return '/account/payments?return_to='+encodeURIComponent(productPath+'?area=commerce');
+ const destinations:Record<Exclude<CreatorLaunchNavigation,'payments'>,string>={details:'details',content:'content',review:'review',price:'commerce',publish:'commerce','sales-page':'page',preview:'content&mode=member'};
+ return productPath+'?area='+destinations[action.navigate];
+}
+
 /** Use the configured application origin, never an incoming Host or a draft URL. */
 export function creatorLaunchPublicUrl(origin:string,slug:string){
  try{const url=new URL(origin);if(url.pathname!=='/'||url.search||url.hash||url.username||url.password||!(/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug))||slug.length>120)return null;

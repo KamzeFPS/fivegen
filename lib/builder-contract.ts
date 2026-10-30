@@ -49,5 +49,10 @@ export function builderFamily(draft:BuilderDraft):BuilderFamily{
 export function builderBrief(draft:BuilderDraft){
  const info=builderTypeDetails[draft.type];
  const family=builderFamily(draft),format=draft.type==='custom'?(family==='service'?'Coaching session':family==='course'?'Mini course':family==='community'?'Community':info.format):info.format;
- return {title:draft.title,description:draft.description,audience:draft.audience,format,price:draft.priceCents/100,color:'orange' as const,language:draft.language,quality:'premium' as const,duration:Math.max(3,Math.min(30,Number(draft.fields.unitCount)||7)),instructions:`Outcome: ${draft.fields.outcome||''}\nRequested ${info.plural}: ${draft.fields.unitCount||''}\nTone: ${draft.fields.tone||''}\n${Object.entries(draft.fields).filter(([key])=>!['meetingUrl','communityUrl'].includes(key)).map(([key,value])=>`${key}: ${value}`).join('\n')}`};
+ // Product details owns these values. An intentional clear must not restore
+ // older AI-only wording; legacy fields remain the fallback for older drafts.
+ const fields={...draft.fields},basics=draft.studio?.basics;
+ if(typeof basics?.problem==='string')fields.problem=basics.problem;
+ if(typeof basics?.prerequisites==='string')fields.prerequisites=basics.prerequisites;
+ return {title:draft.title,description:draft.description,audience:draft.audience,format,price:draft.priceCents/100,color:'orange' as const,language:draft.language,quality:'premium' as const,duration:Math.max(3,Math.min(30,Number(draft.fields.unitCount)||7)),instructions:`Outcome: ${draft.fields.outcome||''}\nRequested ${info.plural}: ${draft.fields.unitCount||''}\nTone: ${draft.fields.tone||''}\n${Object.entries(fields).filter(([key])=>!['meetingUrl','communityUrl'].includes(key)).map(([key,value])=>`${key}: ${value}`).join('\n')}`};
 }

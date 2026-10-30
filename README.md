@@ -31,6 +31,14 @@ Products can be archived and restored from the library. Archive keeps orders, su
 
 **Brand & catalog** at `/account/catalog` publishes a shared creator story, branding and currently public owned offers at `/creator/<slug>`. Custom domain DNS ownership and hosting/TLS are separate states; creator DNS proof alone never activates a hostname. Documentation is served at `/docs` and supports `docs.fivegen.ai`, with 27 searchable guides, keyboard/mobile navigation, sitemap, manifest and `/llms.txt`. The maintained guide set includes Funnel Builder and Calendar. See [audit implementation checklist](docs/audit-implementation-checklist.md) for the earlier verification record and [creator clarity release checklist](docs/creator-clarity-release-checklist.md) for this release’s checks. Existing subscription prices are unchanged.
 
+## Useful product and launch guidance
+
+The teaching entry starts a focused mini course with original teaching; other formats remain available. Product details is the shared home for the buyer problem and prerequisites used by generation. Legacy prerequisites remain visible until deliberately replaced or cleared.
+
+Lesson objectives and action steps are edited beside the teaching, and unlocked buyer lessons show the saved objective before the content. Practice advice recognizes existing action steps, assignments, quizzes and reflections. A recording alone does not claim an activity was inspected; advice stays optional and recording-only lessons need no invented transcript.
+
+Launch guidance separates reviewed delivery publication, public Sales page publication and enabling buyer access. Creators can prepare the page before payment setup, and dashboard resume links open the actual next task. Existing review, exact-version publication and checkout eligibility checks remain authoritative.
+
 ## Plans and credits
 
 Every account receives 3 complete AI product runs and 20 planning messages per UTC month. Manual editing and downloads are free. Additional content costs 10 credits per OpenAI step or 30 per Anthropic step. Images cost 12 credits and 5-second videos with audio cost 160.

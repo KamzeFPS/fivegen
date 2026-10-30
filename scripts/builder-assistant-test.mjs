@@ -144,6 +144,11 @@ try {
   await ok(await route.POST(request({ ...input, requestId: randomUUID() }, 'https://outsider.example'), params), 403);
   const period = new Date().toISOString().slice(0, 7);
   for (let i = 0; i < 19; i++) sql.prepare("INSERT INTO studio_plan_turns (id,owner,conversation_id,prompt,period,mode,state,created_at) VALUES (?,?,?,?,?,'included','completed',?)").run(randomUUID(), owner, 'other-conversation', 'Quota fixture', period, now);
+  // Planning messages and the monthly free credit pool are separate allowances.
+  // Exhaust the existing current-month wallet before testing paid-turn consent,
+  // insufficient funds and deductions/refunds from purchased credits below.
+  sql.prepare('UPDATE wallets SET starter=0,purchased=0 WHERE owner=?').run(owner);
+  assert.equal((await dependencies.creditBalance(owner)).total, 0, 'The empty-wallet fixture must exhaust the monthly free pool as well as purchased credits');
   const paid = { ...input, requestId: randomUUID(), expectedUpdatedAt: first.conversation.updatedAt, message: 'Refine the product description for beginners.', target: 'refine' };
   await ok(await post(paid), 402); assert.equal(calls, 1, 'No provider call before explicit credit approval');
   await ok(await post({ ...paid, requestId: randomUUID(), target: 'details', detailsGroup: 'type-details', fieldKeys: ['subtitle'], context: bookContext, message: 'Fill the subtitle.' }), 402); assert.equal(calls, 1, 'Field editing uses the same exhausted allowance and cannot bypass explicit credit consent');

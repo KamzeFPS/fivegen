@@ -7,7 +7,11 @@
 
 /* Member delivery is a dark application surface, separate from document paper. */
 .pb-preview-dialog.pb-member-preview-dialog .pb-preview-content{background:#101113;color:#f4f1ee;padding:0}
-.member-delivery-preview.ops-card{--foreground:#f4f1ee;--muted-foreground:#b7b2ac;--card:#101113;--border:#38383e;--fg-text:#f4f1ee;--fg-muted:#b7b2ac;--fg-bg:#101113;--fg-panel:#19191d;--fg-surface:#222228;--fg-border:#38383e;--fg-accent:#ff9b66;background:#101113;color:#f4f1ee;margin:0;border:0}
-.member-delivery-preview .buyer-simulation-preview>h3,.member-delivery-preview .buyer-section-heading :is(h2,h3,h4),.member-delivery-preview .ops-preview-content :is(h2,h3,h4){color:#f4f1ee}
-.member-delivery-preview>details{margin:20px 0;color:#e8e2dc}
+.member-delivery-preview.ops-card{--foreground:#f4f1ee;--muted-foreground:#b7b2ac;--card:#101113;--border:#38383e;--fg-text:#f4f1ee;--fg-muted:#b7b2ac;--fg-bg:#101113;--fg-panel:#19191d;--fg-surface:#222228;--fg-border:#38383e;--fg-accent:#ff9b66;background:var(--card);color:var(--foreground);margin:0;border:0}
+.member-delivery-preview .buyer-simulation-preview>h3,.member-delivery-preview .buyer-section-heading :is(h2,h3,h4),.member-delivery-preview .ops-preview-content :is(h2,h3,h4){color:var(--fg-text)}
+/* Inherit from the actual lesson surface: courses use the dark preview tokens,
+ * while challenges and document paper retain their own light-paper ink. */
+.member-delivery-preview.ops-card .buyer-lesson-text,.member-delivery-preview.ops-card .buyer-active-lesson :is(h1,h2,h3,h4){color:inherit}
+.member-delivery-preview.ops-card .buyer-unit-select select{background:var(--fg-panel);color:var(--fg-text);border-color:var(--fg-border);color-scheme:dark}
+.member-delivery-preview>details{margin:20px 0;color:var(--fg-text)}
 .member-delivery-preview>details>summary{cursor:pointer;min-height:44px;display:flex;align-items:center}

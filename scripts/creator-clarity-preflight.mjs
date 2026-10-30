@@ -5,7 +5,7 @@ import {resolve} from 'node:path';
 
 assert.ok(!process.env.RENDER,'Run these isolated regressions locally, not on the live service.');
 const suites=[
- 'product-builder-test','account-payments-test','builder-assistant-test','builder-revision-test','product-quality-test',
+ 'product-foundation-test','product-builder-test','account-payments-test','builder-assistant-test','builder-revision-test','product-quality-test',
  'product-page-test','page-template-test','page-brand-presets-test','creator-launch-test','foundation-experience-test',
  'workspace-library-test','builder-navigation-ui-test','product-launch-resume-test','product-studio-creator-ui-test',
  'product-studio-commerce-test','product-community-tier-test','product-community-ui-test','customer-operations-test',

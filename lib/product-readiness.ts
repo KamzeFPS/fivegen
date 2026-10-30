@@ -31,6 +31,15 @@ export function unfinishedSectionIndexes(sections:{title:string;body:string;vide
  return sections.flatMap((section,index)=>!section.title.trim()||isUnfinishedPlaceholder(section.title)||!sectionHasContent(section)||isUnfinishedPlaceholder(section.body)?[index]:[]);
 }
 function hasPracticalTask(value:string){return /(?:\b(?:exercise|worksheet|checklist|practice|task|action|try this|your turn|reflection|write down|complete|apply|prompt|step\s*\d+)\b|\[[ xX]\])/i.test(value);}
+/** A recording can contain an activity, but its presence alone is not evidence
+ * that we checked one. Recognize the existing written/structured activities. */
+function sectionHasPractice(section:{body:string;studio?:SectionStudio}){
+ const meaningful=(value:unknown)=>typeof value==='string'&&!!value.trim()&&!isUnfinishedPlaceholder(value);
+ const settings=section.studio;
+ return meaningful(section.body)&&hasPracticalTask(section.body)
+  ||[settings?.actionStep,settings?.assignment?.prompt,settings?.reflection].some(meaningful)
+  ||Array.isArray(settings?.quiz)&&settings.quiz.some(item=>meaningful(item?.question));
+}
 function validHttps(value:string){try{const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password;}catch{return false;}}
 
 /** A local editorial check, never an AI quality score or a claim about results.
@@ -106,7 +115,7 @@ export function evaluateProductReadiness(draft:BuilderDraft,options:ReadinessOpt
  for(const field of editorialFields)if(draft.fields[field]?.trim()&&isUnfinishedPlaceholder(draft.fields[field]))add(`field-placeholder-${field}`,'advisory','Finish a product detail','One of your product details is still a drafting placeholder. Finish it or clear the optional field.',{step:'details',field},'Review product detail');
  if(family==='course'&&hasSections){const index=draft.sections.findIndex(section=>!section.objective?.trim());if(index>=0)add('learning-objectives','advisory','Make the lesson outcome visible','Add a learning objective so students know what they should be able to do after the lesson.',{step:'content',sectionIndex:index,field:'objective'},'Review lesson outcome');}
  if(hasSections&&(['course','challenge'].includes(family)||draft.type==='playbook')){
-  if(!draft.sections.some(section=>hasPracticalTask(section.body)||section.videoId))add('practice-suggestion','advisory','Give learners something to do','Consider adding a concrete exercise, checklist, reflection prompt, or next action. Keep it relevant to the material.',{step:'content',sectionIndex:0},'Review practical activities');
+  if(!draft.sections.some(sectionHasPractice))add('practice-suggestion','advisory','Give learners something to do','Consider a concrete action step, exercise, assignment, quiz or reflection. If your recording already explains an activity, extra written content is optional; recordings are not inspected by this check.',{step:'content',sectionIndex:0,field:'actionStep'},'Review practical activities');
  }
  const titleDayCount=/\b(\d{1,2})[\s-]*day\b/i.exec(draft.title),planned=titleDayCount?Number(titleDayCount[1]):Number(draft.fields.unitCount);
  if(!originalFileOnly&&hasSections&&Number.isInteger(planned)&&planned>draft.sections.length&&planned<=30)add('planned-items','advisory',`Check the promised ${planned} ${titleDayCount?'days':info.plural}`,`Your draft contains ${draft.sections.length} ${info.plural}. Finish the planned sequence or adjust the promise if the shorter version is intentional.`,{step:'content'},'Review the sequence');

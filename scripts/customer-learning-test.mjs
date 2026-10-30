@@ -20,9 +20,9 @@ function nodes(value){return Array.isArray(value)?value.flatMap(nodes):React.isV
 function text(value){return Array.isArray(value)?value.map(text).join(' '):React.isValidElement(value)?value.props.dangerouslySetInnerHTML?.__html?.replace(/<[^>]*>/g,' ')||text(value.props.children):value==null||typeof value==='boolean'?'':String(value);}
 const readable=value=>text(value).replace(/\s+/g,' ').trim(),sameDeps=(a,b)=>a&&b&&a.length===b.length&&a.every((value,index)=>Object.is(value,b[index]));
 const code=compile('app/customer/learning-content.tsx');
-async function harness(props,{saved=[],locked=[],readFailures=0,writeFailures=0,certificate=false}={}){
+async function harness(props,{saved=[],locked=[],readFailures=0,writeFailures=0,certificate=false,purchasedSections=props.sections}={}){
  const hooks=[],effects=[],requests=[],focusCalls=[];let cursor=0,dirty=true,tree,childKey=null,readErrors=readFailures,writeErrors=writeFailures;
- const server={modules:[{id:'all-lessons',title:'Lessons',description:'',indices:props.sections.map((_,index)=>index)}],results:null,discussionsEnabled:true,orderId:props.orderId,activeSectionId:saved[0]?.sectionId||'',profileName:'Learner',shareProgress:false,leaderboardEnabled:false,allowSubmissions:false,sections:structuredClone(props.sections),lessons:props.sections.map((section,index)=>({id:section.id||'section-'+index,title:section.title,locked:locked.includes(index),reason:locked.includes(index)?'Available after the previous lesson.':'',completed:saved.some(progress=>progress.sectionId===(section.id||'section-'+index)&&progress.completedAt)})),progress:structuredClone(saved),completed:0,total:props.sections.length,certificate:false,reward:'',upsellUrl:'',upsellLabel:'',streak:0,streaksEnabled:!!props.challenge,badges:[],recapPrompt:'',leaderboard:[],cohort:'',comments:[]};
+ const server={modules:[{id:'all-lessons',title:'Lessons',description:'',indices:purchasedSections.map((_,index)=>index)}],results:null,discussionsEnabled:true,orderId:props.orderId,activeSectionId:saved[0]?.sectionId||'',profileName:'Learner',shareProgress:false,leaderboardEnabled:false,allowSubmissions:false,sections:structuredClone(purchasedSections),lessons:purchasedSections.map((section,index)=>({id:section.id||'section-'+index,title:section.title,locked:locked.includes(index),reason:locked.includes(index)?'Available after the previous lesson.':'',completed:saved.some(progress=>progress.sectionId===(section.id||'section-'+index)&&progress.completedAt)})),progress:structuredClone(saved),completed:0,total:purchasedSections.length,certificate:false,reward:'',upsellUrl:'',upsellLabel:'',streak:0,streaksEnabled:!!props.challenge,badges:[],recapPrompt:'',leaderboard:[],cohort:'',comments:[]};
  const update=()=>{server.completed=server.lessons.filter(lesson=>lesson.completed).length;server.certificate=certificate&&server.completed===server.total&&server.total>0;};update();
  const useState=initial=>{const index=cursor++;if(!hooks[index])hooks[index]={value:typeof initial==='function'?initial():initial};hooks[index].setter||=(next=>{const value=typeof next==='function'?next(hooks[index].value):next;if(!Object.is(value,hooks[index].value)){hooks[index].value=value;dirty=true;}});return[hooks[index].value,hooks[index].setter];};
  const useRef=initial=>{const index=cursor++;return hooks[index]||=({current:initial});};
@@ -64,4 +64,25 @@ const sections=[{id:'lesson-1',title:'Start with your own promise',body:'Private
  const source=await harness({orderId:'source-for-preview',sections}),report=structuredClone(source.server);source.dispose();report.orderId='synthetic-preview';report.discussionsEnabled=false;
  const preview=await harness({orderId:'synthetic-preview',sections,previewReport:report});assert.equal(preview.requests.length,0,'Owner preview never reads an actual buyer report');assert.match(preview.text,/Recording preview placeholder/);assert.match(preview.text,/Write your own next useful action\./,'Owner preview includes the saved practice step, matching the real lesson');assert.equal(preview.find('video').length,0,'Owner simulation grants no media access');assert.equal(preview.button('Mark lesson complete').props.disabled,true);await preview.click('Next lesson');assert.match(preview.text,/Only the purchased second lesson/);assert.equal(preview.requests.length,0,'Preview navigation creates no progress/write requests');assert.match(preview.text,/Preview only/);preview.dispose();
 }
-console.log('Buyer learning passed: all 11 types, server progress, private media/captions/resume, exact-order writes, reversible completion, locked content, retry/failure safety, keyboard focus, challenge controls, confirmed certificates, and read-only owner preview with zero requests.');
+{
+ const purchasedSections=structuredClone(sections),objective='Prepare one scoped proposal using the original client inquiry.';
+ purchasedSections[0].objective=objective;
+ const draftSections=structuredClone(purchasedSections);draftSections[0].objective='UNPUBLISHED OBJECTIVE MUST NOT APPEAR';
+ const paid=await harness({orderId:'objective-purchase',sections:draftSections},{purchasedSections});
+ assert.match(paid.text,/Learning objective/);assert.ok(paid.text.includes(objective),'The purchased lesson shows its saved objective');
+ assert.ok(paid.text.indexOf(objective)<paid.text.indexOf('Private first lesson content'),'The objective appears before the teaching');
+ assert.match(paid.text,/Write your own next useful action\./,'Existing practice instructions remain visible');
+ assert.doesNotMatch(paid.text,/UNPUBLISHED OBJECTIVE/,'The server purchase snapshot wins over changed creator draft props');
+ const report=structuredClone(paid.server);paid.dispose();report.orderId='objective-preview';report.discussionsEnabled=false;
+ const preview=await harness({orderId:'objective-preview',sections:draftSections,previewReport:report});
+ assert.ok(preview.text.includes(objective),'Read-only owner preview uses the same objective presentation');
+ assert.equal(preview.requests.length,0,'Showing an objective in preview makes no request or progress write');preview.dispose();
+ const locked=await harness({orderId:'objective-locked',sections:purchasedSections},{locked:[0]});
+ assert.match(locked.text,/This lesson is not available yet/);assert.doesNotMatch(locked.text,/Learning objective/);
+ assert.ok(!locked.text.includes(objective),'A locked lesson never renders its objective even if supplied in the response');locked.dispose();
+ for(const value of [undefined,'','   ']){
+  const blank=await harness({orderId:'objective-blank',sections:[{id:'blank-objective',title:'Real lesson',body:'The actual teaching.',objective:value}]});
+  assert.doesNotMatch(blank.text,/Learning objective/,'Missing objectives have no empty callout or invented fallback');blank.dispose();
+ }
+}
+console.log('Buyer learning passed: all 11 types, server progress, private media/captions/resume, exact-order writes, reversible completion, locked content, retry/failure safety, keyboard focus, challenge controls, confirmed certificates, purchased-snapshot objectives, and read-only owner preview with zero requests.');

@@ -19,12 +19,14 @@ const outputPath='app/appearance-surfaces.css';
 const checkOnly=process.argv.includes('--check');
 let generated='';
 const palette={canvas:'#f5f4f0',panel:'#ffffff',surface:'#ecebe6',line:'#d7d7d0',ink:'#20221f',muted:'#62665e',accent:'#b3470d'};
-const protectedRoots=['.sales-landing','.product-page-view','.fs-public','.storefront','.studio-storefront','.flow-body','.published-funnel','.pb-writing-canvas','.ps-markdown-preview','.ps-editor-label','.ps-writing-stats','.written-reader','.buyer-reader-paper','.ps-theme-sample','.ps-cover-canvas canvas','.product-cover','.buyer-cover','.asset-preview','.gen-public-preview','.public-home','.docs-code'];
+const protectedRoots=['.sales-landing','.product-page-view','.fs-public','.storefront','.studio-storefront','.flow-body','.published-funnel','.pb-writing-canvas','.ps-markdown-preview','.ps-editor-label','.ps-writing-stats','.written-reader','.buyer-reader-paper','.buyer-simulation-preview.buyer-library','.ps-theme-sample','.ps-cover-canvas canvas','.product-cover','.buyer-cover','.asset-preview','.gen-public-preview','.public-home','.docs-code'];
 const protectedSelector=':is('+protectedRoots.join(',')+') *';
 const ignoredFiles=new Set(['appearance-surfaces.css','appearance.css','brand.css','public-home.css','docs/docs.css','file-sale.css','b/[slug]/product-page.css','creator/catalog.css','customer/written-content.css']);
 const imports=fs.readFileSync('app/layout.tsx','utf8').matchAll(/import "\.\/([^\"]+\.css)"/g);
 let ordered=[...imports].map(x=>x[1]);
-for(const f of fs.readdirSync('app',{recursive:true}).filter(f=>f.endsWith('.css')).sort())if(!ordered.includes(f))ordered.push(f);
+// Match the canonical import/ignore paths on Windows as well as POSIX. Native
+// backslashes must not bypass exclusions for creator-owned/public palettes.
+for(const f of fs.readdirSync('app',{recursive:true}).map(f=>f.split(path.sep).join('/')).filter(f=>f.endsWith('.css')).sort())if(!ordered.includes(f))ordered.push(f);
 function splitSelectors(s){let r=[],depth=0,start=0;for(let i=0;i<s.length;i++){if(s[i]==='('||s[i]==='[')depth++;if(s[i]===')'||s[i]===']')depth--;if(s[i]===','&&!depth){r.push(s.slice(start,i).trim());start=i+1}}r.push(s.slice(start).trim());return r}
 function parseHex(h){let x=h.slice(1);if(x.length===3||x.length===4)x=[...x].map(c=>c+c).join('');let n=parseInt(x.slice(0,6),16);return[(n>>16)&255,(n>>8)&255,n&255,x.length===8?parseInt(x.slice(6),16)/255:1]}
 function hue(r,g,b){r/=255;g/=255;b/=255;let hi=Math.max(r,g,b),lo=Math.min(r,g,b),d=hi-lo;let h=0;if(d)h=hi===r?((g-b)/d)%6:hi===g?(b-r)/d+2:(r-g)/d+4;h=(h*60+360)%360;return[h,(hi+lo)/2,d===0?0:d/(1-Math.abs(hi+lo-1))]}

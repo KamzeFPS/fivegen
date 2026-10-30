@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import ts from 'typescript';
 import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
 import * as icons from 'lucide-react';
 const text=value=>typeof value==='string'||typeof value==='number'?String(value):Array.isArray(value)?value.map(text).join(''):value&&typeof value==='object'?text(value.props?.children):'';
 const nodes=value=>Array.isArray(value)?value.flatMap(nodes):value&&typeof value==='object'?[value,...nodes(value.props?.children)]:[];
@@ -22,4 +23,25 @@ assert.match(text(recording.tree),/MP4 or WebM/);recording.find('input',node=>no
 const selected=[],uploaded=[];let release;const held=new Promise(done=>{release=done;});const queue=harness('app/product-upload-queue.tsx','ProductUploadQueue',{productId:'my-product',onUploaded:async value=>{uploaded.push(value.id);return true;}},{uploadResourceFile:async(_id,original,{onProgress})=>{selected.push(original.name);if(selected.length===1)await held;onProgress(100);return{id:original.name,name:original.name,mime:'text/plain'};}});
 const files=[new File(['first'],'first.txt',{type:'text/plain'}),new File(['second'],'second.txt',{type:'text/plain'})];queue.find('input',node=>node.props.type==='file').props.onChange({target:{files,value:''}});queue.render();assert.ok(queue.find('input',node=>node.props.type==='file').props.accept.includes('.docx'));queue.button('Upload queued files').props.onClick();await queue.settle();queue.button('Cancel second.txt').props.onClick();queue.render();release();await queue.settle();assert.deepEqual(selected,['first.txt'],'Cancelling a queued file while another transfer runs must skip that file');assert.deepEqual(uploaded,['first.txt']);queue.dispose();
 assert.throws(()=>resource.resourceUploadMetadata({name:'unrecognized.bin',size:20,type:'application/octet-stream'}),/not supported/);assert.throws(()=>resource.resourceUploadMetadata({name:'too-large.mp4',size:100*1024*1024+1,type:'video/mp4'}),/100 MB/);assert.throws(()=>resource.resourceUploadMetadata({name:'empty.txt',size:0,type:'text/plain'}),/1 byte/);
-console.log('Content usability passed: first useful lesson creation/save recovery, original text retention, recording upload-to-attachment recovery without duplicate transfer, and queued cancellation while another file uploads. All transfers and persistence use fixtures; no network calls.');
+// The same buyer-facing objective/activity can be edited without finding a
+// collapsed advanced setting, and editing it preserves other lesson settings.
+const controlIcons=Object.fromEntries(['Plus','Trash2','ArrowDown','ArrowUp','Bold','ChevronDown','GripVertical','Heading2','ImagePlus','Italic','List','MessageSquare','Quote','Type'].map(name=>[name,icons[name]]));
+const fieldControls=load('app/product-studio-fields.tsx',{React,useId:React.useId,useLayoutEffect:React.useLayoutEffect,useRef:React.useRef,...controlIcons});
+const editors=load('app/product-studio-editor.tsx',{React,useRef:React.useRef,useState:React.useState,...controlIcons,...fieldControls,ProductStudioDecision:()=>null});
+const lesson={id:'original-lesson',title:'Scope a project',body:'Original teaching',objective:'Draft one scoped proposal',studio:{actionStep:'Write the first three sentences.',takeaway:'Be precise.',assignment:{prompt:'Submit the proposal.',required:false}}};
+for(const [type,deliveryFamily,label] of [['mini-course','course','Action step'],['video-course','course','Action step'],['custom','course','Action step'],['challenge','challenge','Daily task'],['guide','document','Action step'],['playbook','document','Action step']]){
+ const original=structuredClone(lesson),patches=[],view=editors.StudioSectionFirstUse({section:lesson,type,deliveryFamily,onChange:patch=>patches.push(patch)}),markup=renderToStaticMarkup(view);
+ assert.match(markup,/aria-label="First-use guidance"/);
+ assert.ok(markup.includes(`data-builder-field="${label}"`),'Readiness can focus the visible activity control');
+ const controls=nodes(view).filter(node=>node.type===fieldControls.StudioText),task=controls.find(node=>node.props.label===label);
+ task.props.onChange('Complete one proposal and compare it with the example.');
+ assert.deepEqual(patches.pop(),{studio:{...lesson.studio,actionStep:'Complete one proposal and compare it with the example.'}},'Editing practice preserves the existing assignment and takeaway');
+ const objective=controls.find(node=>node.props.label==='Learning objective');
+ if(deliveryFamily==='course'){assert.ok(objective,'Mini courses and other supported classrooms expose the existing objective');objective.props.onChange('Explain the scope to a client.');assert.deepEqual(patches.pop(),{objective:'Explain the scope to a client.'});}
+ else assert.equal(objective,undefined,'Written guides do not get an invented lesson requirement');
+ assert.deepEqual(lesson,original,'The editor does not rewrite original teaching or metadata');
+ const advanced=renderToStaticMarkup(React.createElement(editors.StudioSectionSettings,{section:lesson,sections:[lesson],type,deliveryFamily,uploads:[],onChange:()=>{}}));
+ assert.ok(!advanced.includes(`data-builder-field="${label}"`),'The activity has one editing home');
+}
+assert.equal(editors.StudioSectionFirstUse({section:lesson,type:'book',deliveryFamily:'document',onChange:()=>{}}),null,'A finished book does not get a new practice form');
+console.log('Content usability passed: first useful lesson/save recovery, original retention, recording attachment recovery, queued cancellation, visible first-use editing, exact focus destinations and preserved lesson metadata. All transfers and persistence use fixtures; no network calls.');

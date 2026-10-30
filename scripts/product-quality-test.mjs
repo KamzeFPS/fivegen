@@ -17,7 +17,47 @@ for(const type of ['book','guide','playbook','custom']){
  const report=check(draft,{uploads:[{id,name:'original.pdf',mime:'application/pdf',size:1200,status:'completed',sha256:'a'.repeat(64)}]});assert.equal(report.ready,true,`${type}: an original PDF needs no pretend chapters`);assert.equal(report.originalFileOnly,true);assert.equal(report.checks.some(item=>item.key==='practice-suggestion'||item.key==='planned-items'||item.key==='subtitle-suggestion'),false,'Do not second-guess contents of finished uploads');
  assert.equal(check(draft,{uploads:[]}).ready,false,'A known missing attached file is a blocker');assert.equal(check(draft).ready,true,'Lack of metadata does not invent a missing file');
 }
-for(const type of ['mini-course','video-course']){const draft=finished(type),id=randomUUID();draft.sections=[{title:'A private recorded lesson',body:'',videoId:id}];assert.equal(check(draft,{uploads:[{id,name:'lesson.mp4',mime:'video/mp4',size:2300,status:'completed',sha256:'a'.repeat(64)}]}).ready,true,'A recording needs no fake written transcript');assert.equal(check(draft,{uploads:[]}).ready,false,'An unavailable recording is a blocker');}
+for(const type of ['mini-course','video-course']){
+ const draft=finished(type),id=randomUUID();draft.sections=[{title:'A private recorded lesson',body:'',videoId:id}];
+ const report=check(draft,{uploads:[{id,name:'lesson.mp4',mime:'video/mp4',size:2300,status:'completed',sha256:'a'.repeat(64)}]});
+ assert.equal(report.ready,true,'A recording needs no fake written transcript');
+ const practice=report.checks.find(item=>item.key==='practice-suggestion');
+ assert.equal(practice?.status,'advisory','A recording alone does not prove there is a practical activity; the reminder stays optional');
+ assert.deepEqual(practice.location,{step:'content',sectionIndex:0,field:'actionStep'},'The recording practice reminder opens the first lesson action field');
+ assert.equal(draft.sections[0].body,'','Readiness does not invent a recording transcript or alter the creator’s teaching');
+ draft.sections[0].studio={actionStep:'Prepare one scoped client brief using the example in the recording.'};
+ const withRecordingTask=check(draft,{uploads:[{id,name:'lesson.mp4',mime:'video/mp4',size:2300,status:'completed',sha256:'a'.repeat(64)}]});
+ assert.equal(withRecordingTask.ready,true,'A practical recording lesson still needs no written transcript');
+ assert.equal(withRecordingTask.checks.some(item=>item.key==='practice-suggestion'),false,'A real task attached to a recording satisfies the optional practice advice');
+ assert.equal(check(draft,{uploads:[]}).ready,false,'An unavailable recording is a blocker');
+}
+const explanatoryBody='Reliable scope describes the intended audience, deliverable, constraints and review date. A shared definition helps the creator and client resolve differences before production begins. The example compares two project briefs and explains the reasons for each choice.';
+const activityExamples=[
+ ['action step',{actionStep:'Describe one detail you would change in your next client brief.'}],
+ ['assignment',{assignment:{prompt:'Submit your revised project brief and explain one choice.',required:false}}],
+ ['reflection',{reflection:'Which assumption in the example would you question, and why?'}],
+ ['quiz',{quiz:[{question:'Which part of a project brief identifies the intended audience?',options:['Audience','Invoice'],correctIndex:0}]}],
+];
+for(const type of ['mini-course','video-course','challenge','playbook']){
+ const draft=finished(type);draft.sections[0].body=explanatoryBody;
+ const report=check(draft),practice=report.checks.find(item=>item.key==='practice-suggestion');
+ assert.equal(report.ready,true,`${type}: practical-use advice does not become an arbitrary publishing gate`);
+ assert.equal(practice?.status,'advisory',`${type}: explanation without a task has an optional practice reminder`);
+ assert.deepEqual(practice.location,{step:'content',sectionIndex:0,field:'actionStep'},`${type}: the advice has a direct editor destination`);
+ for(const [label,studio] of activityExamples){
+  draft.sections[0].studio=studio;
+  const before=JSON.stringify(draft),withActivity=check(draft);
+  assert.equal(withActivity.ready,true,`${type}: a meaningful ${label} remains publication-ready`);
+  assert.equal(withActivity.checks.some(item=>item.key==='practice-suggestion'),false,`${type}: an existing ${label} is recognized as practical work`);
+  assert.equal(JSON.stringify(draft),before,'Recognizing existing practice never rewrites it');
+ }
+ for(const stub of ['', '   ', 'TODO', '[Insert content here]', '{{content}}'])for(const label of ['actionStep','assignment','reflection','quiz']){
+  draft.sections[0].studio=label==='assignment'?{assignment:{prompt:stub,required:false}}:label==='quiz'?{quiz:[{question:stub,options:['Audience','Invoice'],correctIndex:0}]}:{[label]:stub};
+  const unfinished=check(draft);
+  assert.equal(unfinished.ready,true,`${type}: an optional ${label} draft does not create a new publication gate`);
+  assert.equal(unfinished.checks.find(item=>item.key==='practice-suggestion')?.status,'advisory',`${type}: an empty or placeholder ${label} cannot stand in for a practical activity`);
+ }
+}
 for(const stub of ['TBD','TODO','Coming soon','[Insert chapter content here]','{{content}}','Lorem ipsum dolor sit amet'])assert.equal(isUnfinishedPlaceholder(stub),true,`Known stub: ${stub}`);
 for(const real of ['This lesson explains how TODO comments work in Python.','A simple example: [insert name] is a field you customize.','We will write your answer here during the exercise.','A real chapter about the word placeholder.','Lorem ipsum is used by designers to preview typography.'])assert.equal(isUnfinishedPlaceholder(real),false,`Real explanatory content: ${real}`);
 let draft=finished('book');draft.sections[0].body='[Insert chapter content here]';assert.equal(check(draft).ready,false,'A whole chapter stub blocks publication');
