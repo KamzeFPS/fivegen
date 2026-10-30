@@ -105,7 +105,7 @@ export async function studioExportPdf(input:StudioExportDocument){
   const check=(amount:number)=>{if(y-amount<margin)next();};
   const strip=(source:string)=>source.replace(/\[\^([^\]]+)\]/g,' [$1] ').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1');
   function text(source:string,size=11,font:PDFFont=normal,color=rgb(.15,.16,.17),indent=0){
-    const paragraphs=strip(source).replace(/\t/g,'  ').split('\n');
+    const paragraphs=strip(source).replace(/\r\n?/g,'\n').replace(/\t/g,'  ').split('\n');
     for(const paragraph of paragraphs){
       let lineWidth=0;const pieces:{text:string;font:PDFFont}[]=[];
       const flush=()=>{check(size*1.6);let x=margin+indent;for(const piece of pieces){page.drawText(piece.text,{x,y,font:piece.font,size,color});x+=piece.font.widthOfTextAtSize(piece.text,size);}y-=size*1.6;pieces.length=0;lineWidth=0;};
