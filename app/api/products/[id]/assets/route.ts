@@ -6,6 +6,7 @@ import { creditPolicy } from "@/lib/credit-policy";
 import { providerKey, providerSettings } from "@/lib/ai";
 import { designImageCredits, designImageQualitySchema } from "@/lib/design-image";
 import { generateOpenAIImage, imageGenerationReadiness } from "@/lib/openai-image";
+import {hasUnlimitedGeneration} from '@/lib/generation-access';
 
 const inputSchema = z.object({
   requestId: z.string().min(8).max(80).regex(/^[a-zA-Z0-9_-]+$/),
@@ -14,6 +15,7 @@ const inputSchema = z.object({
   name: z.string().min(1).max(100),
   aspect: z.enum(["1:1", "16:9", "9:16"]).default("1:1"),
   quality: designImageQualitySchema.default("medium"),
+  maxCredits:z.number().int().min(0).max(160).optional(),
 });
 type AssetRow = { id: string; owner: string; product_id: string; status: string; remote: string | null; error: string | null };
 const pendingLeaseMs = 10 * 60 * 1000;
@@ -65,6 +67,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const requestHash = await digest(JSON.stringify([owner,productId,d.kind,d.name,d.prompt,d.aspect,d.kind === 'image' ? d.quality : null]));
     const old = await db.prepare("SELECT id,owner,product_id,status,remote,error FROM assets WHERE id=?").bind(id).first<AssetRow>();
     if (old) return await replay(old,owner,productId,requestHash);
+    if(d.maxCredits!==undefined){const quotedCost=await hasUnlimitedGeneration(owner)?0:d.kind==='image'?designImageCredits(d.quality):creditPolicy.video;if(quotedCost>d.maxCredits)throw new ApiError(`This asset needs ${quotedCost} credits. Review the price before approving it.`,402);}
 
     const bucket = (env as unknown as {BUCKET?:R2Bucket}).BUCKET;
     if (d.kind === 'image') {

@@ -29,7 +29,7 @@ export async function GET(
   try {
     const u = await identity();
     const { id } = await params;
-    await ownedProduct(id, u.userId);
+    const product=productFromRow(await ownedProduct(id, u.userId));
     const job = await database()
       .prepare(
         "SELECT stage,status,error,updated_at,run_id FROM generation WHERE product_id=? AND owner=?",
@@ -37,7 +37,9 @@ export async function GET(
       .bind(id, u.userId)
       .first();
     const run=job?.run_id?await database().prepare("SELECT mode FROM ai_product_runs WHERE id=? AND state<>'released'").bind(job.run_id).first():null;
-    return Response.json({ job, mode:run?.mode||null, allowance:await productAllowance(u.userId) });
+    const stage=Number(job?.stage??-1),section=product.content.sections[stage];
+    const nextStep=job?.status==='completed'?null:stage<0?{kind:'outline',label:'Create the product outline',position:1,total:null}:section?{kind:'section',label:`Write section ${stage+1}: ${section.title}`,position:stage+2,total:product.content.sections.length+2}:{kind:'package',label:'Create supporting files and the launch kit',position:product.content.sections.length+2,total:product.content.sections.length+2};
+    return Response.json({ job, nextStep, mode:run?.mode||null, allowance:await productAllowance(u.userId) });
   } catch (e) {
     return failure(e);
   }

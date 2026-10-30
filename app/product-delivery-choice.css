@@ -1,0 +1,15 @@
+.product-delivery-choice{border:0;padding:0;margin:0;min-width:0;color:var(--foreground)}
+.product-delivery-choice>legend{padding:0;margin-bottom:12px;font-size:14px;font-weight:600;line-height:1.5}
+.product-delivery-options{display:grid;gap:8px}
+.product-delivery-option{display:flex;align-items:flex-start;gap:11px;min-height:64px;padding:12px;border:1px solid var(--border);border-radius:10px;cursor:pointer;background:var(--background)}
+.product-delivery-option:has(input:checked){border-color:var(--fg-accent,var(--primary));background:var(--muted)}
+.product-delivery-option:has(input:focus-visible){outline:2px solid var(--ring);outline-offset:3px}
+.product-delivery-option input{flex:none;width:17px;height:17px;margin:3px 0 0;accent-color:var(--fg-accent,var(--primary))}
+.product-delivery-option span{display:grid;gap:3px;min-width:0}
+.product-delivery-option strong{font-size:13px;font-weight:600;line-height:1.5}
+.product-delivery-option small{font-size:12px;line-height:1.6;color:var(--muted-foreground)}
+.product-delivery-format{display:grid;gap:7px;margin-top:14px}
+.product-delivery-format>label{font-size:13px;font-weight:600}
+.product-delivery-format select{width:100%;min-width:0;min-height:44px;padding:10px 12px;font:inherit;font-size:14px;color:var(--foreground);background:var(--background);border:1px solid var(--border);border-radius:8px}
+.product-delivery-format select:focus-visible{outline:2px solid var(--ring);outline-offset:3px}
+.product-delivery-format p{margin:0;font-size:12px;line-height:1.6;color:var(--muted-foreground)}

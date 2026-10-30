@@ -61,6 +61,7 @@ function tick(now){const pending=[...frames.values()];frames.clear();pending.for
 
 try{
   const app=harness('PublicHomeComposer');app.render();await app.settle();
+  assert.equal(nodes(app.tree,node=>node.type==='test-image-quality').length,0,'Product planning never asks for image quality');
   clickTab(app,'Marketing plan');type(app,'Market my existing gardening guide with a practical seven-day plan.');
   clickTab(app,'Idea to product');type(app,'Create an ebook for first-time gardeners.');
   clickTab(app,'Marketing plan');assert.equal(textarea(app).props.value,'Market my existing gardening guide with a practical seven-day plan.','Switching tasks preserves an edited draft');

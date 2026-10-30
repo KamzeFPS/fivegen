@@ -9,6 +9,7 @@ import {CreatorContextPicker} from './creator-context-picker';
 import {MarketingVersionHistory} from './marketing-version-history';
 import {useEditorSaveRegistry,useRegisterEditorSave} from './editor-save-registry';
 import {SalesRecordingPicker} from './sales-recording-picker';
+import {AICreditConsent} from './ai-credit-consent';
 
 type Props = { product: Product; aiReady: boolean; cost: number; unlimited: boolean; onUpdate?: () => void; onDirtyChange?: (dirty: boolean) => void; onBusyChange?: (busy: boolean) => void };
 async function growthRequest(url: string, options?: RequestInit) {
@@ -28,6 +29,7 @@ function GrowthVSLWorkspace({ product, aiReady, cost, unlimited, onUpdate, onDir
   const [copied, setCopied] = useState(false), [retry, setRetry] = useState(0);
   const [proposal,setProposal]=useState<GrowthAssetProposal|null>(null),[applyMode,setApplyMode]=useState<'append'|'replace'>('append'),[recording,setRecording]=useState<string|null>(null),[savedRecording,setSavedRecording]=useState<string|null>(null),[recordingRevision,setRecordingRevision]=useState(0);
   const [recordingUploadBusy,setRecordingUploadBusy]=useState(false);
+  const [generationConsent,setGenerationConsent]=useState<{fingerprint:string;cost:number}|null>(null);
   const [briefReturn,setBriefReturn]=useState('');
   useEffect(()=>{let active=true;queueMicrotask(()=>{if(active)setBriefReturn(marketingBriefReturnPath(new URLSearchParams(window.location.search).get('briefReturn'),product.id));});return()=>{active=false;};},[product.id]);
   const mounted = useRef(true), running = useRef(false);
@@ -62,8 +64,11 @@ function GrowthVSLWorkspace({ product, aiReady, cost, unlimited, onUpdate, onDir
     catch (reason) { if (mounted.current) setError((reason as Error).message); return false; }
     finally { if (mounted.current) { running.current = false; setBusy(''); } }
   }
-  async function generate() {
-    if(!growth||running.current||historyBusy||recordingUploadBusy||contextDirty)return;running.current=true;setBusy('generate');setError('');setNotice('');
+  async function generate(approved=false) {
+    if(!growth||running.current||historyBusy||recordingUploadBusy||contextDirty||!aiReady||missingGrowthAnswers(growth.brief).length)return;
+    const quote={fingerprint:JSON.stringify({productId:product.id,growth}),cost:unlimited?0:cost};
+    if(!approved||!generationConsent||generationConsent.fingerprint!==quote.fingerprint||generationConsent.cost!==quote.cost){setGenerationConsent(quote);if(approved)setError('Your brief or cost changed. Review this script step and approve again.');return;}
+    setGenerationConsent(null);running.current=true;setBusy('generate');setError('');setNotice('');
     try{const saved=dirty||!growth.updatedAt||!!growth.inheritedKeys?.length?await persist(growth,product.id):growth;if(!accept(saved))return;const response=await fetch(`/api/products/${product.id}/growth/generate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({asset:'vsl',expectedUpdatedAt:saved.updatedAt,requestId:crypto.randomUUID(),maxCredits:unlimited?0:cost})}),value=await response.json() as {proposal:GrowthAssetProposal;error?:string};if(!response.ok)throw new Error(value.error||'The script proposal could not be created.');if(mounted.current){setProposal(value.proposal);setApplyMode('append');setNotice('Script proposal ready. Your current script, pages and emails are unchanged. Review before appending or replacing.');updatedCallback.current?.();}}
     catch(reason){if(mounted.current)setError((reason as Error).message);}finally{running.current=false;if(mounted.current)setBusy('');}
   }
@@ -98,5 +103,6 @@ function GrowthVSLWorkspace({ product, aiReady, cost, unlimited, onUpdate, onDir
     <section className="growth-script"><h3>Your creator recording</h3><p>Select a sales recording you intend to publish. Private Creator library recordings are separate and never appear here.</p><SalesRecordingPicker onBusyChange={setRecordingUploadBusy} productId={product.id} value={recording} onChange={setRecording} disabled={!!busy||historyBusy||recordingUploadBusy}/><button className="button secondary" disabled={!!busy||recording===savedRecording} onClick={()=>void saveRecording()}>Save recording selection privately</button><a className="button secondary" href={`/build/${product.id}?area=page`}>Choose a page video section</a></section>
     <MarketingVersionHistory productId={product.id} onBusyChange={setHistoryBusy} kind="growth" expectedUpdatedAt={growth.updatedAt} disabled={!!busy||historyBusy||recordingUploadBusy||dirty||contextDirty} onRestore={value=>{accept(value as Growth);setNotice('Earlier copy restored as an editable draft. Public pages are unchanged.');}}/>
     <aside className="growth-record-handoff"><span><Mic size={23} /></span><div><h3>Now make it sound like you.</h3><p>Record your VSL on your camera or phone. Select the finished sales recording above, add it to the intended page video section and review before publishing. This does not expose private lesson or AI-reference recordings.</p></div><ArrowRight size={22} /></aside>
+    <AICreditConsent open={!!generationConsent} title="Draft your sales video script?" description="Approve one AI request based on your offer brief and selected references. Review the proposal before applying it, then record your video when ready." cost={generationConsent?.cost??0} included={unlimited?'Included with your access.':undefined} onCancel={()=>setGenerationConsent(null)} onConfirm={()=>void generate(true)}/>
   </div>;
 }

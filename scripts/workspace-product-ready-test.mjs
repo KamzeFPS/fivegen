@@ -22,5 +22,10 @@ for(const href of ['https://example.test/build/'+productId,'//example.test/build
 }
 for(const field of ['productId','resourceId']){const changed=copy();changed.workflow.steps[0].result[field]=otherId;assert.equal(completedWorkspaceProduct(changed,approval),null,'Conflicting saved resource identities cannot direct the creator to another product');}
 const missing=copy();delete missing.workflow.steps[0].result;assert.equal(completedWorkspaceProduct(missing,approval),null,'A completion without a saved result stays in chat');
+for(const format of ['pdf','epub','html','markdown','zip']){
+ const generated=copy();generated.workflow.steps[0].action={type:'generate_product',title:'A complete downloadable product',delivery:'both',exportFormat:format};
+ const completed=completedWorkspaceProduct(generated,approval);assert.equal(completed.delivery,'both');assert.equal(completed.exportFormat,format);assert.equal(completed.downloadHref,`/api/builder/${productId}/export?format=${format}`,'File choices lead to the actual authenticated export endpoint');
+}
+const inApp=copy();inApp.workflow.steps[0].action={type:'generate_product',title:'A complete in-app product',delivery:'in_app',exportFormat:null};assert.equal(completedWorkspaceProduct(inApp,approval).downloadHref,undefined,'In-app only delivery does not invent a file');
 
 console.log('Product-ready matching passed: exact approval scope, completed product-only saves, correct product title and canonical route, conflicting/missing result rejection, deterministic non-mutating matching. No external calls.');

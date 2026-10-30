@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import ts from 'typescript';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
+import {DESIGN_IMAGE_MODEL} from '../lib/design-image.ts';
 
 // Exercise the real textGeneration transport. Only the runtime configuration,
 // budget reservation and HTTP response are fixtures; no provider is contacted.
@@ -26,7 +27,7 @@ const answer = {
 };
 
 const deps = {
-  z, ApiError,
+  z, ApiError,DESIGN_IMAGE_MODEL,
   binding: name => name === 'OPENAI_API_KEY' || name === 'ANTHROPIC_API_KEY' ? fixtureKey : '',
   database: () => ({ prepare: () => ({ bind: () => ({ first: async () => ({
     config: JSON.stringify({ textProvider: provider, textModel: provider === 'openai' ? 'gpt-4.1-mini' : 'claude-haiku-4-5' }),

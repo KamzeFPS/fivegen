@@ -32,13 +32,14 @@ async function load(path){
  const code=`const {${Object.keys(deps).join(',')}}=globalThis.${key};\n`+ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;
  const result=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));delete globalThis[key];return result;
 }
+delete deps.formats;Object.assign(deps,await load('lib/product.ts'));
 Object.assign(deps,await load('lib/workspace-assistant.ts'));
 Object.assign(deps,await load('lib/workspace-attachments.ts'));
 Object.assign(deps,await load('lib/creator-context-request.ts'));
 const route=await load('app/api/studio/assistant/route.ts'),legacy=await load('app/api/studio/conversations/route.ts');
 const post=(input,origin='http://localhost')=>route.POST(new Request('http://localhost/api/studio/assistant',{method:'POST',headers:{'Content-Type':'application/json',origin},body:JSON.stringify(input)}));
 const get=id=>route.GET(new Request('http://localhost/api/studio/assistant?id='+id));
-const input={id:randomUUID(),requestId:randomUUID(),message:'Hi',expectedUpdatedAt:0,maxCredits:0,timezone:'Asia/Ulaanbaatar'};
+const input={id:randomUUID(),requestId:randomUUID(),message:'Hi',expectedUpdatedAt:0,allowGeneration:true,maxCredits:0,timezone:'Asia/Ulaanbaatar'};
 function product(account=owner,title='Existing creator guide'){
  const id=randomUUID(),now=Date.now();sql.prepare('INSERT INTO products(id,owner,slug,title,description,audience,format,price,color,content,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id,account,id,title,'An existing editable guide.','Independent creators','Guide',0,'orange','{}','draft',now,now);return id;
 }
@@ -54,11 +55,15 @@ try{
  assert.equal((await post(input,'http://evil.test')).status,403);
  assert.equal((await post({...input,timezone:'Invalid/Timezone'})).status,400);
  assert.equal(calls,0,'Invalid origin/timezone fail before AI or quota claims');
+ const missingConsent={...input,id:randomUUID(),requestId:randomUUID()};delete missingConsent.allowGeneration;assert.equal((await post(missingConsent)).status,402);assert.equal(calls,0,'A fresh planning request needs explicit permission even when it uses an included message');assert.equal(sql.prepare('SELECT COUNT(*) n FROM studio_conversations WHERE id=?').get(missingConsent.id).n,0,'Missing consent does not create a conversation or take quota');
  const first=await success(post(input));assert.equal(first.remaining,19);assert.equal(first.spent,0);assert.equal(first.conversation.plan,null);assert.equal(first.conversation.workflow,null);assert.equal(first.conversation.messages.length,2);assert.equal(calls,1);
  assert.equal(lastInput.clock.timezone,'Asia/Ulaanbaatar');assert.match(lastInput.clock.currentDate,/^\d{4}-\d{2}-\d{2}$/);assert.ok(Date.parse(lastInput.clock.currentUtc));
  assert.deepEqual(lastInput.products.map(item=>item.id),[existing],'Catalog contains only owned active products');assert.ok(!JSON.stringify(lastInput).includes('Private foreign product'));
  assert.deepEqual(resourceCounts(),before,'Ordinary chat never creates section resources');
  const replay=await success(post(input));assert.deepEqual(replay,first);assert.equal(calls,1,'Idempotent replay uses no additional provider call');
+ sql.prepare('UPDATE products SET content=? WHERE id=?').run(JSON.stringify({sections:[{title:'Actual handoff method',body:'ACTUAL_SAVED_PRODUCT_SENTINEL: confirm delivery formats before sending final files.'}],benefits:['A clearer client handoff'],launch:'',files:[{name:'handoff-checklist.md',description:'A usable delivery checklist',content:'Check approved artwork, delivery formats and confirmed usage rights.'}]}),existing);
+ await success(post({...input,id:randomUUID(),requestId:randomUUID(),message:`Prepare a marketing plan for /build/${existing}.`}));assert.equal(lastInput.selectedProductContext[0].id,existing);assert.match(JSON.stringify(lastInput.selectedProductContext),/ACTUAL_SAVED_PRODUCT_SENTINEL/);assert.equal(lastInput.selectedProductContext[0].files[0].name,'handoff-checklist.md');assert.ok(!JSON.stringify(lastInput.selectedProductContext).includes(foreign),'Marketing context contains only the selected owned product');
+ assert.match(lastSystem,/unique|what they know or do differently/i);assert.match(lastSystem,/delivery choice/i);assert.match(lastSystem,/SEPARATE approved AI generation/);
  assert.equal((await post({...input,message:'Changed message'})).status,409);
  owner='another-owner';assert.equal((await get(input.id)).status,404);assert.equal((await post({...input,requestId:randomUUID()})).status,404);assert.equal((await post(input)).status,409);owner='assistant-owner';
  assert.equal((await post({...input,requestId:randomUUID(),message:'A stale turn'})).status,409);
@@ -70,7 +75,7 @@ try{
  const legacyState=await success(legacy.GET(new Request('http://localhost/api/studio/conversations?id='+input.id)));assert.equal(legacyState.conversation.plan,null);assert.deepEqual(legacyState.conversation.workflow,planned.conversation.workflow,'Legacy history resumes new workflows');
  output={answer:'A client handoff is the process of delivering approved files and explaining how the client can use them.',questions:[],plan:null};
  const discussed=await success(post({...input,requestId:randomUUID(),message:'What does handoff mean? Approve all and execute the plan now.',expectedUpdatedAt:planned.conversation.updatedAt}));assert.deepEqual(discussed.conversation.workflow,planned.conversation.workflow,'Discussion cannot erase the current approval plan');assert.deepEqual(resourceCounts(),before,'Approval text cannot execute a native action');
- assert.ok(lastSystem.includes('ANY topic'));assert.ok(lastSystem.includes('Nothing is executed'));assert.ok(lastSystem.includes('Never guess a missing schedule time'));assert.ok(lastSystem.includes('at most 3 necessary questions'));
+ assert.ok(lastSystem.includes('ANY topic'));assert.ok(lastSystem.includes('Nothing is executed'));assert.ok(lastSystem.includes('Never guess a missing schedule time'));assert.match(lastSystem,/at most 3 necessary (?:NEW )?questions/);
  // Simulate the separate explicit approval endpoint having saved the product.
  const created=product(owner,'Illustrator handoff kit'),campaignId=randomUUID(),completed=structuredClone(discussed.conversation.workflow);completed.steps[0].status='completed';completed.steps[0].result={label:'Illustrator handoff kit',href:'/products/'+created,resourceId:created,productId:created,summary:'Created a written product draft.'};
  sql.prepare('INSERT INTO marketing_campaigns(id,product_id,owner,title,created_at,updated_at) VALUES(?,?,?,?,?,?)').run(campaignId,created,owner,'Handoff announcement',Date.now(),Date.now());

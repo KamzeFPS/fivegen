@@ -5,11 +5,14 @@ import {emptyGrowthBrief} from './growth';
 import {campaignSaveSchema} from './campaign';
 import {adoptBuilderWorkspace} from './product-builder-server';
 import {createCalendarEvent} from './workspace-calendar-server';
+import {prepareAssistantProduct,releaseAssistantProductAttempt,type AssistantGenerationCharge} from './workspace-product-generation';
 import {assistantPlanProposalSchema,assistantResourceReceipts,readAssistantEnvelope,type AssistantConversation,type AssistantMessage,type AssistantStep,type AssistantStepResult,type AssistantWorkflow} from './workspace-assistant';
 
 export const workspaceAssistantActionRequestSchema=z.object({
   conversationId:z.string().uuid(),planId:z.string().uuid(),stepId:z.string().regex(/^[a-z0-9-]{1,64}$/),
   expectedUpdatedAt:z.number().int().min(0),decision:z.enum(['approve','skip']),requestId:z.string().uuid(),
+  allowGeneration:z.boolean().optional(),maxCredits:z.number().int().min(0).max(30).default(0),
+  delivery:z.enum(['in_app','download','both']).optional(),exportFormat:z.enum(['pdf','epub','html','markdown','zip']).nullable().optional(),
 }).strict();
 type ActionRequest=z.infer<typeof workspaceAssistantActionRequestSchema>;
 type ActionResponse={conversation:AssistantConversation;result?:AssistantStepResult};
@@ -49,7 +52,7 @@ async function stepProductId(step:AssistantStep,workflow:AssistantWorkflow,owner
   let productId=step.action.productId;
   if(step.action.productStepId){
     const productStepId=step.action.productStepId,dependency=workflow.steps.find(item=>item.id===productStepId);
-    if(!dependency||dependency.status!=='completed'||dependency.action.type!=='create_product'||!dependency.result?.productId)
+    if(!dependency||dependency.status!=='completed'||!['create_product','generate_product'].includes(dependency.action.type)||!dependency.result?.productId)
       throw new ApiError('This step needs the product from an earlier step. That step was skipped or is incomplete. Revise the plan or skip this step.',409);
     productId=dependency.result.productId;
   }
@@ -60,24 +63,31 @@ async function assertActionGuard(guard:ActionGuard){
   if(!await database().prepare('SELECT 1 AS valid WHERE 1=1'+guard.sql).bind(...guard.values).first())
     throw new ApiError('This plan changed while saving. Refresh the chat and retry this step to recover any saved draft.',409);
 }
-async function executeStep(owner:string,input:ActionRequest,workflow:AssistantWorkflow,step:AssistantStep,guard:ActionGuard):Promise<AssistantStepResult>{
+async function executeStep(owner:string,input:ActionRequest,workflow:AssistantWorkflow,step:AssistantStep,guard:ActionGuard,charge:AssistantGenerationCharge):Promise<AssistantStepResult>{
   const action=step.action,db=database(),id=await stepResourceId(input.conversationId,input.planId,step.id),now=Date.now();
   await assertActionGuard(guard);
   if(action.type==='manual')return {label:'Marked complete',href:null,summary:'You confirmed that you completed this action.'};
-  if(action.type==='create_product'){
-    const brief=briefSchema.parse({...action,price:0,color:'orange'}),sections=await Promise.all(action.sections.map(async(section,index)=>({...section,id:await stepResourceId(input.conversationId,input.planId,step.id,`section-${index}`)}))),content=contentSchema.parse({sections,benefits:[],launch:'',files:[]});
+  if(action.type==='create_product'||action.type==='generate_product'){
+    const brief=briefSchema.parse({...action,price:0,color:'orange'}),generated=action.type==='generate_product'?await prepareAssistantProduct(owner,input.conversationId,id,action,input,guard,charge):null;
+    const sections=await Promise.all((action.type==='create_product'?action.sections:generated?.sections||[]).map(async(section,index)=>({...section,id:await stepResourceId(input.conversationId,input.planId,step.id,`section-${index}`)}))),content=sections.length?contentSchema.parse(generated?{...generated,sections}:{sections,benefits:[],launch:'',files:[]}):null;
+    if(content)await assertActionGuard(guard);
+    if(content)
     await db.batch([
       db.prepare(`INSERT OR IGNORE INTO products(id,owner,slug,title,description,audience,format,price,color,content,status,created_at,updated_at) SELECT ?,?,?,?,?,?,?,0,?,?,'draft',?,? WHERE 1=1${guard.sql}`)
         .bind(id,owner,slugify(brief.title)+'-'+id.slice(0,6),brief.title,brief.description,brief.audience,brief.format,brief.color,JSON.stringify(content),now,now,...guard.values),
       db.prepare(`INSERT OR IGNORE INTO growth_workspaces(product_id,owner,brief,updated_at) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM products WHERE id=? AND owner=?)${guard.sql}`)
         .bind(id,owner,JSON.stringify(emptyGrowthBrief(brief.audience)),now,id,owner,...guard.values),
+      ...(action.type==='generate_product'?[
+        db.prepare(`UPDATE generation SET status='completed',stage=?,lease=0,brief=json_set(brief,'$.builderResult',json(?),'$.builderAppliedVersion',1),updated_at=? WHERE product_id=? AND owner=? AND lease=? AND EXISTS(SELECT 1 FROM products WHERE id=? AND owner=?)${guard.sql}`).bind(sections.length+1,JSON.stringify(content),now,id,owner,charge.lease,id,owner,...guard.values),
+        db.prepare(`UPDATE ai_product_runs SET state='active' WHERE id=? AND owner=? AND EXISTS(SELECT 1 FROM products WHERE id=? AND owner=?)${guard.sql}`).bind(charge.runId,owner,id,owner,...guard.values),
+      ]:[]),
     ]);
     // Only this deterministic, newly created draft is ever adopted. Existing
     // product content is never rewritten by an approval or a recovery retry.
     const saved=await activeProduct(id,owner);await assertActionGuard(guard);
-    await adoptBuilderWorkspace(id,owner,{language:action.language,source:'ai'});
-    const savedSections=contentSchema.parse(JSON.parse(String(saved.content))).sections;
-    return {label:'Open product draft',href:'/build/'+id,resourceId:id,productId:id,summary:`Saved “${String(saved.title)}” in Products with ${savedSections.length} written ${savedSections.length===1?'section':'sections'}. Open the product to review its current content.`};
+    await adoptBuilderWorkspace(id,owner,{language:action.language,source:'ai',...(action.type==='generate_product'?{productDetails:{buyerProblem:action.buyerProblem,outcome:action.outcome,creatorExpertise:action.creatorExpertise,prerequisites:action.prerequisites,instructions:action.instructions,delivery:action.delivery,exportFormat:action.exportFormat}}:{})});
+    const savedContent=contentSchema.parse(JSON.parse(String(saved.content))),savedSections=savedContent.sections;
+    return {label:'Open product draft',href:'/build/'+id,resourceId:id,productId:id,summary:`${action.type==='generate_product'?'Generated and saved':'Saved'} “${String(saved.title)}” in Products with ${savedSections.length} written ${savedSections.length===1?'section':'sections'}${action.type==='generate_product'?` and ${savedContent.files?.length||0} practical supporting files`:''}. Open the product to review its current content.`};
   }
   const productId=await stepProductId(step,workflow,owner);
   if(action.type==='create_campaign'){
@@ -96,7 +106,7 @@ async function executeStep(owner:string,input:ActionRequest,workflow:AssistantWo
 }
 
 export async function executeWorkspaceAssistantAction(owner:string,value:unknown):Promise<ActionResponse>{
-  const input=workspaceAssistantActionRequestSchema.parse(value),db=database(),now=Date.now(),lease=now+180000,prompt=JSON.stringify({planId:input.planId,stepId:input.stepId,expectedUpdatedAt:input.expectedUpdatedAt,decision:input.decision});
+  const input=workspaceAssistantActionRequestSchema.parse(value),db=database(),now=Date.now(),lease=now+180000,prompt=JSON.stringify({planId:input.planId,stepId:input.stepId,expectedUpdatedAt:input.expectedUpdatedAt,decision:input.decision,...(input.allowGeneration===true||input.maxCredits>0?{allowGeneration:input.allowGeneration,maxCredits:input.maxCredits}:{}),...(input.delivery!==undefined?{delivery:input.delivery,exportFormat:input.exportFormat}:{})}),charge:AssistantGenerationCharge={};
   const previous=await db.prepare('SELECT owner,conversation_id,prompt,mode,state,response,created_at FROM studio_plan_turns WHERE id=?').bind(input.requestId).first();
   if(previous){
     if(previous.owner!==owner||previous.conversation_id!==input.conversationId||previous.prompt!==prompt||previous.mode!=='action')throw new ApiError('This approval reference was already used. Refresh the chat before trying again.',409);
@@ -109,6 +119,8 @@ export async function executeWorkspaceAssistantAction(owner:string,value:unknown
   if(workflow.id!==input.planId||Number(row.updated_at)!==input.expectedUpdatedAt)throw new ApiError('The plan changed. Review the current plan before approving a step.',409);
   const step=workflow.steps.find(item=>item.status==='pending');
   if(!step||step.id!==input.stepId)throw new ApiError('Review and finish or skip the next pending step first.',409);
+  if(step.action.type==='generate_product'&&input.decision==='approve'&&(!input.delivery||input.exportFormat===undefined||input.delivery==='in_app'&&input.exportFormat!==null||input.delivery!=='in_app'&&input.exportFormat===null))throw new ApiError('Choose in-app delivery, a supported downloadable format, or both before generating.',400);
+  const reviewedStep:AssistantStep=step.action.type==='generate_product'&&input.decision==='approve'?{...step,action:{...step.action,delivery:input.delivery!,exportFormat:input.exportFormat!}}:step;
   let locked=false,claimedTurn=false;
   try{
     const claim=await db.prepare('UPDATE studio_conversations SET lease=? WHERE id=? AND owner=? AND updated_at=? AND plan=? AND lease<?').bind(lease,input.conversationId,owner,input.expectedUpdatedAt,String(row.plan),now).run();
@@ -118,20 +130,23 @@ export async function executeWorkspaceAssistantAction(owner:string,value:unknown
     else await db.prepare("INSERT INTO studio_plan_turns(id,owner,conversation_id,prompt,period,mode,state,created_at) VALUES(?,?,?,?,?,'action','pending',?)").bind(input.requestId,owner,input.conversationId,prompt,new Date(now).toISOString().slice(0,7),now).run();
     claimedTurn=true;
     const guard:ActionGuard={sql:' AND EXISTS(SELECT 1 FROM studio_conversations WHERE id=? AND owner=? AND updated_at=? AND plan=? AND lease=?)',values:[input.conversationId,owner,input.expectedUpdatedAt,String(row.plan),lease]};
-    const result=input.decision==='approve'?await executeStep(owner,input,workflow,step,guard):undefined;
+    const result=input.decision==='approve'?await executeStep(owner,input,workflow,reviewedStep,guard,charge):undefined;
     await assertActionGuard(guard);
-    const nextWorkflow:AssistantWorkflow={...workflow,steps:workflow.steps.map(item=>item.id===step.id?{...item,status:input.decision==='skip'?'skipped':'completed',...(result?{result}:{}),error:undefined}:item)};
+    const nextWorkflow:AssistantWorkflow={...workflow,steps:workflow.steps.map(item=>item.id===step.id?{...reviewedStep,status:input.decision==='skip'?'skipped':'completed',...(result?{result}:{}),error:undefined}:item)};
     const resources=assistantResourceReceipts({kind:'workspace-assistant',resources:assistantResourceReceipts(readAssistantEnvelope(row.plan)),workflow:nextWorkflow});
     const nextStep=nextWorkflow.steps.find(item=>item.status==='pending'),content=(input.decision==='skip'?`Skipped “${step.title}”.`:result!.summary)+(nextStep?` Next: “${nextStep.title}”. Review this step and approve it when you are ready.`:' This plan is complete. You can keep chatting or ask for another plan.');
-    const messages=[...conversation(row,workflow).messages,{id:input.requestId+'-action',role:'assistant' as const,content}],updatedAt=Math.max(Date.now(),input.expectedUpdatedAt+1),productId=row.product_id?String(row.product_id):step.action.type==='create_product'&&result?.productId?result.productId:null;
+    const messages=[...conversation(row,workflow).messages,{id:input.requestId+'-action',role:'assistant' as const,content}],updatedAt=Math.max(Date.now(),input.expectedUpdatedAt+1),productId=row.product_id?String(row.product_id):['create_product','generate_product'].includes(step.action.type)&&result?.productId?result.productId:null;
     const response:ActionResponse={conversation:{id:input.conversationId,messages,plan:null,workflow:nextWorkflow,resources,productId,updatedAt},...(result?{result}:{})},encodedPlan=JSON.stringify({kind:'workspace-assistant',workflow:nextWorkflow,resources}),encodedMessages=JSON.stringify(messages),encodedResponse=JSON.stringify(response);
     const committed=await db.batch([
       db.prepare("UPDATE studio_conversations SET messages=?,plan=?,product_id=?,updated_at=?,lease=0 WHERE id=? AND owner=? AND updated_at=? AND plan=? AND lease=? AND EXISTS(SELECT 1 FROM studio_plan_turns WHERE id=? AND owner=? AND mode='action' AND state='pending' AND created_at=?)").bind(encodedMessages,encodedPlan,productId,updatedAt,input.conversationId,owner,input.expectedUpdatedAt,String(row.plan),lease,input.requestId,owner,now),
       db.prepare("UPDATE studio_plan_turns SET state='completed',response=? WHERE id=? AND owner=? AND mode='action' AND state='pending' AND created_at=? AND EXISTS(SELECT 1 FROM studio_conversations WHERE id=? AND owner=? AND updated_at=? AND messages=? AND plan=? AND lease=0)").bind(encodedResponse,input.requestId,owner,now,input.conversationId,owner,updatedAt,encodedMessages,encodedPlan),
+      ...(charge.creditId?[db.prepare("UPDATE credit_usage SET state='completed' WHERE id=? AND owner=? AND state='reserved' AND EXISTS(SELECT 1 FROM studio_conversations WHERE id=? AND owner=? AND updated_at=? AND messages=? AND lease=0)").bind(charge.creditId,owner,input.conversationId,owner,updatedAt,encodedMessages)]:[]),
+      ...(charge.runId?[db.prepare("UPDATE ai_product_runs SET state='completed' WHERE id=? AND owner=? AND EXISTS(SELECT 1 FROM studio_conversations WHERE id=? AND owner=? AND updated_at=? AND messages=? AND lease=0)").bind(charge.runId,owner,input.conversationId,owner,updatedAt,encodedMessages)]:[]),
     ]);
     if(!committed[0].meta.changes||!committed[1].meta.changes)throw new ApiError('This plan changed while saving. Refresh the chat and retry this step to recover any saved draft.',409);
     return response;
   }catch(error){
+    if(charge.productId||charge.creditId||charge.runId)await releaseAssistantProductAttempt(owner,charge);
     if(claimedTurn)await db.prepare("UPDATE studio_plan_turns SET state='failed' WHERE id=? AND owner=? AND mode='action' AND state='pending' AND created_at=?").bind(input.requestId,owner,now).run();
     throw error;
   }finally{

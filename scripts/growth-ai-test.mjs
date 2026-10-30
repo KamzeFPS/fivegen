@@ -6,14 +6,14 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { createStorage } from '../runtime/render/storage.mjs';
-import { textCredits } from '../lib/credit-policy.ts';
+import { textCredits,creditPolicy as launchCreditPolicy,creditPacks,monthlyWindow } from '../lib/credit-policy.ts';
 
 const root = resolve('outputs/growth-ai-qa', randomUUID()), storage = createStorage(root);
 let owner = 'growth-owner', calls = 0, invalid = false, fail = false, hold, lastSystem, lastPrompt, unlimited = false;
 class ApiError extends Error { constructor(message, status = 400) { super(message); this.status = status; } }
 const generated = { vsl: 'Creator: Here is the honest story behind my offer. [Record your own demonstration.]', landing: { headline: 'A calmer way to onboard clients', subheadline: 'For independent illustrators', body: 'Learn a process from the creator’s real experience.', benefits: ['A clear handoff checklist'], ctaLabel: 'Request details', thankYou: 'Your request has been received.' }, followUp: 'Subject: Your illustration handoff questions\nThanks for requesting details.' };
 const deps = {
-  z, zodToJsonSchema, ApiError, textCredits, database: () => storage.DB,
+  z, zodToJsonSchema, ApiError, textCredits,creditPolicy:{...launchCreditPolicy,monthly:0},creditPacks,monthlyWindow, database: () => storage.DB,
   identity: async () => { if (!owner) throw new ApiError('Sign in', 401); return { userId: owner }; },
   sameOrigin: req => { if (req.headers.has('origin') && req.headers.get('origin') !== new URL(req.url).origin) throw new ApiError('Invalid origin', 403); },
   failure: error => Response.json({ error: error.message }, { status: error.status || (error.issues ? 400 : 500) }),
@@ -37,6 +37,7 @@ async function load(path) {
   const loadedScript = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64')); delete globalThis[key]; return loadedScript;
 }
 Object.assign(deps, await load('lib/growth.ts'));
+// Isolate purchased-credit reservations/refunds after the Free pool is exhausted.
 Object.assign(deps, await load('lib/credits.ts'));
 Object.assign(deps, await load('lib/creator-voice.ts'), await load('lib/campaign-run.ts'));
 Object.assign(deps, await load('lib/creator-voice-server.ts'));
@@ -49,6 +50,7 @@ const id = randomUUID(), otherId = randomUUID();
 const product = productId => storage.sqlite.prepare("INSERT INTO products (id,owner,slug,title,description,audience,format,color,content,created_at,updated_at) VALUES (?,?,?,?,?,?,?,'orange',?,1,1)").run(productId, owner, 'growth-' + productId, 'Illustration handoff', 'A creator-authored illustration offer.', 'Independent illustrators', 'Guide', JSON.stringify({ sections: [], benefits: [], launch: '' }));
 product(id); product(otherId);
 storage.sqlite.prepare('INSERT INTO wallets (owner,purchased) VALUES (?,100)').run(owner);
+const initialCredits=await deps.creditBalance(owner);assert.equal(initialCredits.starter,0,'Purchased-credit fixture starts without Free credits');assert.equal(initialCredits.total,100);
 const params = { params: Promise.resolve({ id }) }, url = `http://localhost/api/products/${id}/growth`;
 const get = () => route.GET(new Request(url), params);
 const patch = (input, headers = {}) => route.PATCH(new Request(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(input) }), params);

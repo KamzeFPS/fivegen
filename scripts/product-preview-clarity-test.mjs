@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+import ts from 'typescript';
+import {CheckCircle2,ExternalLink,FlaskConical,ShieldCheck} from 'lucide-react';
+
+const result={generatedAt:1,title:'A useful original course',family:'course',firstAction:'Start learning',preview:{id:'preview-owned-product',sections:[{id:'lesson-one',title:'Build a useful first result',body:'Original creator teaching.'}],studio:{}},offer:{priceText:'$19',terms:'One-time purchase'},payments:{environment:'Test checkout'},warnings:[{owner:'Creator',title:'Review your price',href:'/build/owned-product?area=commerce'}],notTested:['Protected recordings and live payment']};
+let requests=0,cursor=0;
+const scope={React,CheckCircle2,ExternalLink,FlaskConical,ShieldCheck,useEffect(){},useRef:()=>({current:0}),useState:()=>[cursor++===0?result:cursor===2?false:'',()=>{}],curriculumOrder:sections=>sections,curriculumGroups:()=>[],CustomerLearning:({sections})=>React.createElement('section',{'aria-label':'Course contents'},sections[0].body),CustomerService:()=>null,CustomerCommunity:()=>null,WrittenContent:()=>null,PurchasedProductResources:()=>null,fetch:()=>{requests++;throw new Error('Preview rendering must not make a request.');}};
+const source=readFileSync('app/buyer-journey-test.tsx','utf8').replace(/^import[\s\S]*?;\r?\n/gm,'');
+const loaded={};new Function('exports',...Object.keys(scope),ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React}}).outputText)(loaded,...Object.values(scope));
+const compact=renderToStaticMarkup(React.createElement(loaded.BuyerPreviewPanel,{result,compact:true}));
+assert.match(compact,/Original creator teaching/,'The saved teaching remains the main preview content');
+assert.doesNotMatch(compact,/First action:|Sample access|No real purchase|synthetic report|A useful original course/,'The focused reader avoids repeated headings and QA banners');
+const regular=renderToStaticMarkup(React.createElement(loaded.BuyerPreviewPanel,{result}));
+assert.match(regular,/BUYER CONTENT VIEW/);assert.match(regular,/A useful original course/,'Standalone buyer checks retain their own content heading');
+cursor=0;const view=loaded.BuyerJourneyTest({productId:'owned-product',deliveryFirst:true}),html=renderToStaticMarkup(view);
+assert.match(html,/Original creator teaching/);
+assert.match(html,/<details class="ops-preview-checks"><summary>Preview limits &amp; launch checks/,'Launch diagnostics remain in a collapsed disclosure');
+assert.doesNotMatch(html,/<details[^>]*\bopen[ =>]/,'The reader opens before optional checks');
+assert.ok(html.indexOf('Original creator teaching')<html.indexOf('Preview limits'),'Content precedes checks');
+assert.match(html,/no purchase, message, booking or customer activity is created/,'Safe preview boundaries are still explained');
+assert.match(html,/Protected recordings, downloads, release rules and checkout need a separate buyer check/);
+assert.equal(requests,0,'Presentation changes neither grant access nor trigger external work');
+console.log('Product preview clarity passed: saved content first, no repeated QA chrome, standalone title, collapsed limits/checks, and unchanged read-only boundaries. No external calls.');

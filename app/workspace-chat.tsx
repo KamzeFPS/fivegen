@@ -9,23 +9,25 @@ import type {AssistantAction,AssistantConversation,AssistantResourceReceipt,Assi
 import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
 import {ChatQuestionStepper} from './chat-question-stepper';
 import {ChatReplyDownload,WorkspaceChatDownloads} from './workspace-chat-downloads';
-import {ImageQualityControl,useImageQuality} from './image-quality-control';
+import {AICreditConsent,type AICreditPermission} from './ai-credit-consent';
+import {ProductDeliveryChoice,type ProductDelivery,type ProductExportFormat} from './product-delivery-choice';
 import {completedWorkspaceProduct,type ProductReadyApproval,type ProductReadyCompletion} from '@/lib/workspace-product-ready';
 import {WorkspaceProductReady} from './workspace-product-ready';
 import './workspace-chat.css';
 
 type Props={
   conversation:AssistantConversation|null;message:string;sent:string;busy:string;
-  name:string;remaining:number;cost:number;credits:number|undefined;aiReady:boolean;unlimited?:boolean;
-  onMessage:(value:string)=>void;onSend:(prompt:string,attachmentIds?:string[])=>Promise<boolean>;
+  name:string;remaining:number;cost:number;credits:number|undefined;aiReady:boolean;unlimited?:boolean;productRunsRemaining?:number;
+  onMessage:(value:string)=>void;onSend:(prompt:string,attachmentIds?:string[],permission?:AICreditPermission)=>Promise<boolean>;
   attachmentScope?:string;onBusyChange?:(busy:boolean)=>void;onAuthRequired?:()=>void;
-  onAction:(stepId:string,decision:'approve'|'skip')=>Promise<boolean>;onVisit:(href:string)=>void;
+  onAction:(stepId:string,decision:'approve'|'skip',permission?:AICreditPermission)=>Promise<boolean>;onVisit:(href:string)=>void;
   onNewChat?:()=>void;
   products?:{id:string;title:string}[];
 };
 type AnswerDraft={id:string;values:Record<string,string>;index?:number};
 type SavedDraft={message:string;answers:AnswerDraft;updatedAt:number};
 type ProductDestination={title:string;id?:string;detail?:string};
+type ChatCreditConsent={kind:'message'|'product';context:string;cost:number;prompt?:string;fileIds?:string;stepId?:string;delivery?:ProductDelivery;exportFormat?:ProductExportFormat|null};
 
 const DRAFT_PREFIX='fivegen:workspace-chat:';
 const MAX_MESSAGE=3000;
@@ -34,9 +36,9 @@ function designStudioReply(content:string){const known=/\[([^\]\r\n]{1,80})\]\(\
 const taskLabels:Record<string,string>={idea:'Develop an idea',marketing:'Plan marketing','product-photos':'Create product photo assets',funnel:'Plan a sales funnel',designs:'Create editable visual designs'};
 const kindLabels:Record<string,string>={ebook:'eBook',invitation:'Invitation','colouring-book':'Colouring book',course:'Course','template-kit':'Template kit'};
 const SUGGESTIONS=[
-  {label:'A practical ebook',prompt:'Help me make a practical ebook. Ask about my audience and the problem I can help them solve, then show me a plan.'},
-  {label:'A wedding invitation',prompt:'Help me design an editable wedding invitation. Ask about the names, date, venue, and style, then help me continue in Design studio.'},
-  {label:'A content plan',prompt:'Help me plan content for one of my existing products. Let’s choose the product, audience, and goal first.'},
+  {label:'Build from my expertise',prompt:'Help me turn my expertise into a useful digital product. First ask who I can help, what result they need, and what unique methods, examples or supporting files I can bring. Then guide me through creating it and finding my first customer.'},
+  {label:'Use my files',prompt:'I have notes, recordings, templates or other supporting files. Help me choose a useful product from my original material. Ask what I have and who it should help before generating anything.'},
+  {label:'Launch an existing product',prompt:'Help me get my first customer for an existing product. Let’s choose the product, check the offer and sales page, then prepare marketing, images and a small buyer feedback or outreach plan. Ask permission before each AI step.'},
 ];
 
 function saveDraft(key:string,draft:SavedDraft){
@@ -51,11 +53,10 @@ function saveDraft(key:string,draft:SavedDraft){
 }
 
 function actionLabel(action:AssistantAction){
-  return action.type==='create_product'?'Approve & create product':action.type==='create_campaign'?'Approve & create campaign':action.type==='create_calendar_event'?'Approve & add to Calendar':'I’ve done this';
+  return action.type==='generate_product'?'Generate my product':action.type==='create_product'?'Approve & create product':action.type==='create_campaign'?'Approve & create campaign':action.type==='create_calendar_event'?'Approve & add to Calendar':'I’ve done this';
 }
 
-export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cost,credits,aiReady,unlimited,onMessage,onSend,onAction,onVisit,onNewChat,attachmentScope='guest',onBusyChange,onAuthRequired,products=[]}:Props){
-  const [imageQuality,setImageQuality]=useImageQuality();
+export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cost,credits,aiReady,unlimited,productRunsRemaining=0,onMessage,onSend,onAction,onVisit,onNewChat,attachmentScope='guest',onBusyChange,onAuthRequired,products=[]}:Props){
   const messages=conversation?.messages||[];
   const isHome=!messages.length&&!sent;
   const latest=messages.at(-1);
@@ -75,6 +76,7 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
   const [showLatest,setShowLatest]=useState(false);
   const [planOpen,setPlanOpen]=useState(false);
   const [noteOpen,setNoteOpen]=useState(false);
+  const [creditConsent,setCreditConsent]=useState<ChatCreditConsent|null>(null);
   const [productApproval,setProductApproval]=useState<ProductReadyApproval|null>(null);
   const [productReady,setProductReady]=useState<ProductReadyCompletion|null>(null);
   const productContextRef=useRef<{conversationId:string|undefined;planId:string|undefined}|null>(null);
@@ -117,12 +119,15 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
   const hasCredits=Boolean(unlimited||remaining>0||credits===undefined||credits>=cost);
   const canSend=(userReply.length>0||attachedFiles.length>0)&&filesReady&&!missingFiles&&!tooLong&&!isBusy&&aiReady&&hasCredits;
   const actionDisabled=isBusy||hasDraft;
+  const consentContext=`${conversation?.id||'new'}:${conversation?.updatedAt||0}:${workflow?.id||''}`;
+  const planningCost=unlimited||remaining>0?0:cost;
+  const productCost=unlimited||productRunsRemaining>0?0:cost;
 
   useEffect(()=>{messageChangeRef.current=onMessage;},[onMessage]);
 
   useEffect(()=>{
     productContextRef.current={conversationId:conversation?.id,planId:workflow?.id};
-    setProductApproval(null);setProductReady(null);
+    setProductApproval(null);setProductReady(null);setCreditConsent(null);
     return()=>{productContextRef.current=null;};
   },[conversation?.id,workflow?.id]);
 
@@ -249,10 +254,16 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
   }
   async function submit(){
     if(!canSend||submitRef.current)return;
+    setCreditConsent({kind:'message',context:consentContext,cost:planningCost,prompt:reply,fileIds:attachedFiles.map(item=>item.id).join(':')});
+  }
+  async function submitApproved(consent:ChatCreditConsent){
+    if(!canSend||submitRef.current)return;
+    if(consent.kind!=='message'||consent.context!==consentContext||consent.cost!==planningCost||consent.prompt!==reply||consent.fileIds!==attachedFiles.map(item=>item.id).join(':')){setCreditConsent(null);setLocalError('Your message or cost changed. Review it and approve this step again.');return;}
+    setCreditConsent(null);
     submitRef.current=true;setSending(true);setLocalError('');onBusyChange?.(true);followRef.current=true;const attachmentKey=fileDraftKey,sourceKey=fileDraft.draft.sourceKey,selected=[...attachedFiles];
     try{
       const attachments=await stageFiles(attachmentKey,selected);setUploadStatus('');
-      if(await onSend(reply||'Help me with these attached files.',attachments.map(item=>item.id))){
+      if(await onSend(reply||'Help me with these attached files.',attachments.map(item=>item.id),{allowGeneration:true,maxCredits:consent.cost})){
         await deleteWorkspaceAttachmentDraft(attachmentKey);if(sourceKey&&(sourceKey==='landing'||sourceKey===workspaceAttachmentDraftKey(attachmentScope)))await deleteWorkspaceAttachmentDraft(sourceKey);const next={key:attachmentKey,draft:{message:'',files:[],updatedAt:Date.now()}};fileDraftRef.current=next;setFileDraft(next);setFileNotice('');
         setAnswers({id:'',values:{}});setNoteOpen(false);onMessage('');
         try{sessionStorage.removeItem(draftKey);}catch{}
@@ -261,12 +272,13 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
     }catch(error){setLocalError(error instanceof Error?error.message:'Your message wasn’t sent. Your draft is saved here so you can try again.');}
     finally{submitRef.current=false;setSending(false);setUploadStatus('');onBusyChange?.(false);}
   }
-  async function decide(step:AssistantStep,decision:'approve'|'skip'){
+  async function decide(step:AssistantStep,decision:'approve'|'skip',permission?:AICreditPermission){
     if(actionDisabled||actionRef.current||step.id!==next?.id)return;
-    const approval=decision==='approve'&&step.action.type==='create_product'&&conversation&&workflow?{conversationId:conversation.id,planId:workflow.id,stepId:step.id}:null;
+    if(decision==='approve'&&step.action.type==='generate_product'&&!permission){const output=step.action as typeof step.action&{delivery?:ProductDelivery;exportFormat?:ProductExportFormat|null};setCreditConsent({kind:'product',context:consentContext,cost:productCost,stepId:step.id,delivery:output.delivery||'in_app',exportFormat:output.exportFormat||null});return;}
+    const approval=decision==='approve'&&['create_product','generate_product'].includes(step.action.type)&&conversation&&workflow?{conversationId:conversation.id,planId:workflow.id,stepId:step.id}:null;
     actionRef.current=true;setActing(true);setLocalError('');
     try{
-      if(!await onAction(step.id,decision))setLocalError('This step could not be saved. Review the message above, then try again.');
+      if(!await onAction(step.id,decision,permission))setLocalError('This step could not be saved. Review the message above, then try again.');
       else if(approval&&productContextRef.current?.conversationId===approval.conversationId&&productContextRef.current.planId===approval.planId)setProductApproval(approval);
     }
     catch{setLocalError('This step could not be saved. Please try again.');}
@@ -274,6 +286,13 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
   }
 
   function dismissProductReady(){setProductReady(null);window.requestAnimationFrame(()=>inputRef.current?.focus({preventScroll:true}));}
+  function approveCreditStep(){
+    if(!creditConsent)return;
+    if(creditConsent.kind==='message'){void submitApproved(creditConsent);return;}
+    const approved=creditConsent;setCreditConsent(null);
+    if(!next||approved.context!==consentContext||approved.cost!==productCost||next.id!==approved.stepId){setLocalError('Your plan or cost changed. Review this step and approve it again.');return;}
+    void decide(next,'approve',{allowGeneration:true,maxCredits:approved.cost,delivery:approved.delivery||'in_app',exportFormat:approved.delivery==='in_app'?null:approved.exportFormat||'pdf'});
+  }
 
   return <div className={`workspace-assistant${isHome?' wa-home':''}`} ref={shellRef}>
     {!isHome&&<header className="wa-heading">
@@ -282,7 +301,7 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
     </header>}
     <div className="wa-layout">
       <section className="wa-thread" aria-label="Workspace assistant conversation" aria-busy={isBusy}>
-        {isHome&&<header className="wa-home-intro"><img src="/brand/fivegen-sparkle-mark.png" width="48" height="48" alt="" aria-hidden="true"/><h1>What would you like to make?</h1><p>An ebook, a design, or a plan for your next launch.</p></header>}
+        {isHome&&<header className="wa-home-intro"><img src="/brand/fivegen-sparkle-mark.png" width="48" height="48" alt="" aria-hidden="true"/><h1>Build a product people can use.</h1><p>Bring your expertise or files. Gen will guide you from a useful offer to your first customers.</p><ol className="wa-journey-path" aria-label="Your product journey"><li>Shape the offer</li><li>Create the product</li><li>Prepare your launch</li><li>Find your first customer</li></ol></header>}
         <div className="wa-transcript" ref={scrollRef} tabIndex={0} aria-label="Conversation history">
           {messages.map((item,index)=>{const designLink=item.role==='assistant'?designStudioReply(item.content):null;return <article key={item.id} className={`wa-message wa-${item.role}`}>
             <span className="wa-avatar" aria-hidden="true">{item.role==='assistant'?<Sparkles size={17}/>:name.slice(0,1).toUpperCase()||'Y'}</span>
@@ -302,9 +321,9 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
             {next.needs.length>0&&<div className="wa-needs"><h3>What’s needed</h3><ul>{next.needs.map((need,index)=><li key={index}>{need}</li>)}</ul></div>}
             <ActionPreview action={next.action} productDestination={resolveProductDestination(next.action,workflow,products,savedResources)} expanded/>
             {next.error&&<p className="wa-inline-error" role="alert">{next.error}</p>}
-            <div className="wa-step-permission"><ShieldCheck size={16} aria-hidden="true"/><p>{next.action.type==='manual'?'Complete this action yourself, then mark it done to move on.':`This creates the draft shown above in ${assistantDestination(next.action)}. Nothing is created until you approve. Execution adds no extra AI generation charge.`}</p></div>
+            <div className="wa-step-permission"><ShieldCheck size={16} aria-hidden="true"/><p>{next.action.type==='manual'?'Complete this action yourself, then mark it done to move on.':next.action.type==='generate_product'?'Review this brief, choose in-app delivery or a downloadable file, then approve the exact AI cost. Gen writes the full product only after that approval.':`This creates the draft shown above in ${assistantDestination(next.action)}. Nothing is created until you approve. Execution adds no extra AI generation charge.`}</p></div>
             {hasDraft&&<p className="wa-unsent-note">Send your draft reply first so Gen can include your changes before you approve.</p>}
-            <div className="wa-step-actions"><button type="button" className="wa-primary" disabled={actionDisabled} onClick={()=>void decide(next,'approve')} aria-describedby={hasDraft?`${statusId}-approval-help`:undefined}>{acting?<Loader2 size={17} className="wa-spin" aria-hidden="true"/>:next.action.type==='manual'?<Check size={17} aria-hidden="true"/>:<Sparkles size={17} aria-hidden="true"/>}{acting?'Saving step…':actionLabel(next.action)}</button><button type="button" className="wa-skip" disabled={actionDisabled} onClick={()=>void decide(next,'skip')}><SkipForward size={15} aria-hidden="true"/>Skip this step</button></div>
+            <div className="wa-step-actions"><button type="button" className="wa-primary" disabled={actionDisabled} onClick={()=>void decide(next,'approve')} aria-describedby={hasDraft?`${statusId}-approval-help`:undefined}>{acting?<Loader2 size={17} className="wa-spin" aria-hidden="true"/>:next.action.type==='manual'?<Check size={17} aria-hidden="true"/>:<Sparkles size={17} aria-hidden="true"/>}{acting?next.action.type==='generate_product'?'Writing your product…':'Saving step…':actionLabel(next.action)}</button><button type="button" className="wa-skip" disabled={actionDisabled} onClick={()=>void decide(next,'skip')}><SkipForward size={15} aria-hidden="true"/>Skip this step</button></div>
             <p className="wa-approval-help" id={`${statusId}-approval-help`}>Want to change anything? Tell Gen in the chat before approving.</p>
           </section>}
           {workflow&&!next&&<div className="wa-plan-finished"><CheckCircle2 size={19} aria-hidden="true"/><div><strong>This plan is complete.</strong><p>Keep chatting to ask a question, improve what you made, or work on your next idea.</p></div></div>}
@@ -316,11 +335,11 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
             {questions.length>0&&<>{!showMessage&&<ChatQuestionStepper questions={questions} index={questionIndex} answered={answered} value={answerFor(questionIndex)} disabled={isBusy} onAnswer={value=>updateAnswer(questionIndex,value)} onIndex={selectQuestion} onSubmit={()=>void submit()}/>}<button type="button" className="wa-note-toggle" aria-expanded={showMessage} onClick={()=>{setNoteOpen(open=>!open);if(!showMessage)window.requestAnimationFrame(()=>inputRef.current?.focus({preventScroll:true}));}} disabled={isBusy}>{showMessage?`Back to questions · ${answered}/${questions.length} answered`:message.trim()?'Review your added note':'Add a note or reply in your own words'}<ChevronDown size={13} aria-hidden="true"/></button></>}
             {(task||productKind)&&<p className="wa-creation-context"><span>{[task,productKind].filter(Boolean).join(' · ')}</span></p>}
             <label htmlFor={inputId} hidden={!showMessage} className={isHome?'wa-sr-only':undefined}>{questions.length?'Anything else?':'Message Gen'}</label>
-            <textarea id={inputId} ref={inputRef} hidden={!showMessage} rows={2} value={message} maxLength={MAX_MESSAGE} disabled={isBusy} placeholder={answered?'Add anything else, or send your answers…':workflow?'Ask anything, refine the plan, or start something new…':isHome?'Tell Gen your idea…':'Tell me what’s on your mind…'} aria-describedby={`${helpId}${tooLong||localError?` ${errorId}`:''}`} aria-invalid={tooLong||Boolean(localError)} onChange={event=>{fileEditsRef.current++;onMessage(event.target.value);setNoteOpen(true);setLocalError('');}} onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing&&event.nativeEvent.keyCode!==229&&!window.matchMedia('(pointer: coarse)').matches){event.preventDefault();void submit();}}}/>
+            <textarea id={inputId} ref={inputRef} hidden={!showMessage} rows={2} value={message} maxLength={MAX_MESSAGE} disabled={isBusy} placeholder={answered?'Add anything else, or send your answers…':workflow?'Ask anything, refine the plan, or start something new…':isHome?'Who can you help, what do you know, and what result could you help them get?':'Tell me what’s on your mind…'} aria-describedby={`${helpId}${tooLong||localError?` ${errorId}`:''}`} aria-invalid={tooLong||Boolean(localError)} onChange={event=>{fileEditsRef.current++;onMessage(event.target.value);setNoteOpen(true);setLocalError('');}} onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing&&event.nativeEvent.keyCode!==229&&!window.matchMedia('(pointer: coarse)').matches){event.preventDefault();void submit();}}}/>
             {!!attachedFiles.length&&<ul className="wa-file-list" aria-label="Files to send">{attachedFiles.map(item=><li key={item.id}><div className="wa-file-chip">{item.file.type.startsWith('image/')?<ImageIcon size={17} aria-hidden="true"/>:<FileText size={17} aria-hidden="true"/>}<span><strong title={item.file.name}>{item.file.name}</strong><small>{Math.max(1,Math.ceil(item.file.size/1024))} KB · {item.uploaded?'Uploaded privately':'Ready to attach'}</small></span><button type="button" disabled={isBusy} aria-label={`Remove ${item.file.name}`} onClick={()=>removeFile(item.id)}><X size={14} aria-hidden="true"/></button></div>{item.uploaded?.warnings.map((warning,index)=><p className="wa-file-warning" key={index}>{warning}</p>)}</li>)}</ul>}
             <input ref={fileInputRef} className="wa-file-input" type="file" multiple accept="image/png,image/jpeg,image/webp,.pdf,.docx,.txt" aria-label="Attach images or documents" disabled={isBusy||!filesReady} onChange={event=>{const files=Array.from(event.target.files||[]);event.target.value='';chooseFiles(files);}}/>
             {(uploadStatus||fileNotice)&&<p className="wa-file-status" role="status">{uploadStatus||fileNotice}</p>}{missingFiles&&<button type="button" className="wa-file-reselect" onClick={()=>{const next={key:fileDraftKey,draft:{...fileDraft.draft,missingFiles:false}};fileDraftRef.current=next;setFileDraft(next);setFileNotice('');}}>Continue without files</button>}
-            <div className="wa-composer-bottom"><button type="button" className="wa-attach" aria-label="Attach images or documents" title="PNG, JPEG, WebP, PDF, DOCX, or TXT · 4 files · 8 MB each" disabled={isBusy||!filesReady||attachedFiles.length>=4} onClick={()=>fileInputRef.current?.click()}><Paperclip size={18} aria-hidden="true"/><span>{isHome?'Add files':'Attach'}</span></button><span className="wa-allowance">{!aiReady?'AI is not connected yet':isBusy?acting?'Saving your approved step…':'Gen is working…':unlimited?'Unlimited planning':remaining>0?`${remaining} included ${remaining===1?'message':'messages'} left`:`${cost} credits per message`}</span><div className="wa-submit-group"><ImageQualityControl value={imageQuality} onChange={setImageQuality} disabled={isBusy}/><button type="submit" disabled={!canSend} className="wa-send">{sending||busy==='planning'?<Loader2 size={17} className="wa-spin" aria-hidden="true"/>:isHome?<ArrowRight size={18} aria-hidden="true"/>:<ArrowUp size={17} aria-hidden="true"/>}<span>{uploadStatus.startsWith('Uploading')?'Uploading…':sending||busy==='planning'?'Thinking…':answered?'Send answers':isHome?'Make it':'Send'}</span></button></div></div>
+            <div className="wa-composer-bottom"><button type="button" className="wa-attach" aria-label="Attach images or documents" title="PNG, JPEG, WebP, PDF, DOCX, or TXT · 4 files · 8 MB each" disabled={isBusy||!filesReady||attachedFiles.length>=4} onClick={()=>fileInputRef.current?.click()}><Paperclip size={18} aria-hidden="true"/><span>{isHome?'Add supporting files':'Attach'}</span></button><span className="wa-allowance">{!aiReady?'AI is not connected yet':isBusy?acting?'Saving your approved step…':'Gen is working…':unlimited?'Unlimited planning':remaining>0?`${remaining} included ${remaining===1?'message':'messages'} left`:`${cost} credits per message`}</span><div className="wa-submit-group"><button type="submit" disabled={!canSend} className="wa-send">{sending||busy==='planning'?<Loader2 size={17} className="wa-spin" aria-hidden="true"/>:isHome?<ArrowRight size={18} aria-hidden="true"/>:<ArrowUp size={17} aria-hidden="true"/>}<span>{uploadStatus.startsWith('Uploading')?'Uploading…':sending||busy==='planning'?'Thinking…':answered?'Send answers':isHome?'Make it':'Send'}</span></button></div></div>
           </form>
           <div className="wa-composer-help" id={helpId}><span>{isHome?'Review every draft before you publish.':'Images and documents are uploaded only when you send. Planning uses your message allowance.'}</span><span className={isHome?'wa-sr-only':'wa-keyboard-hint'}><CornerDownLeft size={12} aria-hidden="true"/>{questions.length&&!showMessage&&questionIndex<questions.length-1?'Enter for next question':'Enter to send'} · Shift + Enter for a new line</span></div>
           {isHome&&<><div className="wa-home-suggestions"><span>Try an idea:</span>{SUGGESTIONS.map(({label,prompt})=><button type="button" key={label} disabled={isBusy} onClick={()=>focusMessage(prompt)}>{label}</button>)}</div><details className="wa-home-options"><summary>Other ways to start</summary><div><button type="button" onClick={()=>onVisit('/build/new?source=upload')}>Import a file</button><button type="button" onClick={()=>onVisit('/build/new?source=manual')}>Write it yourself</button></div></details></>}
@@ -350,18 +369,20 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
             <p className="wa-plan-footnote"><ShieldCheck size={14} aria-hidden="true"/>Only the next step can be approved. You can revise the plan by chatting.</p>
           </div>
       </DialogContent></Dialog>}
-    {productReady&&productReady.conversationId===conversation?.id&&productReady.planId===workflow?.id&&<WorkspaceProductReady key={productReady.key} completion={productReady} onClose={dismissProductReady} onOpen={()=>{setProductReady(null);onVisit(productReady.href);}}/>}
+    <AICreditConsent open={!!creditConsent} title={creditConsent?.kind==='product'?'Generate your product?':'Use Gen for this reply?'} description={creditConsent?.kind==='product'?'Gen will use your confirmed brief and supporting material to write the product. This is one AI generation step.':'Gen will read this message and its attachments, then reply or prepare the next step. Nothing is published or sent to customers.'} cost={creditConsent?.cost||0} included={creditConsent?.cost===0?(unlimited?'Included in your plan':creditConsent.kind==='product'?'Uses 1 included product run':'Uses 1 included planning message'):undefined} onCancel={()=>setCreditConsent(null)} onConfirm={approveCreditStep}>{creditConsent?.kind==='product'&&<ProductDeliveryChoice delivery={creditConsent.delivery||'in_app'} exportFormat={creditConsent.exportFormat||null} onChange={choice=>setCreditConsent(current=>current?{...current,...choice}:null)}/>}</AICreditConsent>
+    {productReady&&productReady.conversationId===conversation?.id&&productReady.planId===workflow?.id&&<WorkspaceProductReady key={productReady.key} completion={productReady} onClose={dismissProductReady} onOpen={()=>{setProductReady(null);onVisit(productReady.href);}} onImages={()=>{setProductReady(null);onVisit('/?project='+encodeURIComponent(productReady.href.slice('/build/'.length))+'&area=media');}} onMarketing={()=>{setProductReady(null);focusMessage(`Help me find the first customer for my saved product “${productReady.title}” (${productReady.href}). Use what you already know. Ask only for missing information, then guide me through the offer, sales page, marketing drafts, suitable images, real buyer feedback and a small outreach plan. Ask permission before each AI step. Do not create another product.`);}}/>}
     <p className="wa-sr-only" role="status" aria-live="polite" aria-atomic="true">{latest?.role==='assistant'?`Gen replied. ${latest.content.slice(0,180)}`:''}</p>
   </div>;
 }
 
 function ActionIcon({action}:{action:AssistantAction}){
-  const Icon=action.type==='create_product'?Package:action.type==='create_campaign'?PenLine:action.type==='create_calendar_event'?CalendarDays:ClipboardList;
+  const Icon=['create_product','generate_product'].includes(action.type)?Package:action.type==='create_campaign'?PenLine:action.type==='create_calendar_event'?CalendarDays:ClipboardList;
   return <Icon size={14} aria-hidden="true"/>;
 }
 
 function ActionPreview({action,expanded=false,productDestination}:{action:AssistantAction;expanded?:boolean;productDestination?:ProductDestination}){
   if(action.type==='manual')return <div className="wa-manual-preview"><h3>Your action</h3><p>{action.instructions}</p></div>;
+  if(action.type==='generate_product')return <section className="wa-generation-brief" aria-label="Your product brief"><h3>{action.title}</h3><p>{action.description}</p><dl className="wa-preview-meta"><div><dt>For</dt><dd>{action.audience}</dd></div><div><dt>Problem to solve</dt><dd>{action.buyerProblem}</dd></div><div><dt>Useful result</dt><dd>{action.outcome}</dd></div><div><dt>Your unique contribution</dt><dd>{action.creatorExpertise||'General guidance requested. Add your own examples and experience during review.'}</dd></div><div><dt>Format</dt><dd>{action.format} · {action.sectionCount} sections · {action.language}</dd></div><div><dt>Delivery</dt><dd>{action.delivery==='in_app'?'In-app product':action.delivery==='download'?'Downloadable file':'In-app product and downloadable file'}{action.exportFormat?` · ${action.exportFormat.toUpperCase()}`:''}</dd></div></dl><details><summary>Generation instructions & preparation</summary><p>{action.instructions}</p>{action.prerequisites&&<p>Before starting: {action.prerequisites}</p>}</details><p className="wa-preview-small">This is the brief, not the finished product. Generate my product shows the cost and asks for your approval before AI writes it.</p></section>;
   return <details className="wa-preview" open={expanded}>
     <summary><BookOpen size={15} aria-hidden="true"/><span>Exact draft to be saved{action.type==='create_product'?` · ${action.sections.length} sections`:action.type==='create_campaign'?` · ${action.items.length} items`:''}</span><ChevronDown size={15} aria-hidden="true"/></summary>
     <div className="wa-preview-content">
@@ -386,7 +407,7 @@ function Result({step,onVisit}:{step:AssistantStep|AssistantResourceReceipt;onVi
   const result=step.result;
   const href=result?.href?.startsWith('/')&&!result.href.startsWith('//')?result.href:null;
   const type='action' in step?step.action.type:step.type;
-  const destination=type==='create_product'?'Products':type==='create_campaign'?'Marketing → Campaigns':type==='create_calendar_event'?'Calendar':'Your next action';
+  const destination=['create_product','generate_product'].includes(type)?'Products':type==='create_campaign'?'Marketing → Campaigns':type==='create_calendar_event'?'Calendar':'Your next action';
   return <div className="wa-result"><CheckCircle2 size={16} aria-hidden="true"/><div><strong>{result?.label||step.title}</strong><p>{result?.summary||'Completed.'}</p>{href&&<a href={href} onClick={event=>{if(!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.altKey){event.preventDefault();onVisit(href);}}}>Open in {destination}<ExternalLink size={12} aria-hidden="true"/></a>}</div></div>;
 }
 
@@ -395,12 +416,12 @@ function resolveProductDestination(action:AssistantAction,workflow:AssistantWork
   if(action.productStepId){
     const index=workflow?.steps.findIndex(step=>step.id===action.productStepId)??-1;
     const step=workflow?.steps[index];
-    if(step?.action.type==='create_product')return {title:step.action.title,id:step.result?.productId||step.result?.resourceId,detail:`${step.status==='completed'?'Created':'Will be created'} in step ${index+1}`};
+    if(step&&['create_product','generate_product'].includes(step.action.type)&&'title' in step.action)return {title:step.action.title,id:step.result?.productId||step.result?.resourceId,detail:`${step.status==='completed'?'Created':'Will be created'} in step ${index+1}`};
     return {title:'Product from an earlier plan step',detail:`Step reference: ${action.productStepId}`};
   }
   if(action.productId){
     const product=products.find(item=>item.id===action.productId);
-    const receipt=resources.find(item=>item.type==='create_product'&&(item.result.productId===action.productId||item.result.resourceId===action.productId));
+    const receipt=resources.find(item=>['create_product','generate_product'].includes(item.type)&&(item.result.productId===action.productId||item.result.resourceId===action.productId));
     return {title:product?.title||receipt?.result.label||receipt?.title||'Existing product',id:action.productId};
   }
   return {title:'No product attached',detail:'Saved to your workspace Calendar'};

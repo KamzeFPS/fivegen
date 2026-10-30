@@ -5,7 +5,6 @@ import {ArrowRight,Camera,ChartNoAxesColumnIncreasing,FileText,Funnel,Lightbulb,
 import Link from 'next/link';
 import {Brand} from './ui-brand';
 import {AppearanceControl} from './appearance';
-import {ImageQualityControl,useImageQuality} from './image-quality-control';
 import {addWorkspaceDraftFiles,readWorkspaceAttachmentDraft,writeWorkspaceAttachmentDraft,type WorkspaceDraftAttachment} from '@/lib/workspace-attachment-draft';
 import './public-home-composer.css';
 
@@ -39,7 +38,6 @@ export function PublicHomeHeader(){
 }
 
 export function PublicHomeComposer(){
-  const [imageQuality,setImageQuality]=useImageQuality();
   const [active,setActive]=useState<TaskId>('idea'),[drafts,setDrafts]=useState(initialDrafts),[kinds,setKinds]=useState<Partial<Record<TaskId,string>>>({idea:'colouring-book'});
   const [files,setFiles]=useState<WorkspaceDraftAttachment[]>([]),[error,setError]=useState(''),[storageWarning,setStorageWarning]=useState(false),[busy,setBusy]=useState(false),[ready,setReady]=useState(false);
   const input=useRef<HTMLTextAreaElement>(null),fileInput=useRef<HTMLInputElement>(null),edited=useRef(false),id=useId();
@@ -59,7 +57,7 @@ export function PublicHomeComposer(){
       <label className="public-home-sr-only" htmlFor={`${id}-message`}>Describe what you would like to make</label>
       <textarea ref={input} id={`${id}-message`} value={message} onChange={event=>{edited.current=true;setDrafts(value=>({...value,[active]:event.target.value}));setKinds(value=>({...value,[active]:undefined}));setError('');}} rows={2} maxLength={3000} disabled={busy} placeholder="Describe your idea. Make something that’s yours…" aria-describedby={`${id}-help${error?` ${id}-error`:''}`}/>
       {files.length>0&&<ul className="public-home-attachments" aria-label="Attached files">{files.map(item=><li key={item.id}><FileText size={16} aria-hidden="true"/><span title={item.file.name}>{item.file.name}<small>{(item.file.size/1024/1024).toFixed(1)} MB · ready</small></span><button type="button" disabled={busy} aria-label={`Remove ${item.file.name}`} onClick={()=>{edited.current=true;setFiles(value=>value.filter(file=>file.id!==item.id));setError('');}}><X size={15}/></button></li>)}</ul>}
-      <div className="public-home-composer-bar"><div className="public-home-attach"><input ref={fileInput} type="file" multiple accept=".png,.jpg,.jpeg,.webp,.pdf,.docx,.txt" aria-label="Attach images, documents or PDFs" tabIndex={-1} className="public-home-sr-only" onChange={addFiles} disabled={busy}/><button type="button" disabled={busy||files.length>=4} onClick={()=>fileInput.current?.click()}><Paperclip size={20} aria-hidden="true"/>Add files</button><span>Images, docs, PDFs</span></div><div className="public-home-submit-group"><ImageQualityControl value={imageQuality} onChange={setImageQuality} disabled={busy}/><button className="public-home-primary" type="submit" disabled={busy||(!message.trim()&&!files.length)}>{busy?<><Loader2 size={18} className="spin"/>Keeping your draft…</>:<>Make it <ArrowRight size={19}/></>}</button></div></div>
+      <div className="public-home-composer-bar"><div className="public-home-attach"><input ref={fileInput} type="file" multiple accept=".png,.jpg,.jpeg,.webp,.pdf,.docx,.txt" aria-label="Attach images, documents or PDFs" tabIndex={-1} className="public-home-sr-only" onChange={addFiles} disabled={busy}/><button type="button" disabled={busy||files.length>=4} onClick={()=>fileInput.current?.click()}><Paperclip size={20} aria-hidden="true"/>Add files</button><span>Images, docs, PDFs</span></div><div className="public-home-submit-group"><button className="public-home-primary" type="submit" disabled={busy||(!message.trim()&&!files.length)}>{busy?<><Loader2 size={18} className="spin"/>Keeping your draft…</>:<>Make it <ArrowRight size={19}/></>}</button></div></div>
     </form>
     {error&&<p className="public-home-composer-error" id={`${id}-error`} role="alert">{error}</p>}
     {storageWarning&&!error&&<p className="public-home-composer-error" role="status">Keep this page open. Your browser could not save these files for sign in.</p>}

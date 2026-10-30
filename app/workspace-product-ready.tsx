@@ -1,36 +1,18 @@
 'use client';
 
-import {useEffect,useRef,useState} from 'react';
-import {ArrowRight,Check,Package} from 'lucide-react';
+import {useRef} from 'react';
+import {ArrowRight,Check,ImageIcon,Package,Sparkles} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
 import type {ProductReadyCompletion} from '@/lib/workspace-product-ready';
 import './workspace-product-ready.css';
 
 /** A confirmed new product save, never a claim that the product is published. */
-export function WorkspaceProductReady({completion,onClose,onOpen}:{completion:ProductReadyCompletion;onClose:()=>void;onOpen:()=>void}){
- const [seconds,setSeconds]=useState(5);
+export function WorkspaceProductReady({completion,onClose,onOpen,onImages,onMarketing}:{completion:ProductReadyCompletion;onClose:()=>void;onOpen:()=>void;onImages?:()=>void;onMarketing?:()=>void}){
  const primaryRef=useRef<HTMLButtonElement>(null),settledRef=useRef(false);
- const timerRef=useRef<ReturnType<typeof setTimeout>|null>(null),openRef=useRef(onOpen);
- openRef.current=onOpen;
- function stopTimer(){if(timerRef.current!==null){clearTimeout(timerRef.current);timerRef.current=null;}}
- function openProduct(){if(settledRef.current)return;settledRef.current=true;stopTimer();openRef.current();}
- function stayInChat(){if(settledRef.current)return;settledRef.current=true;stopTimer();onClose();}
-
- useEffect(()=>{
-  let remaining=5,active=true;settledRef.current=false;setSeconds(remaining);
-  function schedule(){
-   if(!active||settledRef.current||document.hidden)return;
-   timerRef.current=setTimeout(()=>{
-    timerRef.current=null;if(!active||settledRef.current||document.hidden)return;
-    remaining--;setSeconds(remaining);
-    if(remaining===0){settledRef.current=true;openRef.current();}else schedule();
-   },1000);
-  }
-  function visibilityChanged(){stopTimer();if(!document.hidden)schedule();}
-  document.addEventListener('visibilitychange',visibilityChanged);schedule();
-  return()=>{active=false;stopTimer();document.removeEventListener('visibilitychange',visibilityChanged);};
- },[completion.key]);
+ function choose(action:()=>void){if(settledRef.current)return;settledRef.current=true;action();}
+ function openProduct(){choose(onOpen);}
+ function stayInChat(){choose(onClose);}
 
  return <Dialog open onOpenChange={open=>{if(!open)stayInChat();}}>
   <DialogContent className="wa-product-ready" onOpenAutoFocus={event=>{event.preventDefault();primaryRef.current?.focus();}} onCloseAutoFocus={event=>event.preventDefault()}>
@@ -38,14 +20,16 @@ export function WorkspaceProductReady({completion,onClose,onOpen}:{completion:Pr
    <DialogHeader>
     <span className="wa-product-ready-eyebrow">SAVED IN PRODUCTS</span>
     <DialogTitle>Your product draft is ready</DialogTitle>
-    <DialogDescription>Saved privately in your workspace. Review your content before you publish.</DialogDescription>
+    <DialogDescription>{completion.delivery==='download'?'Your downloadable product is saved. Review or export the file, then choose how to launch it.':'Your private product is saved. Review it, then choose the next step toward your first customer.'}</DialogDescription>
    </DialogHeader>
    <div className="wa-product-ready-product"><Package aria-hidden="true"/><span>{completion.title}</span></div>
+   {(onMarketing||onImages)&&<section className="wa-product-ready-next" aria-label="Continue your launch"><h3>What would you like to do next?</h3>{onMarketing&&<Button variant="outline" onClick={()=>choose(onMarketing)}><Sparkles data-icon="inline-start" aria-hidden="true"/><span><strong>Make a marketing plan</strong><small>Messaging, content and first-customer outreach</small></span><ArrowRight data-icon="inline-end" aria-hidden="true"/></Button>}{onImages&&<Button variant="outline" onClick={()=>choose(onImages)}><ImageIcon data-icon="inline-start" aria-hidden="true"/><span><strong>Create product images</strong><small>Choose the style, quality and cost before generating</small></span><ArrowRight data-icon="inline-end" aria-hidden="true"/></Button>}</section>}
    <div className="wa-product-ready-actions">
+    {completion.downloadHref&&<Button asChild size="lg" variant={completion.delivery==='download'?'default':'outline'}><a href={completion.downloadHref} download>Download {completion.exportFormat==='markdown'?'Markdown':completion.exportFormat?.toUpperCase()}</a></Button>}
     <Button ref={primaryRef} size="lg" onClick={openProduct}>Open product<ArrowRight data-icon="inline-end" aria-hidden="true"/></Button>
     <Button variant="ghost" size="lg" onClick={stayInChat}>Stay in chat</Button>
    </div>
-   <p className="wa-product-ready-countdown" aria-live="off">{seconds>0?<>Opening your product in <strong>{seconds}</strong> {seconds===1?'second':'seconds'}…</>:'Opening your product…'}</p>
+   <p className="wa-product-ready-countdown">Every AI step asks for your approval. Nothing is published or sent automatically.</p>
   </DialogContent>
  </Dialog>;
 }

@@ -50,6 +50,7 @@ import type {CreditBalance} from "@/lib/credit-policy";
 import type { ProviderConfig } from "@/lib/ai";
 import {designImageCredits,type DesignImageQuality} from '@/lib/design-image';
 import {ImageQualityControl,useImageQuality} from './image-quality-control';
+import {AICreditConsent} from './ai-credit-consent';
 import './settings-experience.css';
 async function request<T>(
   url: string,
@@ -135,23 +136,23 @@ export function GenerationProgress({
   const inProgress = useRef(false);
   const productRef = useRef(product);
   productRef.current = product;
-  const [creditConfirm,setCreditConfirm]=useState(false),[confirmedCost,setConfirmedCost]=useState(textCost),[allowance,setAllowance]=useState<{remaining:number;unlimited?:boolean}|null>(null),[paymentMode,setPaymentMode]=useState<string|null>(null);
-  async function run(allowCredits=false) {
+  const [creditConfirm,setCreditConfirm]=useState(false),[confirmedCost,setConfirmedCost]=useState(textCost),[allowance,setAllowance]=useState<{remaining:number;unlimited?:boolean}|null>(null),[paymentMode,setPaymentMode]=useState<string|null>(null),[nextStepLabel,setNextStepLabel]=useState('Create the product outline');
+  async function run(approved=false) {
     if (inProgress.current) return;
     if (!aiReady) { onSetup(); return; }
     inProgress.current = true;
     try {
-      const status=await request<{mode:string|null;allowance:{remaining:number;unlimited?:boolean}}>(`/api/products/${product.id}/generate`);
+      const status=await request<{mode:string|null;nextStep?:{label:string}|null;allowance:{remaining:number;unlimited?:boolean}}>(`/api/products/${product.id}/generate`);
       setAllowance(status.allowance);setPaymentMode(status.mode);
-      if(!status.allowance.unlimited&&(status.mode==='credits'||(status.mode!=='included'&&status.allowance.remaining===0))){
-        if(!allowCredits){const pricing=await request<{costs:{text:number}}>('/api/credits');setConfirmedCost(pricing.costs.text);setCreditConfirm(true);return;}
-      }
+      setNextStepLabel(status.nextStep?.label||'Generate the next content step');
+      const paid=!status.allowance.unlimited&&(status.mode==='credits'||(status.mode!=='included'&&status.allowance.remaining===0));
+      if(!approved||(paid&&confirmedCost===0)){const pricing=paid?await request<{costs:{text:number}}>('/api/credits'):null;setConfirmedCost(pricing?.costs.text||0);setCreditConfirm(true);return;}
+      setCreditConfirm(false);
       if (!(await onBeforeGenerate())) return;
       stop.current = false;
       setRunning(true);
       setError("");
-      let done = false;
-      while (!done && !stop.current && mounted.current) {
+      if (!stop.current && mounted.current) {
         const d = await request<{
           product: Product;
           done: boolean;
@@ -159,8 +160,8 @@ export function GenerationProgress({
           total: number;
           mode?:string;
           allowance?:CreditBalance['products'];
-        }>(`/api/products/${product.id}/generate`, "POST", {allowCredits,maxStepCredits:confirmedCost});
-        if (!mounted.current) break;
+        }>(`/api/products/${product.id}/generate`, "POST", {allowCredits:paid,maxStepCredits:paid?confirmedCost:0});
+        if (!mounted.current) return;
         onProduct(d.product);
         if(d.mode)setPaymentMode(d.mode);
         if(d.allowance){setAllowance(d.allowance);onAllowance?.(d.allowance);}
@@ -169,13 +170,12 @@ export function GenerationProgress({
           status: d.done ? "completed" : "queued",
           updated_at: Date.now(),
         });
-        done = d.done;
-        if (done) {
+        if (d.done) {
           toast.success(
             "Your product, supporting files, and launch kit are ready.",
           );
           onComplete();
-        }
+        }else toast.success('This AI step is saved. Approve the next step to continue.');
       }
     } catch (e) {
       if (mounted.current) {
@@ -296,7 +296,7 @@ export function GenerationProgress({
       {job && !completed && (
         <Progress className="generation-meter" value={percent} />
       )}
-      <AlertDialog open={creditConfirm} onOpenChange={setCreditConfirm}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Create with your credits?</AlertDialogTitle><AlertDialogDescription>This generation uses {confirmedCost} credits per completed step, up to {confirmedCost*(job&&job.stage>=0?Math.max(0,product.content.sections.length+1-job.stage):32)} credits for the remaining product. Most full products take 5–12 steps; longer formats can take 32. You can pause between steps. Failed steps return credits, and images and videos are separate.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep editing myself</AlertDialogCancel><AlertDialogAction onClick={()=>void run(true)}>Use credits & generate</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <AlertDialog open={creditConfirm} onOpenChange={setCreditConfirm}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Approve one AI generation step?</AlertDialogTitle><AlertDialogDescription>{nextStepLabel}. This step uses {confirmedCost} credits{confirmedCost===0?' through your included generation access':''}. This approves one model call only. The next outline, section or supporting-file package requires another approval. Failed paid steps are refunded.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Not now</AlertDialogCancel><AlertDialogAction onClick={()=>void run(true)}>Approve step · {confirmedCost} credits</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       {error && (
         <p role="alert" className="generation-error">
           {error}
@@ -335,6 +335,7 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
   const mediaReady=readiness?.[kind]??null;
   const imageCost=designImageCredits(quality),generationCost=kind==='image'?imageCost:160,campaignCost=imageCost*3+160;
   type Submission={kind:'image'|'video';prompt:string;name:string;aspect:string;quality?:DesignImageQuality};
+  const [mediaConsent,setMediaConsent]=useState<{slot:'single'|'campaign';name:string;cost:number;fingerprint:string}|null>(null);
   type RetryRecord={fingerprint:string;ids:string[];done:boolean[]};
   const retryRecords=useRef<Record<string,RetryRecord>>({});
   async function retryRecord(slot:string,inputs:Submission[]){
@@ -349,7 +350,7 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
     persist();return {record:saved,persist,clear};
   }
   async function submit(input:Submission,requestId:string){
-    const result=await request<{id:string;status:string;error?:string}>(`/api/products/${product.id}/assets`,'POST',{...input,requestId});
+    const result=await request<{id:string;status:string;error?:string}>(`/api/products/${product.id}/assets`,'POST',{...input,requestId,maxCredits:unlimited?0:input.kind==='image'?designImageCredits(input.quality||'medium'):160});
     if(result.status==='failed')throw Object.assign(new Error(result.error||'Generation failed. Credits returned.'),{assetStatus:'failed'});
     return result;
   }
@@ -388,13 +389,16 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
     const timer = setTimeout(() => void sync(), 10000);
     return () => clearTimeout(timer);
   }, [assets, sync]);
-  async function generate() {
-    if(busyRef.current)return;busyRef.current=true;
+  async function generate(approved=false) {
+    if(busyRef.current||!mediaReady||prompt.length<15)return;busyRef.current=true;
     setBusy(true);
     setError("");
     let retry:Awaited<ReturnType<typeof retryRecord>>|undefined;
     try {
       const input:Submission={kind,prompt,name:`${product.title} · ${kind==='image'?'Campaign visual':'Promo video'}`.slice(0,100),aspect,...(kind==='image'?{quality}:{})};
+      const quote={slot:'single' as const,name:input.name,cost:unlimited?0:generationCost,fingerprint:JSON.stringify(input)};
+      if(!approved||mediaConsent?.slot!==quote.slot||mediaConsent.fingerprint!==quote.fingerprint||mediaConsent.cost!==quote.cost){setMediaConsent(quote);return;}
+      setMediaConsent(null);
       retry=await retryRecord('single',[input]);
       const result=await submit(input,retry.record.ids[0]);
       if(result.status!=='submitting')retry.clear();
@@ -408,28 +412,30 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
       setBusy(false);
     }
   }
-  async function campaign() {
+  async function campaign(approved=false) {
     if(busyRef.current)return;busyRef.current=true;
     setBusy(true);
     setError("");
     try {
       const inputs:Submission[]=['1:1','9:16','16:9'].map((aspect,i)=>({kind:'image',prompt:(product.content.imagePrompt||prompt).slice(0,2500),name:['Social square','Story creative','Website banner'][i],aspect,quality}));
       inputs.push({kind:'video',prompt:(product.content.videoPrompt||`Cinematic 5-second product promo for ${product.title}. ${product.description}. Clean modern studio, slow camera push, polished lighting, subtle music.`).slice(0,2500),name:'Launch video',aspect:'9:16'});
-      const retry=await retryRecord('campaign',inputs),remaining=inputs.reduce((cost,input,i)=>cost+(retry.record.done[i]?0:input.kind==='image'?imageCost:160),0);
-      if(!unlimited&&balance<remaining)throw new Error(`The remaining campaign needs ${remaining} credits. Add credits first.`);
-      for(const [i,input] of inputs.entries()){
-        if(retry.record.done[i])continue;
-        try{
-          const result=await submit(input,retry.record.ids[i]);
-          if(result.status==='submitting'){setError('A campaign image is still generating. Retry this campaign shortly to continue without duplicating completed assets.');return;}
-          retry.record.done[i]=true;retry.persist();
-        }catch(error){
-          // A confirmed failure may be retried explicitly; uncertain responses keep their ID.
-          if((error as {assetStatus?:string}).assetStatus==='failed'){retry.record.ids[i]=crypto.randomUUID();retry.persist();}
-          throw error;
-        }
+      const retry=await retryRecord('campaign',inputs),index=inputs.findIndex((_,i)=>!retry.record.done[i]);
+      if(index<0){retry.clear();toast.success('Your campaign assets are already saved.');return;}
+      const input=inputs[index],stepCost=unlimited?0:input.kind==='image'?imageCost:160;
+      if(!unlimited&&balance<stepCost)throw new Error(`The next campaign asset needs ${stepCost} credits. Add credits first.`);
+      const quote={slot:'campaign' as const,name:input.name,cost:stepCost,fingerprint:JSON.stringify({inputs,index})};
+      if(!approved||mediaConsent?.slot!==quote.slot||mediaConsent.fingerprint!==quote.fingerprint||mediaConsent.cost!==quote.cost){setMediaConsent(quote);return;}
+      setMediaConsent(null);
+      try{
+        const result=await submit(input,retry.record.ids[index]);
+        if(result.status==='submitting'){setError('This campaign image is still generating. Check its status before approving the next asset.');return;}
+        retry.record.done[index]=true;retry.persist();
+      }catch(error){
+        if((error as {assetStatus?:string}).assetStatus==='failed'){retry.record.ids[index]=crypto.randomUUID();retry.persist();}
+        throw error;
       }
-      retry.clear();toast.success('Your 3 campaign images are saved and your video is queued.');
+      if(retry.record.done.every(Boolean)){retry.clear();toast.success('Your 3 campaign images are saved and your video is queued.');}
+      else toast.success(`${input.name} is saved. Approve the next campaign asset when you are ready.`);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -528,7 +534,7 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
           <h3>{unlimited?'A whole campaign · included.':`A whole campaign · ${campaignCost} credits.`}</h3>
           <p>
             A square post, a story creative, a website banner, and a 5-second
-            promo video.
+            promo video. Each asset has its own cost approval; the remaining assets never start automatically.
           </p>
         </div>
         <button
@@ -643,9 +649,10 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
             <ImagePlus size={27} />
           </span>
           <h3>Your next campaign starts here.</h3>
-          <p>Generate your first visual or let AI build the full campaign.</p>
+          <p>Generate your first visual, or approve campaign assets one at a time.</p>
         </div>
       )}
+      <AICreditConsent open={!!mediaConsent} title={mediaConsent?.slot==='campaign'?'Generate the next campaign asset?':'Generate this asset?'} description={mediaConsent?.name||'Review this image or video before approving generation.'} cost={mediaConsent?.cost||0} included={unlimited?'Included with your access':undefined} onCancel={()=>setMediaConsent(null)} onConfirm={()=>{if(mediaConsent?.slot==='campaign')void campaign(true);else if(mediaConsent?.slot==='single')void generate(true);}}><p>Only this asset will be generated. Nothing is published or sent.</p></AICreditConsent>
     </div>
   );
 }

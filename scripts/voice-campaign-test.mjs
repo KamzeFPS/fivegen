@@ -6,13 +6,13 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { createStorage } from '../runtime/render/storage.mjs';
-import { textCredits } from '../lib/credit-policy.ts';
+import { textCredits,creditPolicy as launchCreditPolicy,creditPacks,monthlyWindow } from '../lib/credit-policy.ts';
 
 const root = resolve('outputs/voice-campaign-qa', randomUUID()), storage = createStorage(root);
 let owner = 'creator-owner', calls = 0, fail = false, invalid = false, invented = false, hold, lastPrompt, lastSystem, unlimited = false, transcriptionAvailable = true;
 class ApiError extends Error { constructor(message, status = 400) { super(message); this.status = status; } }
 const deps = {
-  z, zodToJsonSchema, ApiError, textCredits, database: () => storage.DB, env: { BUCKET: storage.BUCKET },
+  z, zodToJsonSchema, ApiError, textCredits,creditPolicy:{...launchCreditPolicy,monthly:0},creditPacks,monthlyWindow, database: () => storage.DB, env: { BUCKET: storage.BUCKET },
   binding: () => '', providerKey: async () => 'fixture-key',
   identity: async () => { if (!owner) throw new ApiError('Sign in', 401); return { userId: owner }; },
   sameOrigin: request => { if (request.headers.has('origin') && request.headers.get('origin') !== new URL(request.url).origin) throw new ApiError('Invalid origin', 403); },
@@ -39,6 +39,7 @@ Object.assign(deps, await load('lib/creator-context-contract.ts'));
 Object.assign(deps,await load('lib/marketing-destination.ts'));
 deps.listMarketingDestinations=async()=>[];deps.resolveMarketingDestination=async()=>{throw new ApiError('No fixture destination',409);};deps.destinationGuard=()=>({sql:'',values:[]});
 Object.assign(deps, await load('lib/creator-voice.ts'), await load('lib/campaign.ts'), await load('lib/growth.ts'));
+// Isolate purchased-credit reservations/refunds after the Free pool is exhausted.
 Object.assign(deps, await load('lib/credits.ts'));
 Object.assign(deps, await load('lib/campaign-run.ts'));
 Object.assign(deps, await load('lib/creator-voice-server.ts'));
@@ -49,6 +50,7 @@ const libraryRoute = await load('app/api/voice/route.ts'), sourceRoute = await l
 const productId = randomUUID(), otherId = randomUUID(), brief = { icp: 'Independent illustrators', problem: 'Client handoffs take too long', beliefs: 'Processes must be complicated', story: 'I simplified my own studio', promise: 'A repeatable process, no financial guarantee', proof: 'No proof yet', offer: 'My workshop and checklist', tone: 'Plain spoken and warm', cta: 'Request details' };
 for (const [id, account] of [[productId, owner], [otherId, 'another-owner']]) storage.sqlite.prepare("INSERT INTO products (id,owner,slug,title,description,audience,format,color,content,created_at,updated_at) VALUES (?,?,?,?,?,?,?,'orange',?,1,1)").run(id, account, id, 'Illustration workshop', 'Creator-led workshop.', 'Illustrators', 'Video course', JSON.stringify({ sections: [], benefits: [], launch: '' }));
 storage.sqlite.prepare('INSERT INTO wallets (owner,purchased) VALUES (?,200)').run(owner);
+const initialCredits=await deps.creditBalance(owner);assert.equal(initialCredits.starter,0,'Purchased-credit fixture starts without Free credits');assert.equal(initialCredits.total,200);
 storage.sqlite.prepare('INSERT INTO growth_workspaces (product_id,owner,brief,updated_at) VALUES (?,?,?,1)').run(productId, owner, JSON.stringify(brief));
 const body = (url, value, method = 'POST', headers = {}) => new Request('http://localhost' + url, { method, headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(value) });
 const params = id => ({ params: Promise.resolve({ id }) }), campaignUrl = `/api/products/${productId}/campaigns`;
