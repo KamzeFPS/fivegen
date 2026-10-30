@@ -14,7 +14,7 @@ delete globalThis[dependencyKey];
 
 const catalog=walletCatalog(),subscriptions=catalog.filter(offer=>offer.interval);
 assert.deepEqual(subscriptions.map(({id,name,cents,credits,commissionBps,interval})=>({id,name,cents,credits,commissionBps,interval})),[
-  {id:'subscription:pro:month',name:'Creator Pro',cents:2900,credits:2500,commissionBps:300,interval:'month'},
+  {id:'subscription:pro:month',name:'Creator Pro',cents:2900,credits:2000,commissionBps:300,interval:'month'},
   {id:'subscription:scale:month',name:'Scale',cents:9900,credits:6000,commissionBps:0,interval:'month'},
 ]);
 assert.equal(new Set(catalog.map(offer=>offer.id)).size,catalog.length,'Every published offer has one unambiguous server-owned ID');

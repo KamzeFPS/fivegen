@@ -1,5 +1,5 @@
 // USD prices checked against provider documentation on 2026-09-11.
-export const creditPolicy = {starter:0, monthly:0, productsPerMonth:3, image:12, video:160} as const;
+export const creditPolicy = {starter:0, monthly:60, productsPerMonth:3, image:12, video:160} as const;
 export const creditPacks = [
   {id:"starter",credits:1000,cents:1500},
   {id:"studio",credits:2500,cents:3500},

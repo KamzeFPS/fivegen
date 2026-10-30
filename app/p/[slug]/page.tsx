@@ -11,6 +11,7 @@ import {getPublishedFileSale,fileSalesEnabled} from '@/lib/file-sales';
 import {FileSalePageView} from '@/app/file-sale-page-view';
 import FileSalePurchase from '@/app/file-sale-purchase';
 import {getChatGPTUser} from '@/app/chatgpt-auth';
+import {publicHostAppOrigin} from '@/lib/public-host';
 export const dynamic = "force-dynamic";
 export default async function ProductPage({
   params,
@@ -18,12 +19,13 @@ export default async function ProductPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  const canonicalOrigin=await publicHostAppOrigin();
   const builder=await database().prepare('SELECT slug FROM product_builder_publications WHERE slug=?').bind(slug).first();
   if(builder)redirect(`/b/${encodeURIComponent(String(builder.slug))}`);
   const sale=await getPublishedFileSale(slug);
   if(sale){
-    const user=await getChatGPTUser();
-    return <FileSalePageView snapshot={sale.snapshot} coverUrl={sale.snapshot.coverUploadId?`/api/file-sales/cover/${encodeURIComponent(slug)}`:undefined}><FileSalePurchase slug={slug} revisionId={sale.revisionId} ready={sale.readiness.ready} message={sale.readiness.checks.find(c=>!c.ready)?.message||''} email={user?.email}/></FileSalePageView>;
+    const user=canonicalOrigin?null:await getChatGPTUser();
+    return <FileSalePageView appOrigin={canonicalOrigin} snapshot={sale.snapshot} coverUrl={sale.snapshot.coverUploadId?(canonicalOrigin||'')+`/api/file-sales/cover/${encodeURIComponent(slug)}`:undefined}>{canonicalOrigin?<><a className="fs-primary" href={canonicalOrigin+'/p/'+encodeURIComponent(slug)}>Continue on FiveGen</a><p className="fs-notice">Review checkout and access securely on FiveGen.</p></>:<FileSalePurchase slug={slug} revisionId={sale.revisionId} ready={sale.readiness.ready} message={sale.readiness.checks.find(c=>!c.ready)?.message||''} email={user?.email}/>}</FileSalePageView>;
   }
   // The narrow sandbox exception does not reactivate retired legacy stores.
   if(fileSalesEnabled())notFound();

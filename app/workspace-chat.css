@@ -19,6 +19,66 @@
 .workspace-assistant :is(button,textarea) { font-family: inherit; }
 .workspace-assistant button { cursor: pointer; }
 .workspace-assistant button:disabled { cursor: not-allowed; opacity: .48; }
+/* Home is a single invitation to create. The active conversation keeps its docked input. */
+.workspace-assistant.wa-home { max-width:none; padding:0 42px; overflow-y:auto; }
+.wa-home .wa-thread { width:100%; max-width:1010px; margin:0 auto; padding-top:clamp(44px,13.2vh,123px); }
+.wa-home-intro { flex:none; text-align:center; margin-bottom:44px; }
+.wa-home-intro > img { display:block; width:48px; height:48px; object-fit:contain; margin:0 auto 25px; }
+.workspace-assistant .wa-home-intro > h1 { font-size:clamp(31px,3.3vw,48px); font-weight:650; letter-spacing:-1.85px; line-height:1.18; }
+.workspace-assistant .wa-home-intro > p { margin-top:15px; color:var(--wa-muted); font-size:clamp(16px,1.55vw,23px); line-height:1.6; }
+.wa-home .wa-transcript { display:none; }
+.wa-home .wa-compose-dock { padding:0; background:transparent; }
+.wa-home .wa-composer { padding:22px 24px 18px; border-radius:18px; background:var(--wa-panel); }
+.workspace-assistant.wa-home .wa-composer > textarea { min-height:82px; font-size:19px; line-height:1.6; }
+.wa-home .wa-composer-bottom { margin-top:7px; }
+.wa-home .wa-composer-bottom > .wa-allowance { font-size:11px; opacity:.8; margin-left:auto; margin-right:10px; }
+.wa-home .wa-attach { font-size:15px; gap:10px; }
+.wa-home .wa-send { min-height:46px; min-width:132px; padding:10px 19px; gap:11px; border-radius:12px; background:#ff6b0b; border-color:#ff6b0b; color:#fff; font-size:15px; font-weight:500; flex-direction:row-reverse; }
+.wa-home .wa-send:disabled { opacity:1; background:color-mix(in srgb,#ff6b0b 12%,var(--wa-panel)); color:var(--wa-muted); border-color:var(--wa-border); }
+.wa-home .wa-send:hover:not(:disabled) { background:#ed5c00; }
+.wa-home .wa-composer-help { justify-content:center; text-align:center; padding-top:12px; font-size:13px; }
+.wa-home-suggestions { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:12px 23px; margin-top:38px; color:var(--wa-muted); font-size:14px; }
+.wa-home-suggestions > button { border:0; border-radius:3px; padding:7px 0; background:none; color:var(--wa-muted); font-size:14px; text-decoration:underline; text-underline-offset:5px; }
+.wa-home-suggestions > button:hover { color:var(--wa-text); }
+.wa-home-options { margin-top:16px; text-align:center; color:var(--wa-muted); font-size:12px; }
+.wa-home-options > summary { display:inline-block; padding:7px; min-height:32px; cursor:pointer; list-style:none; }
+.wa-home-options > summary::-webkit-details-marker { display:none; }
+.wa-home-options > div { display:flex; justify-content:center; gap:18px; }
+.wa-home-options button { min-height:36px; padding:5px; background:none; border:0; font:inherit; color:var(--wa-text); text-decoration:underline; text-underline-offset:4px; }
+.wa-home-browse { display:flex; flex:none; align-items:center; justify-content:center; gap:10px; align-self:center; margin:auto 0 32px; padding:12px; min-height:44px; background:none; border:0; color:var(--wa-muted); font:inherit; font-size:14px; text-decoration:underline; text-underline-offset:5px; }
+@media(max-height:780px) and (min-width:901px) {
+  .wa-home .wa-thread { padding-top:45px; }
+  .wa-home-intro { margin-bottom:26px; }
+  .wa-home-intro > img { margin-bottom:18px; width:40px; height:40px; }
+  .wa-home-suggestions { margin-top:24px; }
+  .wa-home-browse { margin-bottom:12px; }
+}
+@media(max-width:900px) {
+  .workspace-assistant.wa-home { padding:0 26px; }
+  .wa-home .wa-thread { padding-top:clamp(36px,10vh,95px); }
+  .wa-home-intro { margin-bottom:30px; }
+  .workspace-assistant .wa-home-intro > h1 { font-size:36px; }
+  .wa-home .wa-composer-bottom { flex-wrap:wrap; }
+  .wa-home .wa-composer-bottom > .wa-allowance { display:block; order:3; flex-basis:100%; margin:0; text-align:center; font-size:11px; }
+  .wa-home .wa-send { margin-left:auto; }
+  .wa-home-suggestions { gap:8px 17px; }
+}
+@media(max-width:600px) {
+  .workspace-assistant.wa-home { padding:0 18px; }
+  .wa-home .wa-thread { padding-top:36px; }
+  .wa-home-intro > img { width:36px; height:36px; margin-bottom:22px; }
+  .workspace-assistant .wa-home-intro > h1 { font-size:31px; letter-spacing:-1.1px; }
+  .workspace-assistant .wa-home-intro > p { font-size:16px; max-width:310px; margin:13px auto 0; }
+  .wa-home .wa-composer { padding:18px 17px 15px; border-radius:15px; }
+  .workspace-assistant.wa-home .wa-composer > textarea { min-height:88px; font-size:16px; }
+  .wa-home .wa-send { min-width:112px; min-height:44px; font-size:14px; padding:10px 12px; }
+  .wa-home .wa-attach { font-size:13px; }
+  .wa-home .wa-composer-help { font-size:11px; }
+  .wa-home-suggestions { margin-top:24px; gap:5px 16px; font-size:12px; }
+  .wa-home-suggestions > span { width:100%; }
+  .wa-home-suggestions > button { font-size:12px; min-height:36px; }
+  .wa-home-browse { margin-top:28px; margin-bottom:12px; font-size:13px; }
+}
 .workspace-assistant :is(p,li,dd,strong,.wa-message-copy,.wa-exact-copy) { overflow-wrap: anywhere; }
 .wa-heading { display: flex; align-items: center; justify-content: space-between; flex:none; gap: 24px; margin-bottom: 16px; }
 .wa-heading > div { min-width: 0; }
@@ -302,3 +362,6 @@
 .wa-creation-context{display:flex;align-items:center;gap:7px;width:fit-content;max-width:100%;margin-bottom:10px!important;padding:5px 8px;border:1px solid var(--wa-border);border-radius:6px;background:var(--wa-bg);color:var(--wa-muted);font-size:11px;line-height:1.5}
 .wa-file-reselect{padding:4px 0;border:0;background:none;color:var(--wa-text);font-size:11px;text-decoration:underline;text-underline-offset:3px}
 .wa-design-start{margin:12px 0 3px;min-height:38px;padding:9px 13px;font-size:12px}
+
+.wa-submit-group{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex:none}.wa-submit-group .image-quality-control button{font-size:11px}.wa-home .wa-composer-bottom>.wa-allowance{margin-left:auto}.wa-composer-bottom{flex-wrap:wrap}.wa-composer-bottom>.wa-allowance{margin-left:auto}
+@media(max-width:700px){.wa-submit-group{order:2;width:100%;justify-content:space-between;gap:10px}.wa-submit-group .image-quality-control button{min-height:36px}.wa-submit-group .wa-send{margin-left:auto}.wa-composer-bottom>.wa-allowance{order:3;flex-basis:100%;text-align:center;margin:0}.wa-home .wa-composer-bottom>.wa-allowance{order:3}}

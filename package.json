@@ -18,7 +18,7 @@
     "db:generate": "drizzle-kit generate",
     "test:journey": "node scripts/journey-integration-test.mjs",
     "test:referrals": "node scripts/referral-test.mjs",
-    "test:credits": "node scripts/credits-test.mjs && node scripts/generation-credit-test.mjs && node scripts/commission-test.mjs",
+    "test:credits": "node scripts/free-monthly-credits-test.mjs && node scripts/credits-test.mjs && node scripts/generation-credit-test.mjs && node scripts/commission-test.mjs",
     "test:paddle": "node scripts/paddle-test.mjs && node scripts/paddle-webhook-test.mjs",
     "test:wallets": "node scripts/wallet-billing-test.mjs && node scripts/admin-credit-grant-test.mjs && node scripts/wallet-readiness-test.mjs && node scripts/commerce-readiness-test.mjs",
     "test:file-sales": "node scripts/file-upload-test.mjs && node scripts/file-sales-test.mjs && node scripts/file-sale-boundary-test.mjs",
@@ -56,9 +56,11 @@
     "test:funnel-builder": "node scripts/funnel-builder-test.mjs && node scripts/funnel-builder-navigation-test.mjs && node scripts/funnel-journey-ui-test.mjs",
     "test:calendar": "node scripts/workspace-calendar-test.mjs && node scripts/workspace-calendar-ui-test.mjs",
     "test:appearance": "node scripts/appearance-test.mjs && node scripts/generate-appearance-surfaces.cjs --check",
-    "test:design-studio": "node scripts/design-studio-ui-test.mjs && node scripts/builder-design-generation-test.mjs && node scripts/design-export-test.mjs && node scripts/design-integration-test.mjs",
+    "test:design-studio": "node scripts/image-quality-control-test.mjs && node scripts/design-studio-ui-test.mjs && node scripts/design-image-generation-test.mjs && node scripts/design-image-upload-privacy-test.mjs && node scripts/builder-design-generation-test.mjs && node scripts/design-export-test.mjs && node scripts/design-integration-test.mjs",
     "test:workspace-attachments": "node scripts/workspace-attachments-test.mjs && node scripts/chat-composer-ui-test.mjs",
-    "preview:design-studio": "node scripts/design-studio-preview.mjs"
+    "preview:design-studio": "node scripts/design-studio-preview.mjs",
+    "test:marketing-images": "node scripts/marketing-image-test.mjs && node scripts/marketing-image-ui-test.mjs",
+    "test:domains": "node scripts/workspace-domains-test.mjs && node scripts/workspace-domains-ui-test.mjs && node scripts/public-host-actions-test.mjs && node scripts/creator-catalog-test.mjs && node scripts/catalog-host-test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

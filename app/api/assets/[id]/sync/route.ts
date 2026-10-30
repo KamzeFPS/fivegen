@@ -27,6 +27,17 @@ export async function POST(
     if (!a.remote)
       throw new ApiError("The provider has not returned a job yet.", 409);
     const remote = JSON.parse(String(a.remote));
+    // New OpenAI images finish in their original request. Polling must never
+    // reinterpret their metadata as a historical FAL job or start another call.
+    if (remote.provider === 'openai') {
+      if (a.status === 'submitting' && typeof remote.leaseExpiresAt === 'number' && remote.leaseExpiresAt <= Date.now()) {
+        const expired = await db.prepare("UPDATE assets SET status='failed',error=? WHERE id=? AND owner=? AND status='submitting' AND remote=?")
+          .bind('This image request could not be confirmed. Credits returned. Start a new generation when ready.',id,u.userId,a.remote).run();
+        if (expired.meta.changes) await refundCredits(id);
+      }
+      const current = await db.prepare('SELECT status,error FROM assets WHERE id=? AND owner=?').bind(id,u.userId).first();
+      return Response.json({status:current?.status,...(current?.error?{error:current.error}:{})});
+    }
     const key = await providerKey(u.userId, "fal");
     const headers = { Authorization: `Key ${key}` };
     for (const link of [remote.statusUrl, remote.responseUrl])

@@ -1,0 +1,4 @@
+import {sqliteTable,text,integer,primaryKey,uniqueIndex} from 'drizzle-orm/sqlite-core';
+export const workspaceDomainBases=sqliteTable('workspace_domain_bases',{baseDomain:text('base_domain').primaryKey(),firstSeenAt:integer('first_seen_at').notNull()});
+export const workspaceDomains=sqliteTable('workspace_domains',{owner:text('owner').primaryKey(),baseDomain:text('base_domain').notNull(),subdomain:text('subdomain'),version:integer('version').notNull().default(1),operationToken:text('operation_token').notNull(),updatedAt:integer('updated_at').notNull()},table=>[uniqueIndex('workspace_domain_hostname').on(table.baseDomain,table.subdomain)]);
+export const workspaceProductPaths=sqliteTable('workspace_product_paths',{owner:text('owner').notNull(),productId:text('product_id').notNull(),path:text('path').notNull()},table=>[primaryKey({columns:[table.owner,table.productId]}),uniqueIndex('workspace_product_path').on(table.owner,table.path)]);

@@ -32,6 +32,17 @@ function deterministicDesign(request){
 async function guardedFetch(input,init){
  const target=new URL(typeof input==='string'||input instanceof URL?input:input.url);
  if(local(target.hostname))return originalFetch(input,init);
+ if(target.href==='https://api.openai.com/v1/images/generations'){
+  assert.equal(init?.method||(input instanceof Request?input.method:'GET'),'POST');
+  const raw=typeof init?.body==='string'?init.body:input instanceof Request?await input.clone().text():'',body=JSON.parse(raw);
+  assert.equal(body.model,'gpt-image-2');assert.ok(['low','medium','high'].includes(body.quality));assert.ok(['1024x1024','1536x1024','1024x1536','1536x864','864x1536'].includes(body.size));
+  interceptedCalls++;
+  if(String(body.prompt).includes('[fixture-fail]'))return Response.json({error:{code:'synthetic_image_failure',message:'Local synthetic failure. No provider request occurred.'}},{status:503});
+  const {createCanvas,loadImage}=require('@napi-rs/canvas'),[width,height]=body.size.split('x').map(Number),canvas=createCanvas(width,height),context=canvas.getContext('2d'),mark=await loadImage(readFileSync(resolve(appRoot,'public/brand/fivegen-sparkle-mark.png')));
+  context.drawImage(mark,width*.25,height*.15,width*.5,width*.5);context.fillStyle='#9d470c';context.font=Math.round(width*.045)+'px sans-serif';context.textAlign='center';context.fillText('LOCAL DEMO ARTWORK',width/2,height*.78);context.font=Math.round(width*.025)+'px sans-serif';context.fillText('GPT Image 2 request · '+body.quality+' quality',width/2,height*.84);
+  const format=body.output_format==='jpeg'?'jpeg':'png',bytes=canvas.toBuffer(format==='jpeg'?'image/jpeg':'image/png');
+  return Response.json({created:Math.floor(Date.now()/1000),data:[{b64_json:bytes.toString('base64')}],quality:body.quality,size:body.size,output_format:format,background:body.background,usage:{input_tokens:0,output_tokens:0,total_tokens:0}},{headers:{'x-request-id':'synthetic-local-image-response'}});
+ }
  if(target.href==='https://api.openai.com/v1/responses'){
   assert.equal(init?.method||(input instanceof Request?input.method:'GET'),'POST','Only the synthetic design generation POST is intercepted.');
   const raw=typeof init?.body==='string'?init.body:input instanceof Request?await input.clone().text():'',body=JSON.parse(raw);
@@ -66,7 +77,7 @@ Object.assign(process.env,{FIVEGEN_RUNTIME:'render',NODE_ENV:'production',FIVEGE
 const {createStorage}=await import('../runtime/render/storage.mjs'),storage=createStorage(dataRoot),db=storage.sqlite,session=randomBytes(32).toString('base64url'),now=Date.now();
 assert.ok(db.prepare('SELECT id FROM products WHERE id=? AND owner=?').get(productId,owner));
 db.prepare('INSERT INTO render_sessions(hash,user_id,email,name,expires) VALUES(?,?,?,?,?)').run(createHash('sha256').update(session).digest('base64url'),owner,email,'Alex Morgan',now+86400000);storage.close();
-const info={...previous,synthetic:true,harness:'editable-design-studio-v1',providerCalls:false,entryURL:`http://localhost:${entryPort}/design-preview`,appURL:`http://localhost:${appPort}/build/${productId}?area=design`,productId,dataRoot,metadataPath,note:'Isolated synthetic records. Only editable design generation is intercepted using local vector templates. No real AI, payment, email or external requests. Prompt [fixture-fail] simulates provider failure and refund. Set page count2 for a two-page colouring-book or invitation proposal.'};
+const info={...previous,synthetic:true,harness:'editable-design-studio-v1',providerCalls:false,entryURL:`http://localhost:${entryPort}/design-preview`,appURL:`http://localhost:${appPort}/build/${productId}?area=design`,productId,dataRoot,metadataPath,note:'Isolated synthetic records. Editable vector generation and GPT Image 2 artwork are intercepted using clearly labelled local fixtures. No real AI, payment, email or external requests. Prompt [fixture-fail] simulates provider failure and refund. Set page count2 for a two-page colouring-book or invitation proposal.'};
 if(process.argv.includes('--verify')){
  const envelope=spec=>({instructions:"You are FiveGen's editable visual design artist.",input:'Return only JSON.\n\nRequest:\n'+JSON.stringify({designRequest:{kind:'colouring-book',pageCount:2,width:794,height:1123,prompt:'Two original woodland colouring pages',...spec},savedProduct:{title:'Local demo',language:'English'},status:'Private editable design proposal. Apply or append requires creator review; nothing is published.'})});
  for(const kind of ['colouring-book','invitation']){const response=await guardedFetch('https://api.openai.com/v1/responses',{method:'POST',body:JSON.stringify(envelope({kind}))}),payload=await response.json(),document=JSON.parse(payload.output[0].content[0].text);assert.equal(document.pages.length,2);assert.equal(document.kind,kind);assert.ok(document.pages.every(page=>!('id'in page)&&page.elements.length>10&&page.elements.every(element=>!('id'in element)&&element.type!=='image')));}
@@ -89,7 +100,17 @@ if(!process.argv.includes('--seed-only')&&!process.argv.includes('--verify')){
   const failed=await request(`/api/builder/${checkProductId}/design/generate`,{method:'POST',body:JSON.stringify({...generation,requestId:randomUUID(),prompt:'[fixture-fail]'})});assert.equal(failed.status,502);assert.equal((await json('/api/credits')).balance.total,beforeCredits-10,'Synthetic provider failure refunds its debit');
   await json(`/api/builder/${checkProductId}`,{method:'PATCH',body:JSON.stringify({expectedVersion:checkWorkspace.version,draft:{...checkWorkspace.draft,studio:{...checkWorkspace.draft.studio,design:result.document}}})});
   const exports={};for(const format of ['json','svg','pdf','zip']){const response=await request(`/api/builder/${checkProductId}/design/export?format=${format}`);assert.equal(response.status,200,format+' export failed');assert.equal(response.headers.get('cache-control'),'private, no-store');const bytes=new Uint8Array(await response.arrayBuffer());assert.ok(bytes.length>100);if(format==='pdf')assert.equal(Buffer.from(bytes.subarray(0,5)).toString(),'%PDF-');if(format==='zip')assert.equal(Buffer.from(bytes.subarray(0,2)).toString(),'PK');exports[format]=bytes.length;}
-  info.httpCheck={passed:true,checkProductId,generationPages:2,spent:10,duplicateCalls:0,failureRefunded:true,exports};writeFileSync(metadataPath,JSON.stringify(info,null,2));
+  const capability=await json(`/api/builder/${checkProductId}/design/image`);assert.equal(capability.model,'gpt-image-2');assert.equal(capability.ready,true);assert.deepEqual(capability.costs,{low:4,medium:12,high:40});
+  const imageWorkspace=await json(`/api/builder/${checkProductId}`),beforeImages=(await json('/api/credits')).balance.total,imageResults=[];
+  for(const quality of ['low','medium','high']){
+   const input={expectedVersion:imageWorkspace.version,requestId:randomUUID(),maxCredits:capability.costs[quality],prompt:'Local demo artwork to verify the editable image-layer flow.',quality,size:'1024x1024',background:'transparent'},calls=interceptedCalls;
+   const image=await json(`/api/builder/${checkProductId}/design/image`,{method:'POST',body:JSON.stringify(input)});assert.equal(image.quality,quality);assert.equal(image.model,'gpt-image-2');assert.equal(image.spent,capability.costs[quality]);assert.equal(image.upload.width,1024);assert.equal(image.upload.height,1024);
+   const replay=await json(`/api/builder/${checkProductId}/design/image`,{method:'POST',body:JSON.stringify(input)});assert.equal(replay.upload.id,image.upload.id);assert.equal(interceptedCalls,calls+1,'An image retry replays its stored result without another provider request');
+   const download=await request(`/api/uploads/${image.upload.id}`);assert.equal(download.status,200);assert.equal(download.headers.get('content-type'),'image/png');imageResults.push(image);
+  }
+  assert.equal((await json('/api/credits')).balance.total,beforeImages-56);
+  const imageFailure=await request(`/api/builder/${checkProductId}/design/image`,{method:'POST',body:JSON.stringify({expectedVersion:imageWorkspace.version,requestId:randomUUID(),maxCredits:40,prompt:'[fixture-fail]',quality:'high',size:'1024x1024'})});assert.ok(imageFailure.status>=400);assert.equal((await json('/api/credits')).balance.total,beforeImages-56,'A provider failure returns the selected image credits');
+  info.httpCheck={passed:true,checkProductId,generationPages:2,spent:10,duplicateCalls:0,failureRefunded:true,exports,imageQualities:imageResults.map(image=>({quality:image.quality,spent:image.spent,model:image.model})),imageFailureRefunded:true};writeFileSync(metadataPath,JSON.stringify(info,null,2));
  }
 }
 console.log(JSON.stringify(info));

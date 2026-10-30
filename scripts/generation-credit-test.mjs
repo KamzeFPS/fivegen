@@ -5,7 +5,10 @@ import {z} from 'zod';
 import {zodToJsonSchema} from 'zod-to-json-schema';
 import {DatabaseSync} from 'node:sqlite';
 import {AsyncLocalStorage} from 'node:async_hooks';
-import {creditPolicy,creditPacks,textCredits,monthlyWindow} from '../lib/credit-policy.ts';
+import {creditPolicy as launchCreditPolicy,creditPacks,textCredits,monthlyWindow} from '../lib/credit-policy.ts';
+// Isolate purchased-credit consent/refunds after Free credits are exhausted;
+// free-monthly-credits-test exercises the actual 60-credit launch policy.
+const creditPolicy={...launchCreditPolicy,monthly:0};
 const sqlite=new DatabaseSync(':memory:');
 for(const file of fs.readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())sqlite.exec(fs.readFileSync('drizzle/'+file,'utf8'));
 const stmt=(sql,args=[])=>({sql,args,bind:(...v)=>stmt(sql,v),first:async()=>sqlite.prepare(sql).get(...args)||null,all:async()=>({results:sqlite.prepare(sql).all(...args)}),run:async()=>({meta:{changes:sqlite.prepare(sql).run(...args).changes}})});

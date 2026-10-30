@@ -3,7 +3,10 @@ import fs from 'node:fs';
 import ts from 'typescript';
 import {DatabaseSync} from 'node:sqlite';
 import {AsyncLocalStorage} from 'node:async_hooks';
-import {creditPolicy,creditPacks,monthlyWindow,commissionAmount,commissionRate} from '../lib/credit-policy.ts';
+import {creditPolicy as launchCreditPolicy,creditPacks,monthlyWindow,commissionAmount,commissionRate} from '../lib/credit-policy.ts';
+// These purchased-credit/debt fixtures start after the complimentary allowance
+// is exhausted. The actual 60-credit policy is covered by free-monthly-credits-test.
+const creditPolicy={...launchCreditPolicy,monthly:0};
 
 // Run the actual credit SQL against SQLite; only D1 transport and Stripe are mocked.
 const sqlite=new DatabaseSync(':memory:');

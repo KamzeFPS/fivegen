@@ -4,7 +4,7 @@ import type { Brief } from "@/lib/product";
 export function Brand({tone = 'auto'}: {tone?: 'auto' | 'dark' | 'light'} = {}) {
   return (
     <span className="brand" data-brand-tone={tone} role="img" aria-label="FiveGen">
-      {(tone === 'auto' ? ['dark', 'light'] : [tone]).map(variant => <img key={variant} className={`brand-lockup brand-lockup-${variant}`} src={`/brand/fivegen-sparkle-${variant}.webp`} alt="" aria-hidden="true" width="1494" height="330" decoding="async" />)}
+      {(tone === 'auto' ? ['dark', 'light'] : [tone]).map(variant => <img key={variant} className={`brand-lockup brand-lockup-${variant}`} src={`/brand/fivegen-sparkle-${variant}.webp`} alt="" aria-hidden="true" width="181" height="40" decoding="async" />)}
     </span>
   );
 }

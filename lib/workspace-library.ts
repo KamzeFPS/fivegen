@@ -5,18 +5,18 @@ export type WorkspaceBuilderSummary={productId:string;type:BuilderType;unitCount
 export type WorkspaceFileSummary={productId:string;pagePublished?:boolean;salesPagePublic?:boolean;selling?:boolean;canonicalPath?:string;coverUrl?:string};
 export type ProductFilter='all'|'public'|'published'|'selling'|'draft'|'archived';
 export type ProductSort='updated'|'title';
-export type WorkspaceView='create'|'overview'|'library'|'crm'|'credits'|'connections'|'creator-library'|'calendar'|'admin';
+export type WorkspaceView='create'|'overview'|'library'|'marketing'|'design'|'crm'|'credits'|'connections'|'creator-library'|'domains'|'calendar'|'admin';
 
-export function initialWorkspaceView(signedIn:boolean,query:URLSearchParams):WorkspaceView{
+export function initialWorkspaceView(_signedIn:boolean,query:URLSearchParams):WorkspaceView{
  if(query.has('billing'))return 'credits';
  if(query.get('connect')==='mcp')return 'connections';
  const requested=query.get('view');
- if(['create','overview','library','crm','credits','connections','creator-library','calendar','admin'].includes(requested||''))return requested as WorkspaceView;
- if(['marketing','vsl','funnel'].includes(requested||''))return 'library';
+ if(['create','overview','library','marketing','design','crm','credits','connections','creator-library','domains','calendar','admin'].includes(requested||''))return requested as WorkspaceView;
+ if(['vsl','funnel'].includes(requested||''))return 'marketing';
  // A saved conversation or product is an explicit task, even if it is no
- // longer found. Do not replace its recovery screen with a dashboard.
+ // longer found. Keep its recovery screen in Home.
  if(query.has('conversation')||query.has('project'))return 'create';
- return signedIn?'overview':'create';
+ return 'create';
 }
 
 /** A published page and a product currently accepting payments are separate states. */

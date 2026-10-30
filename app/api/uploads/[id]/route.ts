@@ -7,10 +7,11 @@ export async function GET(req:Request,{params}:{params:Promise<{id:string}>}){tr
  const {id}=await params,a=await database().prepare("SELECT * FROM uploads WHERE id=? AND status='completed'").bind(id).first();if(!a)throw new ApiError("File not found.",404);
  const p=await database().prepare("SELECT * FROM products WHERE id=?").bind(a.product_id).first();
  const voiceOnly=String(a.object_key).startsWith("voice/")||await database().prepare("SELECT id FROM creator_voice_sources WHERE upload_id=? LIMIT 1").bind(id).first();
+ const designArtwork=String(a.object_key).startsWith('design-images/');
  const retainedBrand=!p&&await database().prepare('SELECT id FROM page_brand_presets WHERE icon_upload_id=? AND owner=? LIMIT 1').bind(id,a.owner).first();
- // Creator source recordings stay owner-only even if referenced accidentally
- // by a public funnel, course or historical paid snapshot.
- if(voiceOnly||retainedBrand){const user=await identity();if(user.userId!==a.owner)throw new ApiError("File not found.",404);}
+ // Private source recordings and generated design originals stay owner-only.
+ // Buyer design exports resolve only entitled snapshot assets internally.
+ if(voiceOnly||retainedBrand||designArtwork){const user=await identity();if(user.userId!==a.owner)throw new ApiError("File not found.",404);}
  else {
    if(!p)throw new ApiError("Product not found.",404);
    const funnel=JSON.parse(String(p.commerce||"{}")).funnel;

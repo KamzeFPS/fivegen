@@ -12,7 +12,8 @@ try{
  db.prepare("UPDATE creator_catalog_domains SET ownership_verified_at=1,dns_verified_at=1,platform_status='connected'").run();assert.equal(call(),null,'TLS is a separate platform check');
  db.prepare("UPDATE creator_catalog_domains SET tls_status='active'").run();assert.equal(call().path,'/creator/my-studio');
  assert.equal(call('/creator/my-studio').status,200);assert.equal(call('/assets/main.js').status,200);
- for(const path of ['/api/account/catalog','/signin','/account','/customer','/creator/another-studio','/assets/../api/workspace'])assert.ok([400,404].includes(call(path).status),path);
+ for(const path of ['/api/account/catalog','/account','/creator/another-studio','/assets/../api/workspace'])assert.ok([400,404].includes(call(path).status),path);
+ for(const path of ['/signin','/customer'])assert.equal(call(path).canonical,true,'Account links redirect to the trusted origin without proxying sessions');
  assert.equal(call('/','POST').status,405);assert.equal(call('/','GET','unrecognized.test'),null);
  db.prepare('UPDATE creator_catalogs SET published_at=NULL').run();assert.equal(call(),null,'Pausing the catalog removes its hostname route immediately');
  console.log('Catalog hostname passed: only verified platform/TLS states route, public content/assets only, no customer/account/auth/API/actions, immediate pause rollback.');

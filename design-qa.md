@@ -1,51 +1,78 @@
-# FiveGen landing and editable Design Studio QA — 2026-10-30
+# FiveGen Conversation First workspace — design QA
+
+Date: 2026-10-30
 
 final result: passed
 
-## Visual truth and scope
+## Selected target
 
-The user selected option 2, replacing the earlier option 1 selection. Exact source: `/var/folders/86/cm4skwb14sn12224ft91gk6c0000gn/T/codex-clipboard-0bc74700-7a30-4b65-9c5c-4d566dec19c6.png` (1374 × 1145 pixels). The later user instruction removes the showcase caption and every arrow/play/pause icon, retaining slow automatic scrolling with hover pause.
+The third displayed interior design (Conversation First), refined with Marketing and Design in the global sidebar and creation only on Home. Exact revised target: `outputs/workspace-selected-2026-10-30/selected-reference.png`.
 
-Implementation: `http://localhost:59908/`. Local production build with isolated synthetic records. Design Studio: `http://localhost:5249/design-preview`. Chat: `http://localhost:5219/chat-preview`. The fixtures block all external network/provider/payment/email calls; AI replies are deterministic fixtures passing through the actual application routes, storage and credit logic. Production credentials were not opened or changed.
+## Visual verification
 
-Final production build captured and compared against the source at the same1374 ×1145 viewport and1:1 pixel density. Full comparison: `outputs/final-design-2026-10-30/comparison-final.jpg`. Focused typography/composer comparison: `outputs/final-design-2026-10-30/hero-detail-final.jpg`. Latest implementation screenshot: `outputs/final-design-2026-10-30/landing-final.png`; settled scrolled showcase with glass header and no controls: `outputs/final-design-2026-10-30/showcase-final.png`. No actionable P0/P1/P2 findings remain.
+Opened the reference and actual 1697 × 927 Home together in `comparison-final.jpg`, then inspected the composer crop in `composer-comparison.jpg`. The implementation preserves the single quiet toolbar, orange sparkle brand, named left navigation, centered creation input, generous whitespace and quiet examples. Actual recent products replace mock names. The empty Make it control is deliberately disabled until a prompt or file is supplied; the reviewed mock shows an enabled control. The requested hide/show toggle is added beside the logo. Current allowance remains visible, including on mobile. Manual creation/import and recent chats remain secondary disclosures.
 
-## Comparison history
+Checked light and dark Home and a 390 × 844 phone layout. No horizontal overflow, clipped text or overlapping controls in the accepted captures. The global sidebar collapses without leaving an empty gutter. Product editors retain native product navigation and open global navigation in a drawer rather than adding another permanent column.
 
-1. `outputs/final-design-2026-10-30/comparison-before.jpg` combines the approved reference and first 1374 × 1145 browser capture, 1 CSS pixel per image pixel. P1: handwritten/grid assets were missing in the first build. Fixed by generating individual rasters and using optimized WebP delivery. P2: headline was too light and the showcase began too low. Fixed weight780, line-height.99, hero spacing and larger composer type.
-2. `outputs/final-design-2026-10-30/comparison-after.jpg` and `hero-detail-comparison.jpg` combine source and revised implementation at identical density and viewport. Grid/note are visible, major region proportions and heavy two-line headline restored. P2: small composer controls enlarged; additional caption and playback controls removed at the user's instruction. Slow seamless scrolling replaces the earlier reversing strip.
-3. Browser at705px found the invisible appearance select extending beyond its icon container and into Sign in. Fixed scoped padding/min-width/box sizing. Final geometry passed:705px viewport/document width705; appearance hit area ends491.5px and Sign in begins504.5px, so they do not overlap. Desktop select width38px is contained in its icon control.
-4. Design Studio at390px found the library squeezed out by the focused canvas. Fixed a dedicated Library drawer, accessible icon control names, and direct Gen entry opens the drawer. Phone screenshot `outputs/final-design-2026-10-30/design-studio-mobile.png`; pages can be selected and the drawer closes back to the fitted canvas. The direct Gen entry drawer regression also passes actual handler tests.
+## Corrected blocker
 
-## Required fidelity surfaces
+The first drawer inherited Tailwind individual translation (-50%, -50%) from the centered dialog, even though transform had been reset. This reproduced the user's clipped overlay report. The final drawer explicitly resets translate, transform and animation, overrides the generic dialog padding/radius, and has an accessible close control. Accepted geometry: at 1366 × 768 the drawer is x0/y0/320 × 768; at 705 × 844 and 390 × 844 it is x0/y0/320 × 844. No offscreen half-panel remains. X dismissal restores focus to the persistent navigation toggle; queued navigation restores focus before invoking the existing parent guard.
 
-- **Fonts/typography:** locally hosted variable Inter; heading780, two lines on desktop, intentional responsive reflow on phones. Controls enlarged after comparison; no replacement raster UI text. Existing Noto fonts serve editable canvas typography and offline PDF/SVG exports.
-- **Spacing/layout:** same1374 ×1145 reference/browser view at1:1. Source is unframed page content, so no browser/device frame normalization required. Centered930px composer, underlined feature tabs, image showcase and transparent-to-glass sticky header. Intentional auth/credit disclosure is additional functional copy. Desktop,705px and390px checks included.
-- **Colors/tokens:** warm cream, dark ink and FiveGen orange; shared light/dark preference and correct brand variants. Dark theme keeps contrast and intentional product art colors. No theme recolouring of authored designs or exported art.
-- **Images/assets:** all decorative and product imagery is generated raster art. Supplied FiveGen brand reused. Five independent mockup images plus grid and transparent handwritten cue total about730KB optimized WebP. Originals retained outside public delivery in `outputs/final-design-2026-10-30/asset-originals/`. Product images are examples, not attributed customer work or evidence of sales.
-- **Copy/content:** heading and subtitle follow approved option2; task names and chips reflect actual app entry paths. No invented ratings, customers or outcomes. Make it preserves the draft for sign in; sending and paid design generation require explicit user action. User's removal of strip caption/controls supersedes the intermediate implementation.
+## Browser interactions verified
 
-## Interactions and validation
+- Desktop hide/show and preference survival after refresh.
+- Home preset fills the actual prompt; Make it sends through the existing assistant. Synthetic questions arrive in the input section, separate from conversation history.
+- Marketing requires an explicit product selection; Campaigns opens that product's native Campaign Studio.
+- Global navigation inside a product opens the drawer; choosing Design closes it and opens the Design hub.
+- An existing Design hub product opens its native editable canvas.
+- Phone drawer opens and closes, with all named destinations and visible current allowance.
+- Sign out returns to the anonymous landing page. Local fixture session restored after this check.
+- Light/dark appearance controls remain available. Browser error log was empty at the accepted final Home capture.
 
-Browser-tested actual handlers/routes: template selection and review, text edit, numeric positioning, save, image upload as a separate layer, freehand stroke, undo, append two AI-fixture pages, reorder pages, download PDF and PNG. Actual downloaded PDF has1 page at450 ×630pt; PNG is1200 ×1680. Server tests cover all-page export and frozen buyer delivery, ownership and denied access. Proposal is never automatically applied or published.
+## Checks
 
-Chat browser flow: select image+PDF → chips remain local → explicit Send → private upload → actual multimodal fixture response with image count and extracted PDF sentinel → private historical image download. Narrow safe Design Studio action carries the preceding creative brief into the actual generation input and selects Colouring book. No arbitrary model link is activated.
+Production build, full TypeScript, focused navigation toggle and tool-hub tests, workspace-library tests, chat composer tests, builder navigation tests, marketing navigation checks, generated appearance reproducibility and whitespace validation passed. Focused lint has no errors (one raw-image warning for the supplied brand mark).
 
-Landing browser flow: per-task edited prompt survives switching tabs, file selected, Make it opens `/signin?return_to=%2F%3Fview%3Dcreate%26intent%3D1` with no text/file data inURL, Back restores both prompt and PDF. No account was created and real OAuth was not exercised. IndexedDB tests cover authenticated restoration, account/chat isolation and the delayed legacy-frame overwrite race.
+## Evidence
 
-Hover checked in browser: strip remained at703.5px across successive reads while hovered, then resumed after pointer left. Glass header appeared after scrolling. Console error checks for landing/chat returned none. Reduced motion and focus pauses tested through actual component handlers.
+`outputs/workspace-selected-2026-10-30/` contains full and focused reference comparisons, Home light/dark/phone captures, and fixed phone/16:9 drawer screenshots. Accepted final desktop: `home-final.png`; phone: `home-mobile-final.png`; phone drawer: `navigation-mobile-final.png`; 16:9 drawer: `navigation-16-9-fixed.png`.
 
-Automated checks passed: TypeScript, production build, focused lint with zero errors (existing image/full-navigation warnings remain), design generation migration/idempotency/refund/owner tests, design export, saved-product/buyer design integration, attachment multipart/SQLite/provider-wire tests, composer/IndexedDB tests, builder/quality/commerce/community-tier regressions, public homepage/SEO/index boundaries, docs28 guides, shared appearance and generated-sheet reproducibility.
+## Limits and remaining minor notes
 
-## Follow-up polish / limits
+This is an isolated local preview with synthetic account/product data and deterministic assistant replies. No production secrets, provider charges, payment transactions or real messages were used. Not deployed. The visual implementation uses existing production font/control sizing, slightly more compact than the generated mock (P3). The GPT Image 2 integration described in the follow-up below is now implemented. Live provider verification has not been performed; local previews use intercepted synthetic replies.
 
-- Generated product photo subjects differ from the approved mock while retaining the intended format and art direction; this is expected individual asset generation, not a real-customer claim.
-- Existing product shell names the underlying format Template kit before entering Design Studio. A future format-label refinement can reduce that terminology, without adding a second incompatible product type.
-- Browser QA used synthetic provider transport. It does not establish production model quality, real OAuth, payment, printing hardware or physical touchscreen behavior.
-- Local implementation only; this task has not been deployed to production.
+## Landing preview follow-up
 
-## Final acceptance
+The older anonymous preview on59908 referenced the superseded index.DLmA_Skz.css after a shared build. The latest index.B_QZKgmJ.css returns200; the superseded asset returns404. Restarted both isolated preview services against the current build and reloaded the landing page. Safe Brand HTML display dimensions are now181×40 rather than1494×330; CSS continues to size the visible lockup toapproximately149×33 at the tested viewport and hides the opposite theme variant. Inspected `outputs/landing-logo-fix-2026-10-30/landing-fixed.png`: no oversized duplicate logos cover the composer or examples. Current production build and whitespace checks pass; no deployment performed.
 
-All earlierP1/P2 visual and functional findings above were fixed and reviewed again. Desktop1374 ×1145, phone390 ×844, and705 ×950 browser captures had no page-width overflow. The user-requested gallery removal is visible in the final screenshot; hover pause/resume was observed in the browser. Light/dark, saved prompt and attachment handoff, real local downloads, editable content, phone library, and private buyer delivery checks passed at their documented level.
+## GPT Image 2 follow-up — passed
 
-ResidualP3: small optical differences from raster mock typography and independently generated example imagery; added authentic sign-in/file-limit disclosure is intentional. Real provider quality, real authentication and live payments remain outside this isolated verification.
+Implemented the exact requested model `gpt-image-2`. Shared Low/Med/High controls sit beside Submit on Home and the public landing page, beside Generate in Marketing images, and beside Generate artwork in Design studio. Selection persists between refreshes and synchronizes between surfaces on the same origin. Default is Medium. Image actions send low/medium/high to the provider and review4/12/40 credits respectively; the public pricing copy and documentation use the same policy. Plain chat remains a planning request, and its quality preference applies when artwork is generated.
+
+Native editable pages remain available. The new Image layer mode creates a private PNG candidate, optionally transparent or opaque. The creator reviews it before Add to page; native text and vector elements remain unchanged. Owner-only raw candidate access prevents buyers from fetching unapplied draft artwork, while frozen purchased PDF/ZIP exports still include entitled assets internally. Marketing image generation stores verified private JPEGs; existing video generation and historical FAL jobs remain compatible.
+
+Checked actual browser request → private candidate review → Add to page → Save design using a clearly labelled local image fixture. Low selected4 credits and sent the exact model/quality/size contract. Real HTTP checks exercised all three qualities, stored PNG owner downloads, stable duplicate replay without a second provider request, and failure refunds. Both UI and backend tests cover persisted preference, busy/duplicate guards, independent OpenAI/FAL readiness, quality pricing, chosen backgrounds, tenant isolation, version/archive races, malformed/oversized provider bytes, atomic debit/storage completion, expiry recovery and frozen buyer exports. Production build, full TypeScript, focused suites, pricing tests, whitespace and generated appearance reproducibility checks pass.
+
+Visual QA inspected `outputs/gpt-image-2-2026-10-30/home-quality-final.png`, `home-quality-mobile.png`, `landing-quality.png` and `editor-quality.png`. At390×844 the quality selector and Submit fit on the same row with no horizontal overflow. Desktop controls preserve the approved Conversation First composition. Browser error log on the accepted Home state was empty. Temporary viewport emulation was reset.
+
+No production environment/secrets were changed, no live provider calls or charges were made, and this work is not deployed. The browser preview artwork explicitly says LOCAL DEMO; it verifies app behavior rather than model image quality. Existing deployed OpenAI configuration is used by the implementation.
+
+
+## Plans and workspace Domains follow-up — passed
+
+New-sale allowances are Free60/month, Creator Pro2,000 for USD29/month, and Scale6,000 for USD99/month. Pricing displays each quality's alternative image capacity from the shared4/12/40-credit image policy. Existing subscription prices and credit quantities remain frozen in verified checkout/payment records, including earlier2,500-credit Pro accounts. Free credits reset by UTC calendar month and do not stack with verified paid allowances. Actual SQLite tests cover concurrent spending, upgrades/downgrades without reminting, refunds across expiry, sandbox isolation and debt. The actual Credits browser screen shows the new60 Free pool separately from purchased credits and the quality prices.
+
+Domains is below Library in navigation and search. Each creator chooses a unique available workspace name and product paths; the platform base is configurable (defaultfivegen.ai). The two setup cards and primary Save action appear before the product list. Product paths use compact rows, six-item pagination and search, with hidden draft edits preserved in an atomic save. Native form associations and dirty-navigation guards remain intact. No nested forms or extra product-list scroll area.
+
+Public host resolution serves only current, owned, nonarchived published snapshots and public media. Drafts, account APIs, private uploads and cross-host POSTs are unavailable. Checkout, applications and other forms continue on the canonical app origin. Name collisions, ownership, stale/CAS saves, archive races, path traversal, reserved and historical platform bases, header spoofing boundaries, body limits and status transitions have focused tests. Custom domains reuse exact TXT/CNAME verification and separate trusted hosting/TLS approval. Saving or passing DNS never falsely activates a public address.
+
+Actual isolated browser checks saved aagii plus product1/product2, refreshed their persisted values, configured and removed a synthetic custom hostname, inspected DNS/status steps, and exercised pagination/search. At390×844 the page has no horizontal overflow; viewport emulation was reset afterward. Light and dark states were visually inspected. Saved evidence: outputs/plans-domains-2026-10-30/domains-desktop.png, domains-mobile.png, domains-dark.png and pricing-light.png. The production build completed; TypeScript, relevant credit/billing/domain/public-action/UI tests, generated appearance reproducibility and whitespace checks pass. All three previews were restarted against the same final build.
+
+No production secrets, real provider requests, DNS changes, payments or deployment were performed. First-party wildcard DNS/hosting/TLS and creator-owned domain hosting approval must be activated before their reserved URLs work publicly. Operator setup: docs/workspace-domain-hosting.md.
+
+
+## Pricing release redesign — passed locally
+
+Replaced the tall nested-box comparison with compact cream/orange cards and a matching dark theme. Prices are shown as$0/$29/$99, the primary action is beside the buying decision, and one shared Low/Med/High control changes image estimates without changing monthly allowances. Pro has a restrained orange highlight. Fees and plan terms remain secondary; existing paid subscriptions, credit-pack separation and actual checkout readiness gates are retained. Local preview payments remain disabled; a read-only production check confirmed the existing live checkout links are enabled.
+
+Accepted browser evidence: outputs/release-2026-10-30/pricing-desktop.png, pricing-dark.png and pricing-mobile.png. Desktop core cards fit within approximately915px including the unavailable-preview notice; production omits that notice when checkout is enabled. Phone390px had no horizontal overflow. Shared estimates, top-up switching, dark/light appearance and pricing links were exercised. Corrected the singularimage label and compact phone appearance selector found during QA. Pricing UI suite, focused lint, full TypeScript and production build pass. Viewport overrides were reset.

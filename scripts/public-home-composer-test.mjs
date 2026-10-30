@@ -42,7 +42,7 @@ function harness(name){
   const useRef=initial=>{const index=cursor++;if(!slots[index])slots[index]={value:{current:initial}};return slots[index].value;};
   const useEffect=(callback,dependencies)=>{const index=cursor++,old=slots[index];if(!old||!same(old.dependencies,dependencies)){slots[index]={dependencies,cleanup:old?.cleanup};effects.push(()=>{slots[index].cleanup?.();slots[index].cleanup=callback();});}};
   const iconNames=['ArrowLeft','ArrowRight','Camera','ChartNoAxesColumnIncreasing','FileText','Funnel','Lightbulb','Loader2','Paperclip','Pause','Pencil','Play','X'];
-  const scope={React,...Object.fromEntries(iconNames.map(name=>[name,icons[name]])),...draft,useState,useRef,useEffect,useId:()=>`landing-test-${cursor++}`,Link:'a',Brand:()=>null,AppearanceControl:()=>null};
+  const scope={React,...Object.fromEntries(iconNames.map(name=>[name,icons[name]])),...draft,useState,useRef,useEffect,useId:()=>`landing-test-${cursor++}`,Link:'a',Brand:()=>null,AppearanceControl:()=>null,ImageQualityControl:'test-image-quality',useImageQuality:()=>['medium',()=>{}]};
   const component=sourceExports('app/public-home-composer.tsx',scope)[name];
   function render(){cursor=0;tree=component();nodes(tree,node=>node.props?.ref&&typeof node.type==='string').forEach(node=>{const ref=node.props.ref;if(!hosts.has(ref))hosts.set(ref,{focus(){},click(){},contains:()=>false,scrollLeft:0,clientWidth:500,scrollWidth:3000,querySelector:()=>({offsetWidth:1000}),scrollBy(options){this.scrollLeft+=options.left;scrolls.push(options);}});ref.current=hosts.get(ref);});return tree;}
   async function settle(){for(let index=0;index<6;index++){while(effects.length)effects.shift()();await new Promise(done=>setImmediate(done));render();}return tree;}

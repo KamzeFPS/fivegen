@@ -5,7 +5,10 @@ import {randomUUID} from 'node:crypto';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {resolve} from 'node:path';
 import {createStorage} from '../runtime/render/storage.mjs';
-import {creditPolicy,creditPacks,textCredits,monthlyWindow} from '../lib/credit-policy.ts';
+import {creditPolicy as launchCreditPolicy,creditPacks,textCredits,monthlyWindow} from '../lib/credit-policy.ts';
+// Isolate historical paid subscription accounting. The current Free allowance
+// and interactions with paid plans use the actual policy in free-monthly-credits-test.
+const creditPolicy={...launchCreditPolicy,monthly:0};
 
 const root=resolve('outputs/studio-subscription-qa',randomUUID()),storage=createStorage(root),db=storage.DB,sql=storage.sqlite;
 class ApiError extends Error{constructor(message,status=400){super(message);this.status=status;}}

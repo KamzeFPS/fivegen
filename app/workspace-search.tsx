@@ -1,11 +1,11 @@
 'use client';
 
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {ArrowUpRight,Coins,CreditCard,FolderOpen,Link2,MessageSquare,Plus,Search,ShieldCheck,TrendingUp,Users,CalendarDays} from 'lucide-react';
+import {ArrowUpRight,BookOpen,Coins,CreditCard,FolderOpen,Globe,Home,Link2,Megaphone,MessageSquare,Palette,Search,ShieldCheck,TrendingUp,Users,CalendarDays} from 'lucide-react';
 import {Command,CommandEmpty,CommandGroup,CommandInput,CommandItem,CommandList} from '@/components/ui/command';
 import {Dialog,DialogContent,DialogDescription,DialogTitle,DialogTrigger} from '@/components/ui/dialog';
 
-type NavigationView='overview'|'library'|'crm'|'credits'|'connections'|'creator-library'|'calendar'|'admin';
+type NavigationView='overview'|'library'|'marketing'|'design'|'crm'|'credits'|'connections'|'creator-library'|'domains'|'calendar'|'admin';
 export type WorkspaceSearchProps={
   products:{id:string;title:string;format:string}[];
   history:{id:string;title:string}[];
@@ -21,7 +21,7 @@ function searchText(value:string){
   return value.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase();
 }
 
-export function WorkspaceSearch({products,history,admin,onView,onProduct,onConversation,onCreate,onVisit}:WorkspaceSearchProps){
+export function WorkspaceSearch({products,history,admin,onView,onProduct,onConversation,onVisit}:WorkspaceSearchProps){
   const [open,setOpen]=useState(false);
   const [query,setQuery]=useState('');
   const [shortcut,setShortcut]=useState('⌘ / Ctrl');
@@ -57,17 +57,20 @@ export function WorkspaceSearch({products,history,admin,onView,onProduct,onConve
   },[open]);
 
   const actions=useMemo(()=>[
-    {id:'create',label:'Create a product',description:'Start something new',keywords:'new offer course',icon:Plus,run:onCreate},
+    {id:'home',label:'Home',description:'Start with an idea',keywords:'create new offer course gen chat',icon:Home,run:()=>onVisit('/?view=create')},
     {id:'overview',label:'Overview',description:'Your results and next step',keywords:'dashboard analytics growth',icon:TrendingUp,run:()=>onView('overview')},
-    {id:'library',label:'Products',description:'Content, checkout, and marketing',keywords:'library vsl funnel campaigns',icon:FolderOpen,run:()=>onView('library')},
+    {id:'library',label:'My products',description:'Continue your content and selling setup',keywords:'library vsl funnel campaigns',icon:FolderOpen,run:()=>onView('library')},
+    {id:'marketing',label:'Marketing',description:'Choose a product to plan its next campaign',keywords:'funnel campaigns email growth',icon:Megaphone,run:()=>onView('marketing')},
+    {id:'design',label:'Design',description:'Open an editable design or start a new one',keywords:'canvas invitation colouring coloring planner',icon:Palette,run:()=>onView('design')},
     {id:'crm',label:'Customers',description:'Contacts and your lead pipeline',keywords:'crm leads contacts',icon:Users,run:()=>onView('crm')},
-    {id:'creator-library',label:'Creator library',description:'Private profile and reusable sources',keywords:'voice references recordings stories expertise',icon:FolderOpen,run:()=>onView('creator-library')},
+    {id:'creator-library',label:'Library',description:'Private profile and reusable sources',keywords:'creator voice references recordings stories expertise',icon:BookOpen,run:()=>onView('creator-library')},
+    {id:'domains',label:'Domains',description:'Your workspace address and product links',keywords:'domain url subdomain hostname dns cname website custom link',icon:Globe,run:()=>onView('domains')},
     {id:'calendar',label:'Calendar',description:'All accounts, content and events in one schedule',keywords:'schedule dates content appointments bookings reminders accounts',icon:CalendarDays,run:()=>onView('calendar')},
     {id:'credits',label:'AI credits',description:'Your balance and credit options',keywords:'plans pricing generation wallet',icon:Coins,run:()=>onView('credits')},
     {id:'billing',label:'Account & billing',description:'Manage your subscription',keywords:'payment invoices settings account profile',icon:CreditCard,run:()=>onVisit('/account/billing')},
     {id:'connections',label:'Connect assistant',description:'Connect your AI workspace',keywords:'integrations connection mcp chatgpt',icon:Link2,run:()=>onView('connections')},
     ...(admin?[{id:'admin',label:'Platform settings',description:'Administration tools',keywords:'admin settings',icon:ShieldCheck,run:()=>onView('admin')}]:[]),
-  ],[admin,onCreate,onView,onVisit]);
+  ],[admin,onView,onVisit]);
   const terms=searchText(query.trim()).split(/\s+/).filter(Boolean);
   const matches=(value:string)=>terms.every(term=>searchText(value).includes(term));
   const productResults=terms.length?products.filter(product=>matches(`${product.title} ${product.format}`)):products.slice(0,8);

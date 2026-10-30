@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect,useId,useLayoutEffect,useRef,useState} from 'react';
-import {ArrowDown,ArrowRight,ArrowUp,BookOpen,CalendarDays,Check,CheckCircle2,ChevronDown,ClipboardList,CornerDownLeft,ExternalLink,Lightbulb,Loader2,MessageCircle,Package,Paperclip,PenLine,Plus,FileText,ImageIcon,ShieldCheck,X,SkipForward,Sparkles} from 'lucide-react';
+import {ArrowDown,ArrowRight,ArrowUp,BookOpen,CalendarDays,Check,CheckCircle2,ChevronDown,ClipboardList,CornerDownLeft,ExternalLink,Loader2,Package,Paperclip,PenLine,Plus,FileText,ImageIcon,ShieldCheck,X,SkipForward,Sparkles} from 'lucide-react';
 import {workspaceAttachmentSchema,type WorkspaceAttachment} from '@/lib/workspace-attachments';
 import {addWorkspaceDraftFiles,readWorkspaceAttachmentDraft,writeWorkspaceAttachmentDraft,deleteWorkspaceAttachmentDraft,workspaceAttachmentDraftKey,type WorkspaceAttachmentDraft,type WorkspaceDraftAttachment} from '@/lib/workspace-attachment-draft';
 import {assistantDestination,assistantResourceReceipts,nextAssistantStep} from '@/lib/workspace-assistant';
@@ -9,6 +9,7 @@ import type {AssistantAction,AssistantConversation,AssistantResourceReceipt,Assi
 import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
 import {ChatQuestionStepper} from './chat-question-stepper';
 import {ChatReplyDownload,WorkspaceChatDownloads} from './workspace-chat-downloads';
+import {ImageQualityControl,useImageQuality} from './image-quality-control';
 import './workspace-chat.css';
 
 type Props={
@@ -31,10 +32,9 @@ function designStudioReply(content:string){const known=/\[([^\]\r\n]{1,80})\]\(\
 const taskLabels:Record<string,string>={idea:'Develop an idea',marketing:'Plan marketing','product-photos':'Create product photo assets',funnel:'Plan a sales funnel',designs:'Create editable visual designs'};
 const kindLabels:Record<string,string>={ebook:'eBook',invitation:'Invitation','colouring-book':'Colouring book',course:'Course','template-kit':'Template kit'};
 const SUGGESTIONS=[
-  {icon:Lightbulb,label:'Start from scratch',prompt:'I want to start from scratch. Help me work out what I can make, who it is for, and the first steps.'},
-  {icon:Package,label:'Turn an idea into a product',prompt:'Help me turn an idea into a useful digital product. Ask me what you need, then show me a detailed plan before creating anything.'},
-  {icon:PenLine,label:'Plan my marketing',prompt:'Help me plan a marketing campaign for one of my existing products. Let’s choose the product and goal first.'},
-  {icon:CalendarDays,label:'Organize my next steps',prompt:'Help me organize what to do next. I would like a practical plan, then we can schedule the tasks I approve.'},
+  {label:'A practical ebook',prompt:'Help me make a practical ebook. Ask about my audience and the problem I can help them solve, then show me a plan.'},
+  {label:'A wedding invitation',prompt:'Help me design an editable wedding invitation. Ask about the names, date, venue, and style, then help me continue in Design studio.'},
+  {label:'A content plan',prompt:'Help me plan content for one of my existing products. Let’s choose the product, audience, and goal first.'},
 ];
 
 function saveDraft(key:string,draft:SavedDraft){
@@ -53,7 +53,9 @@ function actionLabel(action:AssistantAction){
 }
 
 export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cost,credits,aiReady,unlimited,onMessage,onSend,onAction,onVisit,onNewChat,attachmentScope='guest',onBusyChange,onAuthRequired,products=[]}:Props){
+  const [imageQuality,setImageQuality]=useImageQuality();
   const messages=conversation?.messages||[];
+  const isHome=!messages.length&&!sent;
   const latest=messages.at(-1);
   const questions=latest?.role==='assistant'?(latest.questions||[]).slice(0,3):[];
   const workflow=conversation?.workflow;
@@ -247,21 +249,15 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
     finally{actionRef.current=false;setActing(false);}
   }
 
-  return <div className="workspace-assistant" ref={shellRef}>
-    <header className="wa-heading">
+  return <div className={`workspace-assistant${isHome?' wa-home':''}`} ref={shellRef}>
+    {!isHome&&<header className="wa-heading">
       <div><span className="wa-eyebrow"><Sparkles size={14} aria-hidden="true"/>CHAT WITH GEN</span><h1>{messages.length?'Let’s keep things moving.':'What would you like to work on?'}</h1><p>Think it through here. Create it in the right part of your workspace.</p></div>
       <div className="wa-heading-actions">{workflow&&<button type="button" className="wa-new-chat wa-plan-toggle" onClick={()=>setPlanOpen(true)}><ClipboardList size={15} aria-hidden="true"/><span>View plan</span><span className="wa-plan-progress">{workflow.steps.length-pendingCount}/{workflow.steps.length}</span></button>}{onNewChat&&messages.length>0&&<button type="button" className="wa-new-chat" aria-label="New chat" title="New chat" onClick={onNewChat} disabled={isBusy}><Plus size={15} aria-hidden="true"/><span>New chat</span></button>}</div>
-    </header>
+    </header>}
     <div className="wa-layout">
       <section className="wa-thread" aria-label="Workspace assistant conversation" aria-busy={isBusy}>
+        {isHome&&<header className="wa-home-intro"><img src="/brand/fivegen-sparkle-mark.png" width="48" height="48" alt="" aria-hidden="true"/><h1>What would you like to make?</h1><p>An ebook, a design, or a plan for your next launch.</p></header>}
         <div className="wa-transcript" ref={scrollRef} tabIndex={0} aria-label="Conversation history">
-          {!messages.length&&!sent&&<section className="wa-welcome" aria-label="Start a conversation">
-            <span className="wa-welcome-icon"><MessageCircle size={24} aria-hidden="true"/></span>
-            <h2>A rough idea is enough.</h2><p>Ask a question, tell me what you want to make, or say you’re starting from zero. We’ll work out the details and a clear plan together.</p>
-            <div className="wa-suggestions">{SUGGESTIONS.map(({icon:Icon,label,prompt})=><button type="button" key={label} disabled={isBusy} onClick={()=>focusMessage(prompt)}><Icon size={17} aria-hidden="true"/><span>{label}</span><ArrowRight size={15} aria-hidden="true"/></button>)}</div>
-            <div className="wa-how"><span><b>1</b>Tell me your goal</span><span><b>2</b>Review the plan & drafts</span><span><b>3</b>Approve one step at a time</span></div>
-            <p className="wa-existing-path">Already have your content? <button type="button" onClick={()=>onVisit('/build/new?source=upload')}>Import a file</button><span aria-hidden="true"> · </span><button type="button" onClick={()=>onVisit('/build/new?source=manual')}>Write it yourself</button></p>
-          </section>}
           {messages.map((item,index)=>{const designLink=item.role==='assistant'?designStudioReply(item.content):null;return <article key={item.id} className={`wa-message wa-${item.role}`}>
             <span className="wa-avatar" aria-hidden="true">{item.role==='assistant'?<Sparkles size={17}/>:name.slice(0,1).toUpperCase()||'Y'}</span>
             <div className="wa-message-body"><strong>{item.role==='assistant'?'Gen':name||'You'}</strong><div className="wa-message-copy">{designLink?.available?designLink.text:item.content}</div>{designLink?.available&&<button type="button" className="wa-primary wa-design-start" disabled={isBusy} onClick={()=>openDesignStudio(index)}>Open Design studio<ArrowRight size={15} aria-hidden="true"/></button>}{!!item.attachments?.length&&<ul className="wa-message-attachments" aria-label="Attached files">{item.attachments.map(file=><li key={file.id}><a href={`/api/studio/assistant/attachments/${encodeURIComponent(file.id)}`} download={file.name}><Paperclip size={14} aria-hidden="true"/><span>{file.name}</span><ArrowDown size={13} aria-hidden="true"/></a>{file.warnings.map((warning,index)=><small key={index}>{warning}</small>)}</li>)}</ul>}
@@ -293,16 +289,18 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
           <form className="wa-composer" onSubmit={event=>{event.preventDefault();void submit();}}>
             {questions.length>0&&<>{!showMessage&&<ChatQuestionStepper questions={questions} index={questionIndex} answered={answered} value={answerFor(questionIndex)} disabled={isBusy} onAnswer={value=>updateAnswer(questionIndex,value)} onIndex={selectQuestion} onSubmit={()=>void submit()}/>}<button type="button" className="wa-note-toggle" aria-expanded={showMessage} onClick={()=>{setNoteOpen(open=>!open);if(!showMessage)window.requestAnimationFrame(()=>inputRef.current?.focus({preventScroll:true}));}} disabled={isBusy}>{showMessage?`Back to questions · ${answered}/${questions.length} answered`:message.trim()?'Review your added note':'Add a note or reply in your own words'}<ChevronDown size={13} aria-hidden="true"/></button></>}
             {(task||productKind)&&<p className="wa-creation-context"><span>{[task,productKind].filter(Boolean).join(' · ')}</span></p>}
-            <label htmlFor={inputId} hidden={!showMessage}>{questions.length?'Anything else?':'Message Gen'}</label>
-            <textarea id={inputId} ref={inputRef} hidden={!showMessage} rows={2} value={message} maxLength={MAX_MESSAGE} disabled={isBusy} placeholder={answered?'Add anything else, or send your answers…':workflow?'Ask anything, refine the plan, or start something new…':'Tell me what’s on your mind…'} aria-describedby={`${helpId}${tooLong||localError?` ${errorId}`:''}`} aria-invalid={tooLong||Boolean(localError)} onChange={event=>{fileEditsRef.current++;onMessage(event.target.value);setNoteOpen(true);setLocalError('');}} onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing&&event.nativeEvent.keyCode!==229&&!window.matchMedia('(pointer: coarse)').matches){event.preventDefault();void submit();}}}/>
+            <label htmlFor={inputId} hidden={!showMessage} className={isHome?'wa-sr-only':undefined}>{questions.length?'Anything else?':'Message Gen'}</label>
+            <textarea id={inputId} ref={inputRef} hidden={!showMessage} rows={2} value={message} maxLength={MAX_MESSAGE} disabled={isBusy} placeholder={answered?'Add anything else, or send your answers…':workflow?'Ask anything, refine the plan, or start something new…':isHome?'Tell Gen your idea…':'Tell me what’s on your mind…'} aria-describedby={`${helpId}${tooLong||localError?` ${errorId}`:''}`} aria-invalid={tooLong||Boolean(localError)} onChange={event=>{fileEditsRef.current++;onMessage(event.target.value);setNoteOpen(true);setLocalError('');}} onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing&&event.nativeEvent.keyCode!==229&&!window.matchMedia('(pointer: coarse)').matches){event.preventDefault();void submit();}}}/>
             {!!attachedFiles.length&&<ul className="wa-file-list" aria-label="Files to send">{attachedFiles.map(item=><li key={item.id}><div className="wa-file-chip">{item.file.type.startsWith('image/')?<ImageIcon size={17} aria-hidden="true"/>:<FileText size={17} aria-hidden="true"/>}<span><strong title={item.file.name}>{item.file.name}</strong><small>{Math.max(1,Math.ceil(item.file.size/1024))} KB · {item.uploaded?'Uploaded privately':'Ready to attach'}</small></span><button type="button" disabled={isBusy} aria-label={`Remove ${item.file.name}`} onClick={()=>removeFile(item.id)}><X size={14} aria-hidden="true"/></button></div>{item.uploaded?.warnings.map((warning,index)=><p className="wa-file-warning" key={index}>{warning}</p>)}</li>)}</ul>}
             <input ref={fileInputRef} className="wa-file-input" type="file" multiple accept="image/png,image/jpeg,image/webp,.pdf,.docx,.txt" aria-label="Attach images or documents" disabled={isBusy||!filesReady} onChange={event=>{const files=Array.from(event.target.files||[]);event.target.value='';chooseFiles(files);}}/>
             {(uploadStatus||fileNotice)&&<p className="wa-file-status" role="status">{uploadStatus||fileNotice}</p>}{missingFiles&&<button type="button" className="wa-file-reselect" onClick={()=>{const next={key:fileDraftKey,draft:{...fileDraft.draft,missingFiles:false}};fileDraftRef.current=next;setFileDraft(next);setFileNotice('');}}>Continue without files</button>}
-            <div className="wa-composer-bottom"><button type="button" className="wa-attach" aria-label="Attach images or documents" title="PNG, JPEG, WebP, PDF, DOCX, or TXT · 4 files · 8 MB each" disabled={isBusy||!filesReady||attachedFiles.length>=4} onClick={()=>fileInputRef.current?.click()}><Paperclip size={18} aria-hidden="true"/><span>Attach</span></button><span>{!aiReady?'AI is not connected yet':isBusy?acting?'Saving your approved step…':'Gen is working…':unlimited?'Unlimited planning':remaining>0?`${remaining} included ${remaining===1?'message':'messages'} left`:`${cost} credits per message`}</span><button type="submit" disabled={!canSend} className="wa-send">{sending||busy==='planning'?<Loader2 size={17} className="wa-spin" aria-hidden="true"/>:<ArrowUp size={17} aria-hidden="true"/>}<span>{uploadStatus.startsWith('Uploading')?'Uploading…':sending||busy==='planning'?'Thinking…':answered?'Send answers':'Send'}</span></button></div>
+            <div className="wa-composer-bottom"><button type="button" className="wa-attach" aria-label="Attach images or documents" title="PNG, JPEG, WebP, PDF, DOCX, or TXT · 4 files · 8 MB each" disabled={isBusy||!filesReady||attachedFiles.length>=4} onClick={()=>fileInputRef.current?.click()}><Paperclip size={18} aria-hidden="true"/><span>{isHome?'Add files':'Attach'}</span></button><span className="wa-allowance">{!aiReady?'AI is not connected yet':isBusy?acting?'Saving your approved step…':'Gen is working…':unlimited?'Unlimited planning':remaining>0?`${remaining} included ${remaining===1?'message':'messages'} left`:`${cost} credits per message`}</span><div className="wa-submit-group"><ImageQualityControl value={imageQuality} onChange={setImageQuality} disabled={isBusy}/><button type="submit" disabled={!canSend} className="wa-send">{sending||busy==='planning'?<Loader2 size={17} className="wa-spin" aria-hidden="true"/>:isHome?<ArrowRight size={18} aria-hidden="true"/>:<ArrowUp size={17} aria-hidden="true"/>}<span>{uploadStatus.startsWith('Uploading')?'Uploading…':sending||busy==='planning'?'Thinking…':answered?'Send answers':isHome?'Make it':'Send'}</span></button></div></div>
           </form>
-          <div className="wa-composer-help" id={helpId}><span>Images and documents are uploaded only when you send. Planning uses your message allowance.</span><span className="wa-keyboard-hint"><CornerDownLeft size={12} aria-hidden="true"/>{questions.length&&!showMessage&&questionIndex<questions.length-1?'Enter for next question':'Enter to send'} · Shift + Enter for a new line</span></div>
+          <div className="wa-composer-help" id={helpId}><span>{isHome?'Review every draft before you publish.':'Images and documents are uploaded only when you send. Planning uses your message allowance.'}</span><span className={isHome?'wa-sr-only':'wa-keyboard-hint'}><CornerDownLeft size={12} aria-hidden="true"/>{questions.length&&!showMessage&&questionIndex<questions.length-1?'Enter for next question':'Enter to send'} · Shift + Enter for a new line</span></div>
+          {isHome&&<><div className="wa-home-suggestions"><span>Try an idea:</span>{SUGGESTIONS.map(({label,prompt})=><button type="button" key={label} disabled={isBusy} onClick={()=>focusMessage(prompt)}>{label}</button>)}</div><details className="wa-home-options"><summary>Other ways to start</summary><div><button type="button" onClick={()=>onVisit('/build/new?source=upload')}>Import a file</button><button type="button" onClick={()=>onVisit('/build/new?source=manual')}>Write it yourself</button></div></details></>}
           {(tooLong||localError||!hasCredits)&&<p className="wa-inline-error" role="alert" id={errorId}>{tooLong?`Your combined reply is ${reply.length-MAX_MESSAGE} characters too long. Shorten your message or answers to send it.`:localError||'You need more credits to send another planning message.'}</p>}
         </div>
+        {isHome&&<button type="button" className="wa-home-browse" onClick={()=>onVisit('/?view=design')}>Browse templates<ArrowRight size={16} aria-hidden="true"/></button>}
       </section>
     </div>
       {workflow&&<Dialog open={planOpen} onOpenChange={setPlanOpen}><DialogContent className="wa-plan-dialog"><DialogHeader><DialogTitle>Your working plan</DialogTitle><DialogDescription>{workflow.steps.length-pendingCount} of {workflow.steps.length} steps reviewed. Each creation still needs your approval in the conversation.</DialogDescription></DialogHeader>

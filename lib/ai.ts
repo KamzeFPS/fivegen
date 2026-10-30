@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ApiError, binding, database } from "./server";
 import {reserveAIBudget} from "./credits";
+import {DESIGN_IMAGE_MODEL} from './design-image';
 export const providerSchema = z.object({
   emailFrom:z.string().max(200).default("").refine(v=>!v||/^[^<>\s]+@[^<>\s]+\.[^<>\s]+$/.test(v), "Enter a verified sender email address."),
   dailyBudget:z.number().min(1).max(10000).default(10),
@@ -9,9 +10,9 @@ export const providerSchema = z.object({
   textModel: z
     .enum(["gpt-4.1-mini", "claude-haiku-4-5"])
     .default("gpt-4.1-mini"),
-  imageModel: z
-    .enum(["fal-ai/flux-pro/v1.1-ultra"])
-    .default("fal-ai/flux-pro/v1.1-ultra"),
+  // Normalize persisted FLUX settings while keeping all other platform settings.
+  imageModel: z.preprocess(value => value === 'fal-ai/flux-pro/v1.1-ultra' ? DESIGN_IMAGE_MODEL : value,
+    z.literal(DESIGN_IMAGE_MODEL).default(DESIGN_IMAGE_MODEL)),
   videoModel: z
     .enum(["fal-ai/kling-video/v2.6/pro/text-to-video"])
     .default("fal-ai/kling-video/v2.6/pro/text-to-video"),

@@ -149,7 +149,7 @@ export default function FileSaleStudio({ initialId, publishingEnabled, user=null
     void navigateTo(area==='page'?productHome():`/?project=${encodeURIComponent(workspace!.product.id)}&area=${area}`);
   }
   function shell(children:ReactNode){return <div className={`file-sale-app gen-app file-sale-workspace ${selectedProduct?'has-selected-product':''} ${navigationProducts.length?'has-product-rail':''}`}>
-    <WorkspaceNavigation user={user} view="library" label={draft.title||'File product'} admin={!!navigation?.admin} products={navigationProducts}
+    <WorkspaceNavigation user={user} productContext={!!selectedProduct} view="library" label={draft.title||'File product'} admin={!!navigation?.admin} products={navigationProducts}
       creditsLabel={navigation?.credits.unlimited?'Unlimited':navigation?`${navigation.credits.total.toLocaleString()} credits`:'AI credits'} history={history}
       onHome={()=>void navigateTo('/')} onCreate={()=>void navigateTo('/?view=create')} onView={view=>void navigateTo('/?view='+view)}
       onProduct={selectProduct} onConversation={id=>void navigateTo('/?conversation='+encodeURIComponent(id))} onVisit={path=>void navigateTo(path)} onSignOut={()=>void navigateTo('/signout-with-chatgpt',true)}/>

@@ -48,6 +48,8 @@ import {CreditsPanel} from "./credits-panel";
 import {PurchaseEmailStatus} from './purchase-email-status';
 import type {CreditBalance} from "@/lib/credit-policy";
 import type { ProviderConfig } from "@/lib/ai";
+import {designImageCredits,type DesignImageQuality} from '@/lib/design-image';
+import {ImageQualityControl,useImageQuality} from './image-quality-control';
 import './settings-experience.css';
 async function request<T>(
   url: string,
@@ -59,8 +61,8 @@ async function request<T>(
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
-  const d = (await r.json()) as T & { error?: string };
-  if (!r.ok) throw new Error(d.error || "Please try again.");
+  const d = (await r.json()) as T & { error?: string; status?:string };
+  if (!r.ok) throw Object.assign(new Error(d.error || "Please try again."),{httpStatus:r.status,assetStatus:d.status});
   return d;
 }
 type Settings = {
@@ -77,7 +79,7 @@ export function AIProviders({signedIn,onUpdate}:{signedIn:boolean;onUpdate:()=>v
   async function save(remove?:"openai"|"anthropic"|"fal"|"resend"){if(!s)return;setBusy(true);setError("");try{await request("/api/providers","PUT",{config:s.config,...keys,remove});setKeys({openai:"",anthropic:"",fal:"",resend:""});await load();setEmailStatusRevision(value=>value+1);onUpdate();toast.success("Platform AI settings saved");}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
   if(!s&&signedIn)return <section className="platform-settings"><header className="platform-settings-heading"><h1>Platform settings</h1><p>Manage FiveGen’s AI providers and platform controls.</p></header>{error?<div className="platform-settings-load" role="alert"><p>{error}</p><button className="button secondary" onClick={()=>void load()}>Try again</button></div>:<div className="platform-settings-load" role="status"><Loader2 className="spin" size={20}/><p>Loading platform settings…</p></div>}</section>;
   if(!s?.admin)return <CreditsPanel signedIn={signedIn}/>;
-  const names={openai:'OpenAI',anthropic:'Anthropic',fal:'fal.ai',resend:'Resend'};
+  const names={openai:'OpenAI · GPT Image 2 & text',anthropic:'Anthropic · text',fal:'fal.ai · video',resend:'Resend · email'};
   return <div className="platform-settings"><header className="platform-settings-heading"><div><h1>Platform settings</h1><p>AI providers, platform spending, and administrative tools.</p></div><span className="platform-admin-badge"><ShieldCheck size={15}/>Administrator</span></header><nav className="platform-settings-links" aria-label="Administration tools"><a href="/admin/billing" className="button secondary"><ShieldCheck size={16}/>Payment checks<ArrowRight size={15}/></a><a href="/admin/credits" className="button secondary"><Sparkles size={16}/>Credit grants<ArrowRight size={15}/></a><a href="/?view=credits" className="button secondary">My AI credits<ArrowRight size={15}/></a></nav>{error&&<p className="error-banner" role="alert">{error}</p>}<section id="platform-ai" className="panel admin-ai"><div className="panel-heading"><div><h2>AI providers & usage</h2><p>These master credentials power every account. Keys are encrypted and never returned to the browser.</p></div><ShieldCheck size={24}/></div>
     <dl className="platform-stats">{[["Accounts",metrics?String(metrics.accounts):"—",'Registered FiveGen accounts'],["Credit sales",metrics?money(metrics.creditSales):"—",'Gross receipts, before refunds and costs']].map(([label,value,detail])=><div key={label}><dt>{label}</dt><dd>{value}</dd><small>{detail}</small></div>)}</dl>
     <fieldset className="platform-settings-fields" disabled={busy}>
@@ -313,10 +315,11 @@ type Asset = {
   created_at: number;
 };
 export function MediaStudio({ product, onSetup }: { product: Product; onSetup: () => void }) {
-  const [mediaReady, setMediaReady] = useState<boolean | null>(null);
+  const [readiness, setReadiness] = useState<{image:boolean;video:boolean}|null>(null);
+  const [quality,setQuality]=useImageQuality();
   const [balance,setBalance]=useState(0);
   const [unlimited,setUnlimited]=useState(false);
-  useEffect(() => { void request<Settings>("/api/providers").then((settings) => {setMediaReady(settings.connected.fal&&!settings.config.paused);setBalance(settings.credits.media);setUnlimited(!!settings.credits.unlimited);}).catch(() => setMediaReady(false)); }, []);
+  useEffect(() => { void request<Settings>("/api/providers").then((settings) => {setReadiness({image:settings.connected.openai&&!settings.config.paused,video:settings.connected.fal&&!settings.config.paused});setBalance(settings.credits.media);setUnlimited(!!settings.credits.unlimited);}).catch(() => setReadiness({image:false,video:false})); }, []);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [kind, setKind] = useState<"image" | "video">("image");
   const [aspect, setAspect] = useState("1:1");
@@ -328,6 +331,28 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
   const [filter, setFilter] = useState("all");
   const [error, setError] = useState("");
   const [syncing, setSyncing] = useState(false);
+  const busyRef=useRef(false);
+  const mediaReady=readiness?.[kind]??null;
+  const imageCost=designImageCredits(quality),generationCost=kind==='image'?imageCost:160,campaignCost=imageCost*3+160;
+  type Submission={kind:'image'|'video';prompt:string;name:string;aspect:string;quality?:DesignImageQuality};
+  type RetryRecord={fingerprint:string;ids:string[];done:boolean[]};
+  const retryRecords=useRef<Record<string,RetryRecord>>({});
+  async function retryRecord(slot:string,inputs:Submission[]){
+    const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(inputs)))),byte=>byte.toString(16).padStart(2,'0')).join('');
+    const key=`fivegen:marketing-request:${product.id}:${slot}`;
+    let saved=retryRecords.current[key];
+    if(!saved)try{saved=JSON.parse(sessionStorage.getItem(key)||'null') as RetryRecord;}catch{}
+    if(!saved||saved.fingerprint!==fingerprint||!Array.isArray(saved.ids)||saved.ids.length!==inputs.length||!saved.ids.every(id=>typeof id==='string'&&/^[a-f0-9-]{36}$/.test(id))||!Array.isArray(saved.done)||saved.done.length!==inputs.length)saved={fingerprint,ids:inputs.map(()=>crypto.randomUUID()),done:inputs.map(()=>false)};
+    retryRecords.current[key]=saved;
+    const persist=()=>{try{sessionStorage.setItem(key,JSON.stringify(saved));}catch{}};
+    const clear=()=>{delete retryRecords.current[key];try{sessionStorage.removeItem(key);}catch{}};
+    persist();return {record:saved,persist,clear};
+  }
+  async function submit(input:Submission,requestId:string){
+    const result=await request<{id:string;status:string;error?:string}>(`/api/products/${product.id}/assets`,'POST',{...input,requestId});
+    if(result.status==='failed')throw Object.assign(new Error(result.error||'Generation failed. Credits returned.'),{assetStatus:'failed'});
+    return result;
+  }
   const load = useCallback(async () => {
     try {
       const d = await request<{ assets: Asset[] }>(
@@ -340,13 +365,13 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
     }
   }, [product.id]);
   useEffect(() => {
-    void load();
+    queueMicrotask(() => void load());
   }, [load]);
   const sync = useCallback(async () => {
     const active = assets.filter((a) =>
       ["queued", "running"].includes(a.status),
     );
-    if (!active.length) return;
+    if (!active.length && !assets.some(a=>a.status==='submitting')) {await load();return;}
     setSyncing(true);
     try {
       for (const a of active)
@@ -359,60 +384,63 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
     }
   }, [assets, load]);
   useEffect(() => {
-    if (!assets.some((a) => ["queued", "running"].includes(a.status))) return;
+    if (!assets.some((a) => ["submitting", "queued", "running"].includes(a.status))) return;
     const timer = setTimeout(() => void sync(), 10000);
     return () => clearTimeout(timer);
   }, [assets, sync]);
   async function generate() {
+    if(busyRef.current)return;busyRef.current=true;
     setBusy(true);
     setError("");
+    let retry:Awaited<ReturnType<typeof retryRecord>>|undefined;
     try {
-      await request(`/api/products/${product.id}/assets`, "POST", {
-        kind,
-        prompt,
-        name: `${product.title} · ${kind === "image" ? "Campaign visual" : "Promo video"}`,
-        aspect,
-      });
+      const input:Submission={kind,prompt,name:`${product.title} · ${kind==='image'?'Campaign visual':'Promo video'}`.slice(0,100),aspect,...(kind==='image'?{quality}:{})};
+      retry=await retryRecord('single',[input]);
+      const result=await submit(input,retry.record.ids[0]);
+      if(result.status!=='submitting')retry.clear();
       await load();
-      toast.success("Your media job is in the queue.");
+      toast.success(result.status==='completed'?'Your image is saved in the asset library.':result.status==='submitting'?'Your image is still being generated. Refresh its status shortly.':'Your video is in the queue.');
     } catch (e) {
+      if((e as {assetStatus?:string}).assetStatus==='failed')retry?.clear();
       setError((e as Error).message);
     } finally {
+      busyRef.current=false;
       setBusy(false);
     }
   }
   async function campaign() {
-    if(!unlimited&&balance<196){setError("This campaign needs 196 credits. Add credits first.");return;}
+    if(busyRef.current)return;busyRef.current=true;
     setBusy(true);
     setError("");
     try {
-      const imagePrompt = product.content.imagePrompt || prompt;
-      for (const [i, a] of ["1:1", "9:16", "16:9"].entries())
-        await request(`/api/products/${product.id}/assets`, "POST", {
-          kind: "image",
-          prompt: imagePrompt,
-          name: ["Social square", "Story creative", "Website banner"][i],
-          aspect: a,
-        });
-      await request(`/api/products/${product.id}/assets`, "POST", {
-        kind: "video",
-        prompt:
-          product.content.videoPrompt ||
-          `Cinematic 5-second product promo for ${product.title}. ${product.description}. Clean modern studio, slow camera push, polished lighting, subtle music.`,
-        name: "Launch video",
-        aspect: "9:16",
-      });
-      toast.success("Your campaign is queued: 3 images and 1 video.");
+      const inputs:Submission[]=['1:1','9:16','16:9'].map((aspect,i)=>({kind:'image',prompt:(product.content.imagePrompt||prompt).slice(0,2500),name:['Social square','Story creative','Website banner'][i],aspect,quality}));
+      inputs.push({kind:'video',prompt:(product.content.videoPrompt||`Cinematic 5-second product promo for ${product.title}. ${product.description}. Clean modern studio, slow camera push, polished lighting, subtle music.`).slice(0,2500),name:'Launch video',aspect:'9:16'});
+      const retry=await retryRecord('campaign',inputs),remaining=inputs.reduce((cost,input,i)=>cost+(retry.record.done[i]?0:input.kind==='image'?imageCost:160),0);
+      if(!unlimited&&balance<remaining)throw new Error(`The remaining campaign needs ${remaining} credits. Add credits first.`);
+      for(const [i,input] of inputs.entries()){
+        if(retry.record.done[i])continue;
+        try{
+          const result=await submit(input,retry.record.ids[i]);
+          if(result.status==='submitting'){setError('A campaign image is still generating. Retry this campaign shortly to continue without duplicating completed assets.');return;}
+          retry.record.done[i]=true;retry.persist();
+        }catch(error){
+          // A confirmed failure may be retried explicitly; uncertain responses keep their ID.
+          if((error as {assetStatus?:string}).assetStatus==='failed'){retry.record.ids[i]=crypto.randomUUID();retry.persist();}
+          throw error;
+        }
+      }
+      retry.clear();toast.success('Your 3 campaign images are saved and your video is queued.');
     } catch (e) {
       setError((e as Error).message);
     } finally {
       await load();
+      busyRef.current=false;
       setBusy(false);
     }
   }
   return (
     <div className="media-studio"><div className="media-credit-bar"><span><Sparkles size={16}/> {unlimited?'Unlimited image & video generation':`${balance.toLocaleString()} image/video credits`}</span>{!unlimited&&<button className="button secondary" onClick={onSetup}>Add credits <ArrowRight size={15}/></button>}</div>
-      {mediaReady === false && <div className="checkout-setup media-setup"><ImagePlus size={21}/><div><strong>Your FiveGen media studio</strong><p>Image and video generation opens when the administrator connects the platform AI. Your product stays saved.</p></div><button className="button primary" onClick={onSetup}>View AI & credits <ArrowRight size={15}/></button></div>}
+      {mediaReady === false && <div className="checkout-setup media-setup"><ImagePlus size={21}/><div><strong>Your FiveGen media studio</strong><p>{kind==='image'?'GPT Image 2 opens when the administrator connects OpenAI and enables generation.':'Video generation opens when the administrator connects the video provider and enables generation.'} Your product stays saved.</p></div><button className="button primary" onClick={onSetup}>View AI & credits <ArrowRight size={15}/></button></div>}
       <section className="media-create panel">
         <div className="panel-heading">
           <div>
@@ -472,13 +500,14 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
           <div className="media-generate-bar">
             <span>
               {kind === "image"
-                ? "FLUX 1.1 Pro Ultra"
+                ? "GPT Image 2"
                 : "Kling 2.6 Pro · 5 seconds"}
-              <small>{unlimited ? "Included with your unlimited access" : kind === "image" ? "12 credits per image" : "160 credits · includes audio"}</small>
+              <small>{unlimited ? "Included with your unlimited access" : kind === "image" ? `${imageCost} credits per image` : "160 credits · includes audio"}</small>
             </span>
+            {kind==='image'&&<ImageQualityControl value={quality} onChange={setQuality} disabled={busy}/>}
             <button
               className="button primary"
-              disabled={busy || prompt.length < 15 || !mediaReady || (!unlimited&&balance<(kind==="image"?12:160))}
+              disabled={busy || prompt.length < 15 || !mediaReady || (!unlimited&&balance<generationCost)}
               onClick={() => void generate()}
             >
               {busy ? (
@@ -496,7 +525,7 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
           <Layers3 size={24} />
         </span>
         <div>
-          <h3>{unlimited?'A whole campaign · included.':'A whole campaign · 196 credits.'}</h3>
+          <h3>{unlimited?'A whole campaign · included.':`A whole campaign · ${campaignCost} credits.`}</h3>
           <p>
             A square post, a story creative, a website banner, and a 5-second
             promo video.
@@ -504,11 +533,11 @@ export function MediaStudio({ product, onSetup }: { product: Product; onSetup: (
         </div>
         <button
           className="button dark"
-          disabled={busy || mediaReady === null}
-          onClick={() => mediaReady ? void campaign() : onSetup()}
+          disabled={busy || readiness === null}
+          onClick={() => readiness?.image&&readiness.video ? void campaign() : onSetup()}
         >
           <WandSparkles size={16} />
-          {mediaReady === false ? "AI status & credits" : unlimited ? "Generate campaign" : "Generate campaign · 196 credits"}
+          {readiness&&(!readiness.image||!readiness.video) ? "AI status & credits" : unlimited ? "Generate campaign" : `Generate campaign · ${campaignCost} credits`}
         </button>
       </section>
       {error && (

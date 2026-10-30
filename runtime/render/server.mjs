@@ -68,7 +68,7 @@ export async function start() {
   server.on('request', async (req, res) => {
     try {
       const webhookSource = { socket: { remoteAddress: req.socket.remoteAddress }, headers: { 'x-forwarded-for': req.headers['x-forwarded-for'], 'cf-ray': req.headers['cf-ray'] } };
-      stripHeaders(req, name => name.startsWith('oai-authenticated-user-') || name.startsWith('x-forwarded-') || name === 'forwarded');
+      stripHeaders(req, name => name.startsWith('oai-authenticated-user-') || name.startsWith('x-forwarded-') || name === 'forwarded' || name === 'x-fivegen-public-host' || name === 'x-fivegen-app-origin');
       const authority = new URL(config.origin);
       const host = String(req.headers.host || '').toLowerCase();
       const domain = process.env.PRODUCT_DOMAIN?.trim().toLowerCase();
@@ -108,7 +108,7 @@ export async function start() {
       }
       if(host!==authority.host){
         const catalog=catalogHostRequest(storage.sqlite,{host,method:req.method,path:url.pathname});
-        if(catalog){res.setHeader('X-FiveGen-Surface','catalog');res.setHeader('Cache-Control','no-store');if(catalog.status!==200){res.writeHead(catalog.status,{'Content-Type':'text/plain',...(catalog.status===405?{Allow:'GET, HEAD'}:{})});res.end('Catalog route not found');return;}stripHeaders(req,name=>name==='cookie'||name==='authorization');req.url=catalog.path+url.search;for(const handler of handlers)handler.call(server,req,res);return;}
+        if(catalog){res.setHeader('X-FiveGen-Surface','catalog');res.setHeader('Cache-Control','no-store');if(catalog.canonical){res.writeHead(303,{Location:config.origin+catalog.path+url.search});res.end();return;}if(catalog.json){res.writeHead(200,{'Content-Type':'application/json'});res.end(req.method==='HEAD'?'':JSON.stringify(catalog.json));return;}if(catalog.status!==200){res.writeHead(catalog.status,{'Content-Type':'text/plain',...(catalog.status===405?{Allow:'GET, HEAD'}:{})});res.end('Catalog route not found');return;}stripHeaders(req,name=>name==='cookie'||name==='authorization');req.headers['x-fivegen-public-host']='1';req.headers['x-fivegen-app-origin']=config.origin;req.rawHeaders.push('x-fivegen-public-host','1','x-fivegen-app-origin',config.origin);req.url=catalog.path+url.search;for(const handler of handlers)handler.call(server,req,res);return;}
       }
       if (host !== authority.host && !productHost) { res.writeHead(421, { 'Cache-Control': 'no-store' }); res.end('Unrecognized host'); return; }
       // Apply the boundary to encoded and trailing-slash route equivalents too.

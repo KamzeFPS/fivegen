@@ -8,7 +8,7 @@ import {ArrowUpRight,CheckCircle2,ChevronDown,ClipboardCheck,Info,TriangleAlert}
 const source=readFileSync('app/builder-navigation.ts','utf8');
 const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;
 const {builderNavigationForLocation,builderPublicationStatus,initialBuilderPanel}=await import('data:text/javascript;base64,'+Buffer.from(compiled).toString('base64'));
-const empty={source:'manual',sections:[],files:[],uploadIds:[]};
+const empty={source:'manual',fields:{},sections:[],files:[],uploadIds:[]};
 assert.equal(initialBuilderPanel(empty),'details','A new manual product starts with its brief');
 assert.equal(initialBuilderPanel({...empty,source:'ai'}),'details','A new AI product starts with its brief');
 assert.equal(initialBuilderPanel({...empty,source:'upload'}),'resources','Choosing existing content opens the upload surface immediately');

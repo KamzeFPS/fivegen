@@ -53,3 +53,6 @@ html[data-appearance=dark] .public-home-composer-error{color:#ffb79c}
 
 
 .public-home-projects{scrollbar-width:none}.public-home-projects::-webkit-scrollbar{display:none}
+
+.public-home-submit-group{display:flex;align-items:center;justify-content:flex-end;gap:14px;flex:none}.public-home-submit-group .image-quality-control{color:var(--ph-muted)}.public-home-submit-group .image-quality-control>div{background:var(--ph-panel);border-color:var(--ph-line)}.public-home-submit-group .image-quality-control button[aria-pressed=true]{background:var(--ph-soft);color:var(--ph-ink);border-color:var(--ph-line)}
+@media(max-width:700px){.public-home-composer-bar{flex-wrap:wrap}.public-home-attach{flex-basis:100%}.public-home-submit-group{width:100%;justify-content:space-between;gap:10px}.public-home-submit-group .image-quality-control button{min-height:36px;padding:5px 7px}.public-home-submit-group .image-quality-control>span{font-size:10px}.public-home-submit-group .public-home-primary{margin-left:auto}}

@@ -1,4 +1,5 @@
 export * from './creator-catalog-schema';
+export * from './workspace-domains-schema';
 export * from './funnel-builder-schema';
 export * from './calendar-schema';
 import { sqliteTable, text, integer, index, uniqueIndex, primaryKey, unique, check } from "drizzle-orm/sqlite-core";
