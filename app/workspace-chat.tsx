@@ -71,6 +71,7 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
   const [answers,setAnswers]=useState<AnswerDraft>({id:'',values:{}});
   const [loadedKey,setLoadedKey]=useState('');
   const [localError,setLocalError]=useState('');
+  const [actionError,setActionError]=useState<{stepId:string;message:string}|null>(null);
   const [acting,setActing]=useState(false);
   const [sending,setSending]=useState(false);
   const [showLatest,setShowLatest]=useState(false);
@@ -103,6 +104,7 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
   const inputId=useId();
   const helpId=useId();
   const errorId=useId();
+  const actionErrorId=useId();
   const statusId=useId();
   const currentAnswers=loadedKey===draftKey&&answers.id===latest?.id?answers.values:{};
   const answerFor=(index:number)=>currentAnswers[String(index)]||'';
@@ -122,12 +124,13 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
   const consentContext=`${conversation?.id||'new'}:${conversation?.updatedAt||0}:${workflow?.id||''}`;
   const planningCost=unlimited||remaining>0?0:cost;
   const productCost=unlimited||productRunsRemaining>0?0:cost;
+  const currentActionError=actionError?.stepId===next?.id?actionError?.message:'';
 
   useEffect(()=>{messageChangeRef.current=onMessage;},[onMessage]);
 
   useEffect(()=>{
     productContextRef.current={conversationId:conversation?.id,planId:workflow?.id};
-    setProductApproval(null);setProductReady(null);setCreditConsent(null);
+    setProductApproval(null);setProductReady(null);setCreditConsent(null);setActionError(null);
     return()=>{productContextRef.current=null;};
   },[conversation?.id,workflow?.id]);
 
@@ -276,12 +279,12 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
     if(actionDisabled||actionRef.current||step.id!==next?.id)return;
     if(decision==='approve'&&step.action.type==='generate_product'&&!permission){const output=step.action as typeof step.action&{delivery?:ProductDelivery;exportFormat?:ProductExportFormat|null};setCreditConsent({kind:'product',context:consentContext,cost:productCost,stepId:step.id,delivery:output.delivery||'in_app',exportFormat:output.exportFormat||null});return;}
     const approval=decision==='approve'&&['create_product','generate_product'].includes(step.action.type)&&conversation&&workflow?{conversationId:conversation.id,planId:workflow.id,stepId:step.id}:null;
-    actionRef.current=true;setActing(true);setLocalError('');
+    actionRef.current=true;setActing(true);setLocalError('');setActionError(null);
     try{
-      if(!await onAction(step.id,decision,permission))setLocalError('This step could not be saved. Review the message above, then try again.');
+      if(!await onAction(step.id,decision,permission))setActionError({stepId:step.id,message:'This step could not be saved. Your brief is saved. Please try again.'});
       else if(approval&&productContextRef.current?.conversationId===approval.conversationId&&productContextRef.current.planId===approval.planId)setProductApproval(approval);
     }
-    catch{setLocalError('This step could not be saved. Please try again.');}
+    catch(error){setActionError({stepId:step.id,message:error instanceof Error&&error.message.trim()?error.message:'This step could not be saved. Your brief is saved. Please try again.'});}
     finally{actionRef.current=false;setActing(false);}
   }
 
@@ -320,10 +323,10 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
             <div className="wa-reason"><h3>Why this comes next</h3><p>{next.why}</p></div>
             {next.needs.length>0&&<div className="wa-needs"><h3>What’s needed</h3><ul>{next.needs.map((need,index)=><li key={index}>{need}</li>)}</ul></div>}
             <ActionPreview action={next.action} productDestination={resolveProductDestination(next.action,workflow,products,savedResources)} expanded/>
-            {next.error&&<p className="wa-inline-error" role="alert">{next.error}</p>}
+            {(currentActionError||next.error)&&<p className="wa-inline-error" role="alert" id={actionErrorId}>{currentActionError||next.error}</p>}
             <div className="wa-step-permission"><ShieldCheck size={16} aria-hidden="true"/><p>{next.action.type==='manual'?'Complete this action yourself, then mark it done to move on.':next.action.type==='generate_product'?'Review this brief, choose in-app delivery or a downloadable file, then approve the exact AI cost. Gen writes the full product only after that approval.':`This creates the draft shown above in ${assistantDestination(next.action)}. Nothing is created until you approve. Execution adds no extra AI generation charge.`}</p></div>
             {hasDraft&&<p className="wa-unsent-note">Send your draft reply first so Gen can include your changes before you approve.</p>}
-            <div className="wa-step-actions"><button type="button" className="wa-primary" disabled={actionDisabled} onClick={()=>void decide(next,'approve')} aria-describedby={hasDraft?`${statusId}-approval-help`:undefined}>{acting?<Loader2 size={17} className="wa-spin" aria-hidden="true"/>:next.action.type==='manual'?<Check size={17} aria-hidden="true"/>:<Sparkles size={17} aria-hidden="true"/>}{acting?next.action.type==='generate_product'?'Writing your product…':'Saving step…':actionLabel(next.action)}</button><button type="button" className="wa-skip" disabled={actionDisabled} onClick={()=>void decide(next,'skip')}><SkipForward size={15} aria-hidden="true"/>Skip this step</button></div>
+            <div className="wa-step-actions"><button type="button" className="wa-primary" disabled={actionDisabled} onClick={()=>void decide(next,'approve')} aria-describedby={hasDraft?`${statusId}-approval-help`:currentActionError||next.error?actionErrorId:undefined}>{acting?<Loader2 size={17} className="wa-spin" aria-hidden="true"/>:next.action.type==='manual'?<Check size={17} aria-hidden="true"/>:<Sparkles size={17} aria-hidden="true"/>}{acting?next.action.type==='generate_product'?'Writing your product…':'Saving step…':actionLabel(next.action)}</button><button type="button" className="wa-skip" disabled={actionDisabled} onClick={()=>void decide(next,'skip')}><SkipForward size={15} aria-hidden="true"/>Skip this step</button></div>
             <p className="wa-approval-help" id={`${statusId}-approval-help`}>Want to change anything? Tell Gen in the chat before approving.</p>
           </section>}
           {workflow&&!next&&<div className="wa-plan-finished"><CheckCircle2 size={19} aria-hidden="true"/><div><strong>This plan is complete.</strong><p>Keep chatting to ask a question, improve what you made, or work on your next idea.</p></div></div>}

@@ -11,8 +11,8 @@ import {workspaceGeneratedProductFixture} from './workspace-product-generation-f
 assert.ok(!process.env.RENDER,'Run this preview locally.');
 const safeEnvironment=new Set(['PATH','HOME','TMPDIR','TMP','TEMP','LANG','LC_ALL','LC_CTYPE','TZ','SystemRoot','SYSTEMROOT','WINDIR']);
 for(const key of Object.keys(process.env))if(!safeEnvironment.has(key))delete process.env[key];
-const anonymous=process.argv.includes('--anonymous'),shortFirst=process.argv.includes('--short-first'),appRoot=resolve('.'),port=anonymous?59908:5218,entryPort=5219,owner='synthetic-design-preview',email='creator@example.test';
-assert.ok(!shortFirst||!process.argv.includes('--check'),'Use --short-first for the interactive retry preview.');
+const anonymous=process.argv.includes('--anonymous'),shortFirst=process.argv.includes('--short-first'),failFirst=process.argv.includes('--fail-first'),appRoot=resolve('.'),port=anonymous?59908:5218,entryPort=5219,owner='synthetic-design-preview',email='creator@example.test';
+assert.ok(!(shortFirst||failFirst)||!process.argv.includes('--check'),'Use failure/concise-output flags for the interactive preview.');
 const resumeArgument=process.argv.find(value=>value.startsWith('--resume='))||(process.argv.includes('--resume')?'--resume='+process.argv[process.argv.indexOf('--resume')+1]:null);
 let fixture,previous,evidenceRoot;
 if(resumeArgument){
@@ -61,9 +61,10 @@ globalThis.fetch=async(input,init)=>{
   if(!productGeneration)assert.equal(images.length,(payload.imageReferenceOrder||[]).length,'Every reference image reaches the actual model envelope.');
   modelRequests.push({kind:productGeneration?'product-generation':'planning',message:payload.message,title:payload.approvedBrief?.title,delivery:payload.approvedBrief?.delivery,exportFormat:payload.approvedBrief?.exportFormat,writingRequirements:payload.writingRequirements,previousAttemptFeedback:payload.previousAttemptFeedback,images,sources:(payload.attachmentSources||payload.referenceMaterial||[]).map(source=>({id:source.id,name:source.name,kind:source.kind,excerpt:source.excerpt.slice(0,600),currentMessage:source.currentMessage}))});writeFileSync(modelEvidencePath,JSON.stringify({synthetic:true,externalProviderCalls:false,requests:modelRequests},null,2));
 
-  if(payload.message?.includes('[fixture-fail]'))return Response.json({error:{code:'synthetic_failure'}},{status:503});
+  if(productGeneration)productGenerationAttempts++;
+  if(payload.message?.includes('[fixture-fail]')||productGeneration&&failFirst&&productGenerationAttempts===1)return Response.json({error:{code:'synthetic_failure'}},{status:503});
   const result=productGeneration?workspaceGeneratedProductFixture(payload.approvedBrief.sectionCount):modelFixture(payload);
-  if(productGeneration&&shortFirst&&++productGenerationAttempts===1)result.sections[0].body=result.sections[0].body.slice(0,1400);
+  if(productGeneration&&shortFirst&&productGenerationAttempts===(failFirst?2:1))result.sections[0].body=result.sections[0].body.slice(0,1400);
   return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(result)}]}]});
  }
  throw new Error('External network is disabled in this synthetic chat preview.');

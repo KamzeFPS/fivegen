@@ -20,7 +20,7 @@ import {generatedOutlineError,generatedSectionError,generatedPackageError} from 
 import {loadCreatorContext,assertCreatorContextRefs} from '@/lib/creator-context-server';
 import {creatorContextInstructions} from '@/lib/creator-context-contract';
 const outlineSchema=z.object({sections:z.array(z.object({title:z.string().min(1).max(150),objective:z.string().min(1).max(1500)})).min(3).max(30),benefits:z.array(z.string().max(300)).min(3).max(8)});
-const sectionBodySchema=z.object({body:z.string().min(300).max(18000)});
+const sectionBodySchema=z.object({body:z.string().trim().min(1)});
 const packageSchema=z.object({launch:z.string().min(600).max(50000),salesCopy:z.string().min(150).max(15000),files:z.array(fileSchema).min(1).max(12),imagePrompt:z.string().min(30).max(4000),videoPrompt:z.string().min(30).max(2500)});
 export async function GET(
   _req: Request,

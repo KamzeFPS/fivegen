@@ -32,7 +32,7 @@ export const colors = ["orange", "violet", "blue", "green", "pink"] as const;
 export const sectionSchema = z.object({
   studio: z.custom<SectionStudio>(value=>{try{return !!value&&typeof value==='object'&&!Array.isArray(value)&&JSON.stringify(value).length<=60000;}catch{return false;}},'Section settings exceed the supported size.').optional(),
   title: z.string().min(1).max(150),
-  body: z.string().max(18000),
+  body: z.string(),
   objective: z.string().max(1500).optional(),
   id: z.string().uuid().optional(),
   videoId: z.string().uuid().optional(),
