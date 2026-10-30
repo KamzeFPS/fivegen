@@ -10,6 +10,8 @@ import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@
 import {ChatQuestionStepper} from './chat-question-stepper';
 import {ChatReplyDownload,WorkspaceChatDownloads} from './workspace-chat-downloads';
 import {ImageQualityControl,useImageQuality} from './image-quality-control';
+import {completedWorkspaceProduct,type ProductReadyApproval,type ProductReadyCompletion} from '@/lib/workspace-product-ready';
+import {WorkspaceProductReady} from './workspace-product-ready';
 import './workspace-chat.css';
 
 type Props={
@@ -73,6 +75,10 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
   const [showLatest,setShowLatest]=useState(false);
   const [planOpen,setPlanOpen]=useState(false);
   const [noteOpen,setNoteOpen]=useState(false);
+  const [productApproval,setProductApproval]=useState<ProductReadyApproval|null>(null);
+  const [productReady,setProductReady]=useState<ProductReadyCompletion|null>(null);
+  const productContextRef=useRef<{conversationId:string|undefined;planId:string|undefined}|null>(null);
+  const shownProductsRef=useRef(new Set<string>());
   const fileDraftKey=workspaceAttachmentDraftKey(attachmentScope,conversation?.id);
   const [fileDraft,setFileDraft]=useState<{key:string;draft:WorkspaceAttachmentDraft}>({key:'',draft:{message:'',files:[],updatedAt:0}});
   const [fileNotice,setFileNotice]=useState(''),[uploadStatus,setUploadStatus]=useState('');
@@ -113,6 +119,20 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
   const actionDisabled=isBusy||hasDraft;
 
   useEffect(()=>{messageChangeRef.current=onMessage;},[onMessage]);
+
+  useEffect(()=>{
+    productContextRef.current={conversationId:conversation?.id,planId:workflow?.id};
+    setProductApproval(null);setProductReady(null);
+    return()=>{productContextRef.current=null;};
+  },[conversation?.id,workflow?.id]);
+
+  useEffect(()=>{
+    const completed=completedWorkspaceProduct(conversation,productApproval);
+    if(!completed)return;
+    setProductApproval(null);
+    if(shownProductsRef.current.has(completed.key))return;
+    shownProductsRef.current.add(completed.key);setPlanOpen(false);setProductReady(completed);
+  },[conversation,productApproval]);
 
   useEffect(()=>{
     let active=true;const edited=fileEditsRef.current;restoredFileMessageRef.current='';
@@ -243,11 +263,17 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
   }
   async function decide(step:AssistantStep,decision:'approve'|'skip'){
     if(actionDisabled||actionRef.current||step.id!==next?.id)return;
+    const approval=decision==='approve'&&step.action.type==='create_product'&&conversation&&workflow?{conversationId:conversation.id,planId:workflow.id,stepId:step.id}:null;
     actionRef.current=true;setActing(true);setLocalError('');
-    try{if(!await onAction(step.id,decision))setLocalError('This step could not be saved. Review the message above, then try again.');}
+    try{
+      if(!await onAction(step.id,decision))setLocalError('This step could not be saved. Review the message above, then try again.');
+      else if(approval&&productContextRef.current?.conversationId===approval.conversationId&&productContextRef.current.planId===approval.planId)setProductApproval(approval);
+    }
     catch{setLocalError('This step could not be saved. Please try again.');}
     finally{actionRef.current=false;setActing(false);}
   }
+
+  function dismissProductReady(){setProductReady(null);window.requestAnimationFrame(()=>inputRef.current?.focus({preventScroll:true}));}
 
   return <div className={`workspace-assistant${isHome?' wa-home':''}`} ref={shellRef}>
     {!isHome&&<header className="wa-heading">
@@ -324,6 +350,7 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
             <p className="wa-plan-footnote"><ShieldCheck size={14} aria-hidden="true"/>Only the next step can be approved. You can revise the plan by chatting.</p>
           </div>
       </DialogContent></Dialog>}
+    {productReady&&productReady.conversationId===conversation?.id&&productReady.planId===workflow?.id&&<WorkspaceProductReady key={productReady.key} completion={productReady} onClose={dismissProductReady} onOpen={()=>{setProductReady(null);onVisit(productReady.href);}}/>}
     <p className="wa-sr-only" role="status" aria-live="polite" aria-atomic="true">{latest?.role==='assistant'?`Gen replied. ${latest.content.slice(0,180)}`:''}</p>
   </div>;
 }

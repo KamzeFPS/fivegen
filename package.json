@@ -26,7 +26,7 @@
     "test:paddle:live": "node scripts/paddle-live-test.mjs",
     "start:paddle:staging": "node --env-file=.env.render.local --env-file=.env.paddle-live.local scripts/paddle-staging.mjs",
     "test:studio": "node scripts/studio-planning-test.mjs && node scripts/studio-subscription-test.mjs",
-    "test:workspace-chat": "node scripts/workspace-assistant-planning-test.mjs && node scripts/workspace-assistant-actions-test.mjs && node scripts/workspace-assistant-downloads-test.mjs && node scripts/chat-composer-ui-test.mjs",
+    "test:workspace-chat": "node scripts/workspace-assistant-planning-test.mjs && node scripts/workspace-assistant-actions-test.mjs && node scripts/workspace-assistant-downloads-test.mjs && node scripts/workspace-product-ready-test.mjs && node scripts/workspace-product-ready-dialog-test.mjs && node scripts/chat-composer-ui-test.mjs",
     "preview:workspace-chat": "node scripts/workspace-assistant-preview.mjs",
     "test:growth": "node scripts/growth-ai-test.mjs && node scripts/growth-funnel-test.mjs && node scripts/creator-content-test.mjs",
     "test:growth:runtime": "node scripts/growth-runtime-test.mjs",

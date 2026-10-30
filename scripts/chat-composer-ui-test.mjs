@@ -14,12 +14,13 @@ const sessionStorage={get length(){return store.size;},key:index=>[...store.keys
 const matches={coarse:false,reduced:true};
 globalThis.window={location:{pathname:'/',search:''},history:{replaceState(){}},innerHeight:900,requestAnimationFrame:fn=>{fn();return 1;},cancelAnimationFrame(){},addEventListener(){},removeEventListener(){},matchMedia:query=>({matches:query.includes('pointer')?matches.coarse:matches.reduced})};
 globalThis.sessionStorage=sessionStorage;
-const components={ChatQuestionStepper:()=>null,WorkspaceChatDownloads:()=>null,ChatReplyDownload:()=>null,GenMascot:()=>null};
+const components={ChatQuestionStepper:()=>null,WorkspaceChatDownloads:()=>null,ChatReplyDownload:()=>null,WorkspaceProductReady:()=>null,GenMascot:()=>null};
 const iconNames=['ArrowDown','ArrowRight','ArrowUp','BookOpen','CalendarDays','Check','CheckCircle2','ChevronDown','ChevronLeft','ChevronRight','ClipboardList','CornerDownLeft','ExternalLink','Layers3','Lightbulb','Loader2','MessageCircle','Package','Paperclip','FileText','ImageIcon','X','PenLine','Plus','ShieldCheck','SkipForward','Sparkles'];
 const deps={React,z,ImageQualityControl:'test-image-quality',useImageQuality:()=>['medium',()=>{}],...Object.fromEntries(iconNames.map(name=>[name,icons[name]])),...components,...Object.fromEntries(['Dialog','DialogContent','DialogDescription','DialogHeader','DialogTitle'].map(name=>[name,`test-${name}`])),nextAssistantStep:workflow=>workflow?.steps.find(step=>step.status==='pending'),assistantResourceReceipts:()=>[],assistantDestination:()=> 'Products'};
 function sourceExports(path,scope){const source=fs.readFileSync(path,'utf8').replace(/^import[\s\S]*?;\r?\n/gm,''),loaded={};new Function('exports',...Object.keys(scope),ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText)(loaded,...Object.values(scope));return loaded;}
 Object.assign(deps,sourceExports('lib/workspace-attachments.ts',{z}));
 Object.assign(deps,sourceExports('lib/workspace-attachment-draft.ts',{workspaceAttachmentLimits:deps.workspaceAttachmentLimits}));
+Object.assign(deps,sourceExports('lib/workspace-product-ready.ts',{}));
 function nodes(tree,predicate=()=>true){const result=[];function visit(node){if(Array.isArray(node))node.forEach(visit);else if(node&&typeof node==='object'){if(predicate(node))result.push(node);visit(node.props?.children);}}visit(tree);return result;}
 function text(node){return typeof node==='string'||typeof node==='number'?String(node):Array.isArray(node)?node.map(text).join(''):node&&typeof node==='object'?text(node.props?.children):'';}
 function one(tree,predicate){const result=nodes(tree,predicate);assert.equal(result.length,1);return result[0];}
@@ -78,6 +79,34 @@ try{
   chat.props.message='';chat.render();approval=one(chat.tree,node=>node.type==='button'&&text(node)==='Approve & create product');assert.equal(approval.props.disabled,false);approval.props.onClick();await chat.settle();assert.equal(approve,1);
   assert.ok(chat.scrolls.length>0&&chat.scrolls.every(item=>item.className==='wa-transcript'),'Following a reply scrolls the transcript, not the document');
   chat.props.message='x'.repeat(3000);chat.render();stepper(chat.tree).props.onAnswer('Answer');chat.render();assert.equal(one(chat.tree,node=>node.type==='button'&&node.props.type==='submit').props.disabled,true,'Combined answers and note respect the server message limit');
+
+  // Completion follows this tab's confirmed product approval, never old history
+  // or the conversation's first product association.
+  {
+    const productId='aa041f25-4e7d-4a3f-9b04-e002b635ac7d',olderProductId='fa43fe01-38bd-497e-a010-09cf1a6c22d8',visits=[];
+    const pending={...conversation,id:'ready-conversation',productId:olderProductId,messages:[{id:'ready-reply',role:'assistant',content:'Review this exact draft.'}],workflow:{...workflow,id:'ready-plan',steps:[{...workflow.steps[0],action:{...workflow.steps[0].action,title:'A useful second product'}}]}};
+    const completed=()=>({...pending,updatedAt:2,workflow:{...pending.workflow,steps:pending.workflow.steps.map(step=>({...step,status:'completed',result:{label:'Open product draft',href:'/build/'+productId,resourceId:productId,productId,summary:'Saved your original sections.'}}))}});
+    const popup=app=>nodes(app.tree,node=>node.type===components.WorkspaceProductReady&&node.props.completion)[0];
+    const approveProduct=app=>one(app.tree,node=>node.type==='button'&&text(node)==='Approve & create product').props.onClick();
+    const make=async(props={})=>{const app=harness('app/workspace-chat.tsx','WorkspaceChat',{...base,conversation:structuredClone(pending),onVisit:path=>visits.push(path),...props});app.render();await app.settle();return app;};
+    const ready=await make({onAction:async()=>{ready.props.conversation=completed();return true;}});
+    assert.equal(popup(ready),undefined);approveProduct(ready);await ready.settle();
+    assert.equal(popup(ready)?.props.completion.title,'A useful second product');assert.equal(popup(ready).props.completion.href,'/build/'+productId,'The popup opens the saved step product, not the older conversation product');assert.equal(visits.length,0,'The chat itself does not navigate before the completion control opens it');
+    popup(ready).props.onOpen();ready.render();await ready.settle();assert.deepEqual(visits,['/build/'+productId]);assert.equal(popup(ready),undefined,'Opening clears the completion before navigation');
+    ready.props.conversation={...completed(),updatedAt:3};ready.render();await ready.settle();assert.equal(popup(ready),undefined,'Later refreshes cannot replay an opened completion');
+    const dismiss=await make({onAction:async()=>{dismiss.props.conversation=completed();return true;}});approveProduct(dismiss);await dismiss.settle();assert.ok(popup(dismiss));popup(dismiss).props.onClose();dismiss.render();await dismiss.settle();assert.equal(popup(dismiss),undefined,'Stay in chat dismisses the popup');dismiss.props.conversation={...completed(),updatedAt:4};dismiss.render();await dismiss.settle();assert.equal(popup(dismiss),undefined,'A dismissed popup does not replay');
+    const history=await make({conversation:completed()});assert.equal(popup(history),undefined,'Opening a completed conversation never announces creation again');
+    for(const outcome of ['false','throw']){
+      const failed=await make({onAction:async()=>{if(outcome==='throw')throw new Error('Save interrupted');return false;}});approveProduct(failed);await failed.settle();assert.equal(popup(failed),undefined,'An unsuccessful approval has no success popup');failed.props.conversation=completed();failed.render();await failed.settle();assert.equal(popup(failed),undefined,'A later history refresh cannot turn a failed approval into a new success event');
+    }
+    const skipped=await make({onAction:async()=>{skipped.props.conversation={...completed(),workflow:{...pending.workflow,steps:pending.workflow.steps.map(step=>({...step,status:'skipped'}))}};return true;}});one(skipped.tree,node=>node.type==='button'&&text(node)==='Skip this step').props.onClick();await skipped.settle();assert.equal(popup(skipped),undefined,'Skipping a product does not celebrate a saved product');
+    for(const action of [{type:'manual',instructions:'Review the saved work yourself.'},{type:'create_campaign',title:'Draft campaign',goal:'Introduce the product',items:[]},{type:'create_calendar_event',title:'Launch review',startAt:Date.UTC(2026,9,30,1),endAt:Date.UTC(2026,9,30,2),timezone:'Asia/Ulaanbaatar',kind:'task',notes:''}]){
+      const nonProduct=structuredClone(pending);nonProduct.workflow.steps[0].action=action;
+      const other=await make({conversation:nonProduct,onAction:async()=>{other.props.conversation={...nonProduct,workflow:{...nonProduct.workflow,steps:nonProduct.workflow.steps.map(step=>({...step,status:'completed',result:{label:'Saved',href:'/build/'+productId,resourceId:productId,productId,summary:'Saved an action.'}}))}};return true;}});
+      const label=action.type==='manual'?'I’ve done this':action.type==='create_campaign'?'Approve & create campaign':'Approve & add to Calendar';one(other.tree,node=>node.type==='button'&&text(node)===label).props.onClick();await other.settle();assert.equal(popup(other),undefined,'Only product creation opens the product completion popup');
+    }
+    let finish;const switched=await make({onAction:()=>new Promise(resolve=>{finish=resolve;})});approveProduct(switched);await switched.settle();switched.props.conversation={...completed(),id:'another-conversation'};switched.render();await switched.settle();finish(true);await switched.settle();assert.equal(popup(switched),undefined,'An approval finishing after a conversation switch cannot show its product in the new chat');
+  }
 
   const calls=[];const questions=harness('app/chat-question-stepper.tsx','ChatQuestionStepper',{questions:conversation.messages[0].questions,index:0,answered:0,value:'',disabled:false,onAnswer:value=>calls.push(['answer',value]),onIndex:value=>calls.push(['index',value]),onSubmit:()=>calls.push(['submit'])});questions.render();
   assert.equal(nodes(questions.tree,node=>node.type==='textarea').length,1,'Only the current question creates an input');
