@@ -11,7 +11,8 @@ import {workspaceGeneratedProductFixture} from './workspace-product-generation-f
 assert.ok(!process.env.RENDER,'Run this preview locally.');
 const safeEnvironment=new Set(['PATH','HOME','TMPDIR','TMP','TEMP','LANG','LC_ALL','LC_CTYPE','TZ','SystemRoot','SYSTEMROOT','WINDIR']);
 for(const key of Object.keys(process.env))if(!safeEnvironment.has(key))delete process.env[key];
-const anonymous=process.argv.includes('--anonymous'),appRoot=resolve('.'),port=anonymous?59908:5218,entryPort=5219,owner='synthetic-design-preview',email='creator@example.test';
+const anonymous=process.argv.includes('--anonymous'),shortFirst=process.argv.includes('--short-first'),appRoot=resolve('.'),port=anonymous?59908:5218,entryPort=5219,owner='synthetic-design-preview',email='creator@example.test';
+assert.ok(!shortFirst||!process.argv.includes('--check'),'Use --short-first for the interactive retry preview.');
 const resumeArgument=process.argv.find(value=>value.startsWith('--resume='))||(process.argv.includes('--resume')?'--resume='+process.argv[process.argv.indexOf('--resume')+1]:null);
 let fixture,previous,evidenceRoot;
 if(resumeArgument){
@@ -46,7 +47,7 @@ function modelFixture(input){
  if(!/campaign drafts|launch review/i.test(input.message))response.plan.steps=response.plan.steps.slice(0,1);
  return response;
 }
-const modelEvidencePath=resolve(evidenceRoot,'model-evidence.json'),modelRequests=[];
+const modelEvidencePath=resolve(evidenceRoot,'model-evidence.json'),modelRequests=[];let productGenerationAttempts=0;
 const local=host=>['localhost','127.0.0.1','[::1]','::1'].includes(host),originalFetch=globalThis.fetch;
 globalThis.fetch=async(input,init)=>{
  const target=new URL(typeof input==='string'||input instanceof URL?input:input.url);
@@ -58,10 +59,12 @@ globalThis.fetch=async(input,init)=>{
   const marker='Request:\n',index=text.lastIndexOf(marker);assert.ok(index>=0,'Expected a real structured request envelope.');const payload=JSON.parse(text.slice(index+marker.length)),images=[];
   for(const part of parts.filter(part=>part.type==='input_image')){const match=/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(part.image_url);assert.ok(match,'Image references must contain actual local bytes, never URLs.');const bytes=Buffer.from(match[2],'base64');assert.ok(bytes.length>20&&bytes.length<=8*1024*1024);const {loadImage}=await import('@napi-rs/canvas'),image=await loadImage(bytes);assert.ok(image.width>0&&image.height>0&&image.width<=2048&&image.height<=2048);images.push({mime:match[1],bytes:bytes.length,width:image.width,height:image.height});}
   if(!productGeneration)assert.equal(images.length,(payload.imageReferenceOrder||[]).length,'Every reference image reaches the actual model envelope.');
-  modelRequests.push({kind:productGeneration?'product-generation':'planning',message:payload.message,title:payload.approvedBrief?.title,delivery:payload.approvedBrief?.delivery,exportFormat:payload.approvedBrief?.exportFormat,images,sources:(payload.attachmentSources||payload.referenceMaterial||[]).map(source=>({id:source.id,name:source.name,kind:source.kind,excerpt:source.excerpt.slice(0,600),currentMessage:source.currentMessage}))});writeFileSync(modelEvidencePath,JSON.stringify({synthetic:true,externalProviderCalls:false,requests:modelRequests},null,2));
+  modelRequests.push({kind:productGeneration?'product-generation':'planning',message:payload.message,title:payload.approvedBrief?.title,delivery:payload.approvedBrief?.delivery,exportFormat:payload.approvedBrief?.exportFormat,writingRequirements:payload.writingRequirements,previousAttemptFeedback:payload.previousAttemptFeedback,images,sources:(payload.attachmentSources||payload.referenceMaterial||[]).map(source=>({id:source.id,name:source.name,kind:source.kind,excerpt:source.excerpt.slice(0,600),currentMessage:source.currentMessage}))});writeFileSync(modelEvidencePath,JSON.stringify({synthetic:true,externalProviderCalls:false,requests:modelRequests},null,2));
 
   if(payload.message?.includes('[fixture-fail]'))return Response.json({error:{code:'synthetic_failure'}},{status:503});
-  return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(productGeneration?workspaceGeneratedProductFixture(payload.approvedBrief.sectionCount):modelFixture(payload))}]}]});
+  const result=productGeneration?workspaceGeneratedProductFixture(payload.approvedBrief.sectionCount):modelFixture(payload);
+  if(productGeneration&&shortFirst&&++productGenerationAttempts===1)result.sections[0].body=result.sections[0].body.slice(0,1400);
+  return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(result)}]}]});
  }
  throw new Error('External network is disabled in this synthetic chat preview.');
 };
