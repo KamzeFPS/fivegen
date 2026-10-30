@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {designDocumentSchema,type DesignDocument} from './design-document';
 import {courseModulesSchema,type CourseModule} from './product-curriculum';
 import {decisionGraphSchema,type ProductDecisionGraph as DecisionGraph} from './product-decision-contract';
 import {communityAdvancedSchema,communityPublicTiers,type CommunityTier} from './product-community-tier-contract';
@@ -6,6 +7,7 @@ import {communityAdvancedSchema,communityPublicTiers,type CommunityTier} from '.
 export type LearningSettings={release?:'all'|'daily'|'date';startAt?:number;intervalDays?:number;requirePrevious?:boolean;certificate?:boolean;completionReward?:string;upsellUrl?:string;upsellLabel?:string;cohort?:string};
 export type SectionStudio={kind?:string;videoChapters?:{title:string;seconds:number}[];decisionGraph?:DecisionGraph;takeaway?:string;actionStep?:string;why?:string;mistakes?:string;imageUrl?:string;phase?:string;role?:string;inputs?:string;outputs?:string;minutes?:number;kpi?:string;decision?:string;audioId?:string;transcript?:string;captionsVtt?:string;unlockAt?:number;dripDays?:number;prerequisiteIds?:string[];quiz?:{question:string;options:string[];correctIndex:number;explanation?:string}[];assignment?:{prompt:string;required:boolean};reflection?:string;goalWords?:number;[key:string]:unknown};
 export type ProductStudioConfig={
+ design?:DesignDocument;
  basics?:{subtitle?:string;shortDescription?:string;tags?:string[];problem?:string;prerequisites?:string;[key:string]:unknown};
  sales?:{faq?:{id?:string;question:string;answer:string}[];testimonials?:{id?:string;name:string;quote:string;role?:string}[];refundPolicy?:string;previewSectionIds?:string[];[key:string]:unknown};
  pricing?:{model?:'one-time'|'subscription'|'pwyw'|'free';interval?:'month'|'year';minimumCents?:number;suggestedCents?:number;coupons?:{id?:string;code:string;percentOff:number}[];bundleProductIds?:string[];[key:string]:unknown};
@@ -28,7 +30,7 @@ function boundedJson(value:unknown,maxBytes:number){
   return !!value&&typeof value==='object'&&!Array.isArray(value)&&valid(value,0);
  }catch{return false;}
 }
-export const productStudioSchema=z.custom<ProductStudioConfig>(value=>boundedJson(value,350000),'Product settings exceed the supported size or contain invalid values.');
+export const productStudioSchema=z.custom<ProductStudioConfig>(value=>{try{if(!value||typeof value!=='object'||Array.isArray(value)||new TextEncoder().encode(JSON.stringify(value)).length>350000)return false;const settings={...value as Record<string,unknown>};delete settings.design;return boundedJson(settings,350000);}catch{return false;}},'Product settings exceed the supported size or contain invalid values.').superRefine((value,context)=>{if(value&&typeof value==='object'&&value.design!==undefined){const parsed=designDocumentSchema.safeParse(value.design);if(!parsed.success)for(const issue of parsed.error.issues)context.addIssue({...issue,path:['design',...issue.path]});}});
 export const sectionStudioSchema=z.custom<SectionStudio>(value=>boundedJson(value,60000),'Section settings exceed the supported size or contain invalid values.');
 export const productPricingSchema=z.object({model:z.enum(['one-time','subscription','pwyw','free']).default('one-time'),interval:z.enum(['month','year']).default('month'),minimumCents:z.number().int().min(0).max(999900).default(0),suggestedCents:z.number().int().min(0).max(999900).default(0),coupons:z.array(z.object({id:z.string().max(100).optional(),code:z.string().trim().regex(/^[a-zA-Z0-9_-]{3,40}$/),percentOff:z.number().int().min(1).max(100)})).max(30).default([]),bundleProductIds:z.array(z.string().uuid()).max(10).default([])});
 export function studioPricing(studio?:ProductStudioConfig){return productPricingSchema.parse(studio?.pricing||{});}
@@ -37,6 +39,7 @@ const studioImageUrl=z.string().max(2000).refine(value=>!value||!!publicTemplate
 const learningSchema=z.object({release:z.enum(['all','daily','date']).optional(),startAt:z.number().int().nonnegative().optional(),intervalDays:z.number().int().min(1).max(365).optional(),requirePrevious:z.boolean().optional(),certificate:z.boolean().optional(),completionReward:studioText.optional(),upsellUrl:studioUrl.optional(),upsellLabel:studioText.optional(),cohort:studioText.optional()}).passthrough();
 /** Drafts may contain unfinished rows; published settings must be usable. */
 export const productStudioPublicationSchema=z.object({
+ design:designDocumentSchema.optional(),
  basics:z.object({subtitle:studioText.optional(),shortDescription:studioText.optional(),tags:z.array(z.string().max(100)).max(20).optional(),problem:studioText.optional(),prerequisites:studioText.optional()}).passthrough().optional(),
  sales:z.object({faq:z.array(z.object({id:z.string().optional(),question:z.string().trim().min(1).max(500),answer:z.string().trim().min(1).max(4000)})).max(20).optional(),testimonials:z.array(z.object({id:z.string().optional(),name:z.string().trim().min(1).max(150),quote:z.string().trim().min(1).max(3000),role:z.string().max(200).optional()})).max(20).optional(),refundPolicy:studioText.optional(),previewSectionIds:z.array(z.string()).max(5).optional()}).passthrough().optional(),
  pricing:productPricingSchema.optional(),

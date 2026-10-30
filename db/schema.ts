@@ -58,7 +58,7 @@ export const studioConversations = sqliteTable('studio_conversations', {
   id:text('id').primaryKey(),owner:text('owner').notNull(),title:text('title').notNull(),messages:text('messages').notNull().default('[]'),plan:text('plan'),productId:text('product_id'),lease:integer('lease').notNull().default(0),updatedAt:integer('updated_at').notNull(),
 },t=>[index('idx_studio_conversations_owner').on(t.owner,t.updatedAt)]);
 export const studioPlanTurns = sqliteTable('studio_plan_turns', {
-  id:text('id').primaryKey(),owner:text('owner').notNull(),conversationId:text('conversation_id').notNull(),prompt:text('prompt').notNull(),period:text('period').notNull(),mode:text('mode').notNull(),state:text('state').notNull(),response:text('response'),createdAt:integer('created_at').notNull(),
+  id:text('id').primaryKey(),owner:text('owner').notNull(),conversationId:text('conversation_id').notNull(),prompt:text('prompt').notNull(),attachmentIds:text('attachment_ids').notNull().default('[]'),period:text('period').notNull(),mode:text('mode').notNull(),state:text('state').notNull(),response:text('response'),createdAt:integer('created_at').notNull(),
 },t=>[index('idx_studio_plan_turns_owner').on(t.owner,t.period)]);
 export const mcpClients = sqliteTable("mcp_clients", {
   id:text("id").primaryKey(),name:text("name").notNull(),redirects:text("redirects").notNull(),createdAt:integer("created_at").notNull(),

@@ -61,6 +61,7 @@ async function unseal(value: string, owner: string) {
   return new TextDecoder().decode(plain);
 }
 export async function providerSettings(_owner?: string) {
+  void _owner;
   const row = await database()
     .prepare("SELECT * FROM providers WHERE owner=?")
     .bind(MASTER_OWNER)
@@ -92,12 +93,16 @@ export async function providerKey(
     409,
   );
 }
+type ProviderTextBlock={type:string;text?:string};
+type ProviderTextPayload={error?:{code?:unknown;type?:unknown};status?:string;stop_reason?:string;output?:{type:string;content?:ProviderTextBlock[]}[];content?:ProviderTextBlock[]};
+export type TextGenerationImage={mime:'image/jpeg'|'image/png'|'image/webp';base64:string};
 export async function textGeneration(
   owner: string,
   system: string,
   prompt: string,
   maxTokens = 8000,
   outputSchema?: {name:string;schema:Record<string,unknown>},
+  images:TextGenerationImage[] = [],
 ) {
   const { config } = await providerSettings(owner);
   const key = await providerKey(owner, config.textProvider);
@@ -108,8 +113,16 @@ export async function textGeneration(
   const requestPrompt = `Return only a valid JSON object for the following request.${schemaText ? `\n\nMatch this JSON schema exactly:\n${schemaText}` : ''}\n\nRequest:\n${prompt}`;
   const inputBytes=new TextEncoder().encode(system+requestPrompt).length;
   if(inputBytes>64000)throw new ApiError("This request is too large. Shorten the brief or instructions.");
+  if(images.length>4)throw new ApiError('Send up to four reference images.');
+  let imageBytes=0;
+  for(const image of images){
+    if(!['image/jpeg','image/png','image/webp'].includes(image.mime)||typeof image.base64!=='string'||image.base64.length>12_000_000||!image.base64.length||image.base64.length%4!==0||!/^[A-Za-z0-9+/]*={0,2}$/.test(image.base64))throw new ApiError('Use verified raster image references.');
+    const bytes=Buffer.from(image.base64,'base64');imageBytes+=bytes.length;
+    const valid=image.mime==='image/jpeg'?bytes[0]===255&&bytes[1]===216&&bytes[2]===255:image.mime==='image/png'?bytes.length>=8&&[137,80,78,71,13,10,26,10].every((value,index)=>bytes[index]===value):bytes.length>=12&&bytes.subarray(0,4).toString()==='RIFF'&&bytes.subarray(8,12).toString()==='WEBP';
+    if(!valid||bytes.toString('base64')!==image.base64||bytes.length>8*1024*1024||imageBytes>20*1024*1024)throw new ApiError('Image references exceed the supported size or file type.');
+  }
   const inputRate=config.textProvider==="anthropic"?1:0.4,outputRate=config.textProvider==="anthropic"?5:1.6;
-  await reserveAIBudget(Math.ceil(inputBytes*inputRate+maxTokens*outputRate),owner);
+  await reserveAIBudget(Math.ceil(inputBytes*inputRate+maxTokens*outputRate)+images.length*25000,owner);
   let output = "";
   if (config.textProvider === "openai") {
     const r = await fetch("https://api.openai.com/v1/responses", {
@@ -122,7 +135,7 @@ export async function textGeneration(
       body: JSON.stringify({
         model: config.textModel,
         instructions: system,
-        input: requestPrompt,
+        input: images.length?[{role:'user',content:[{type:'input_text',text:requestPrompt},...images.map(image=>({type:'input_image',image_url:`data:${image.mime};base64,${image.base64}`,detail:'auto'}))]}]:requestPrompt,
         max_output_tokens: maxTokens,
         store: false,
         // OpenAI strict Structured Outputs rejects several constraints produced
@@ -132,7 +145,7 @@ export async function textGeneration(
         text: { format: { type: "json_object" } },
       }),
     });
-    const d = (await r.json()) as any;
+    const d = (await r.json()) as ProviderTextPayload;
     if (!r.ok) {
       console.error('AI provider request failed', { provider: 'openai', status: r.status, code: typeof d.error?.code === 'string' ? d.error.code.slice(0, 80) : undefined, requestId: r.headers.get('x-request-id') });
       throw new ApiError("AI generation is temporarily unavailable. Please retry later.", 502);
@@ -144,10 +157,10 @@ export async function textGeneration(
       );
     output =
       d.output
-        ?.filter((o: any) => o.type === "message")
-        .flatMap((o: any) => o.content)
-        .filter((c: any) => c.type === "output_text")
-        .map((c: any) => c.text)
+        ?.filter(o => o.type === "message")
+        .flatMap(o => o.content||[])
+        .filter(c => c.type === "output_text")
+        .map(c => c.text)
         .join("") || "";
   } else {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
@@ -162,10 +175,10 @@ export async function textGeneration(
         model: config.textModel,
         system,
         max_tokens: maxTokens,
-        messages: [{ role: "user", content: requestPrompt }],
+        messages: [{ role: "user", content: images.length?[{type:'text',text:requestPrompt},...images.map(image=>({type:'image',source:{type:'base64',media_type:image.mime,data:image.base64}}))]:requestPrompt }],
       }),
     });
-    const d = (await r.json()) as any;
+    const d = (await r.json()) as ProviderTextPayload;
     if (!r.ok) {
       console.error('AI provider request failed', { provider: 'anthropic', status: r.status, type: typeof d.error?.type === 'string' ? d.error.type.slice(0, 80) : undefined, requestId: r.headers.get('request-id') });
       throw new ApiError(
@@ -180,8 +193,8 @@ export async function textGeneration(
       );
     output =
       d.content
-        ?.filter((c: any) => c.type === "text")
-        .map((c: any) => c.text)
+        ?.filter(c => c.type === "text")
+        .map(c => c.text)
         .join("") || "";
   }
   try {

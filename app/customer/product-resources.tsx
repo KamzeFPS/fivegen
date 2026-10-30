@@ -25,18 +25,20 @@ function Embed({url,title}:{url:string;title:string}){const src=embedded(url);re
 /** All metadata comes from the verified purchase snapshot supplied by the
  * customer API. A file button is only created for that purchase's downloads. */
 export function PurchasedProductResources({content,preview=false}:{content:ResourceContent;preview?:boolean}){
+  const design=content.studio?.design;
   const isTemplates=content.builderType==='template-kit'||content.deliveryFamily==='templates',isCustom=content.builderType==='custom';
-  if(!isTemplates&&!isCustom)return null;
+  if(!isTemplates&&!isCustom&&!design)return null;
   const downloads=new Map((content.downloads||[]).map(file=>[file.id,file]));
   const download=(id:string)=>!preview&&downloads.has(id)?`/api/commerce/customer/${content.id}/uploads/${id}`:'';
   const image=(source:unknown)=>{const id=uploadId(source);if(preview&&id)return `/api/uploads/${id}`;return id?(downloads.get(id)?.mime.startsWith('image/')?download(id)+'?inline=1':''):https(source);};
   const imageMap=Object.fromEntries([...downloads].filter(([,file])=>file.mime.startsWith('image/')).flatMap(([id])=>[[id,download(id)+'?inline=1'],[`/api/uploads/${id}`,download(id)+'?inline=1'],[`upload:${id}`,download(id)+'?inline=1']]));
   const rich=(body:string)=><div className="studio-rich-content buyer-resource-copy" dangerouslySetInnerHTML={{__html:renderStudioMarkdown(body,imageMap)}}/>;
-  if(isTemplates){
+  if(isTemplates||design&&!isCustom){
     const config=object(content.studio?.templates),items=rows(config.items),walkthrough=preview?'':https(config.walkthroughUrl),license=text(config.licenseTerms),version=text(config.version),notes=text(config.releaseNotes);
-    if(!items.length&&!walkthrough&&!license&&!version&&!notes)return null;
+    if(!items.length&&!walkthrough&&!license&&!version&&!notes&&!design)return null;
     return <section className="buyer-template-toolkit" id="customer-template-kit" aria-labelledby="customer-template-kit-heading">
       <header className="buyer-section-heading"><div><h3 id="customer-template-kit-heading">Your toolkit</h3><p>Choose a template, make a copy, and follow the included example.</p></div>{version&&<span className="buyer-template-version">Version {version}</span>}</header>
+      {design&&<article className="buyer-template-card"><div className="buyer-template-card-body"><h4>{design.title}</h4><p>{design.pages.length} {design.pages.length===1?'page':'pages'} · Printable PDF and editable design files</p>{!preview&&<div className="buyer-template-actions"><a className="buyer-button primary" href={`/api/commerce/customer/${content.id}/design?format=pdf`}><ArrowDownToLine size={16}/>Download PDF</a><a className="buyer-button secondary" href={`/api/commerce/customer/${content.id}/design?format=zip`}><Package size={16}/>Editable design package</a></div>}</div></article>}
       {walkthrough&&<details className="buyer-resource-disclosure"><summary><Play size={17}/>Watch the walkthrough</summary><div><Embed url={walkthrough} title="Template walkthrough"/></div></details>}
       {!!items.length&&<div className="buyer-template-gallery">{items.map((item,index)=>{const name=text(item.name)||`Template ${index+1}`,preview=image(item.imageUrl),duplicate=preview?'':https(item.duplicateUrl),blank=download(text(item.blankUploadId)),example=download(text(item.exampleUploadId));return <article className="buyer-template-card" key={text(item.id)||index}>
         {preview?<img className="buyer-template-preview" src={preview} alt={`${name} preview`} loading="lazy" referrerPolicy="no-referrer"/>:<div className="buyer-template-preview without-image" aria-hidden="true"><Layers size={34}/></div>}
@@ -49,11 +51,12 @@ export function PurchasedProductResources({content,preview=false}:{content:Resou
     </section>;
   }
   const config=object(content.studio?.custom),blocks=rows(config.blocks),fields=rows(config.fields),message=text(config.postPurchaseMessage),fulfillment=text(config.fulfillment);
-  if(!blocks.length&&!fields.length&&!message&&!fulfillment)return null;
+  if(!blocks.length&&!fields.length&&!message&&!fulfillment&&!design)return null;
   const kinds=Array.isArray(config.deliveryKinds)?config.deliveryKinds.filter((kind):kind is string=>typeof kind==='string'):[];
   const formatLabels:Record<string,string>={downloads:'Files',lessons:'Lessons',video:'Video',links:'Links',sessions:'Live sessions',physical:'Physical items','physical items':'Physical items'};
   return <section className="buyer-custom-delivery" id="customer-product-components" aria-labelledby="customer-product-components-heading">
     <header className="buyer-section-heading"><div><h3 id="customer-product-components-heading">Everything in your purchase</h3><p>Your resources and delivery instructions, together in one place.</p></div><Package size={23}/></header>
+    {design&&<article className="buyer-custom-block"><h4>{design.title}</h4><p>{design.pages.length} design pages</p>{!preview&&<div className="buyer-template-actions"><a className="buyer-button primary" href={`/api/commerce/customer/${content.id}/design?format=pdf`}><ArrowDownToLine size={16}/>Download PDF</a><a className="buyer-button secondary" href={`/api/commerce/customer/${content.id}/design?format=zip`}><Package size={16}/>Editable design package</a></div>}</article>}
     {!!kinds.length&&<ul className="buyer-delivery-kinds" aria-label="Included formats">{kinds.map((kind,index)=><li key={kind+index}>{formatLabels[kind]||kind}</li>)}</ul>}
     {message&&<div className="buyer-post-purchase-message">{rich(message)}</div>}
     <div className="buyer-custom-blocks">{blocks.map((block,index)=>{const kind=text(block.kind)||'text',heading=text(block.title)||({image:'Image',video:'Video',audio:'Audio',file:'Your download',session:'Your live session',physical:'Your physical item',link:'Your resource',embed:'Your resource'} as Record<string,string>)[kind]||`Resource ${index+1}`,body=text(block.body),source=text(block.url),id=uploadId(source),local=download(id),external=preview?'':https(source),url=local||external,picture=image(source),media=id&&downloads.has(id)?`/api/commerce/customer/${content.id}/video/${id}`:external;return <article className={`buyer-custom-block kind-${kind}`} key={text(block.id)||index}>

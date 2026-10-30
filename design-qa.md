@@ -1,56 +1,51 @@
-# FiveGen continuous page scrolling QA
-
-26 October 2026. Scope: remove unnecessary nested scrolling while preserving the existing design and tasks.
-
-## Findings and changes
-
-1. Sales page settings and preview had separate viewport-height scrollboxes. Both now grow in document flow, including narrow-width and full-width preview modes. Clicking a preview section deliberately reveals its editing fields. Draft changes and autosaves do not trigger page repositioning.
-2. Funnel Builder combined a fixed-height map, inspector, scrolling idea/checklist body and a separate scheduled-items list. The reading journey and desktop details now expand with the page. Selecting a stage reveals its details below the workspace header. Freeform map editing keeps its intentional pan/zoom canvas.
-3. Source excerpts, historical marketing copy, imported-section reviews, chapter outlines, customer message history, decision diagrams and Calendar notes had unnecessary short vertical caps. Removed those caps. Long-form writing and shared studio fields now measure their text and grow on content or width changes; sales copy uses the same behavior.
-4. Mobile Funnel details and Page tools retain a single bounded dialog scroll. Nested content inside those surfaces expands naturally. Scheduling remains a separate dialog and was closed without saving. Product switching, search, tables and genuine chat/canvas surfaces retain scrolling when their content cannot fit.
-5. Removed the obsolete sticky schedule footer shadow from its source rule as well as the final override, so the Light appearance compatibility layer cannot restore the old scroll-edge shadow.
-
-## Current-run evidence
-
-All files below are in `/Users/kamze/Documents/ChatGPT/fivegen/outputs/scroll-simplification-2026-10-26/`.
-
-- Visual baseline/source truth: `01-funnel-before.png` and `02-sales-before.png`, 1440 × 1000 CSS/pixel viewport, anonymous isolated fixture account in the local workspace. This is a behavior correction to the existing design, not a new visual concept.
-- Funnel after: `05-funnel-after.png`, 1440 × 1317 full-page pixels at 1440 × 1000 CSS viewport. The map, inspector and idea body report overflow:visible and equal client/scroll heights. The fifteen-product rail is the only active navigation scroller; it cannot fit vertically in this viewport.
-- Sales after: `03-sales-after.png` and `08-sales-section-reveal.png`, 1440 × 1000. The former is scrolled down to demonstrate one continuous page; the latter shows a selected lower preview section and its focused editing fields beneath the sticky header.
-- Long writing: `04-writing-long.png`; a 7,353-character temporary lesson grew to 6,122 CSS px, and to 7,432 px after narrowing to 705 px. In each case clientHeight equalled scrollHeight. Original text was restored through the UI.
-- Mobile sales: `09-mobile-sales-tools.png`, 390 × 844 CSS/pixel viewport. One inspector scroller, no horizontal page overflow. Closing restores focus with preventScroll; selecting a preview section reopens the appropriate controls.
-- Mobile funnel DOM check: 390 × 844; one inspector scroll surface (842 px high, 1,181 px content), with an expanded idea body (799 px client/content) and schedule footer (193 px client/content). The schedule form was opened, checked and closed without saving.
-- `10-mobile-funnel.png` is rejected evidence: the viewport screenshot was rescaled/clipped during a browser viewport transition. It is not used to judge the mobile layout. Browser viewport changes can reparent funnel details into the mobile portal and reset its local tab; normal node event handlers remain unchanged.
-- Combined source/after evidence: `comparison-funnel.png`, two 1440 × 1000 regions with matching Dark state and no density rescaling. Opened together to check typography, palette, spacing and content preservation.
-- Final updated desktop: `13-funnel-approved.png`, 1470 × 1269 full-page pixels at a 1470 × 745 CSS viewport, Light. The obsolete footer shadow is confirmed `none`; the prior duplicate shadow artifact is resolved. Browser-native desktop checks also covered 1470 × 801; explicit checks also covered 1440 × 1000, 705 × 900 and 390 × 844.
-
-## Required fidelity surfaces
-
-- Typography, wording, brand assets, colors and creation/payment behavior remain unchanged. Existing cards, stage hierarchy and responsive navigation are retained.
-- Layout now uses the document for ordinary content. No artificial minimum preview filler, cropped content body or small reading scrollbar remains in the changed panels.
-- Real artwork and creator-customized pages remain intact; no replacement assets or image edits.
-- Focused inspection covered section selection, long writing, stage details/checklist, mobile tools, schedule form and close/focus return. Browser snapshots and saved screenshots supplement measured overflow checks; a screenshot alone does not establish scroll behavior.
-
-## Validation and limits
-
-Production build, TypeScript, focused editor/fields lint, existing sales-page UI, product-page, creator studio UI, Funnel Builder, funnel navigation, Calendar UI and appearance tests passed. Appearance compatibility CSS was regenerated. Existing sales editor React lint findings are unchanged from HEAD. Browser console entries observed were warnings from an installed Chrome extension, not app errors. No real AI, payment, email or publishing calls were made. Temporary writing/copy edits were restored, and the funnel was reloaded to its saved strategy with its two original actions intact.
+# FiveGen landing and editable Design Studio QA — 2026-10-30
 
 final result: passed
 
-# Chat and Funnel Builder clarity QA
+## Visual truth and scope
 
-27 October 2026. Pulled origin/main by fast-forward to 295e8b9 before editing.
+The user selected option 2, replacing the earlier option 1 selection. Exact source: `/var/folders/86/cm4skwb14sn12224ft91gk6c0000gn/T/codex-clipboard-0bc74700-7a30-4b65-9c5c-4d566dec19c6.png` (1374 × 1145 pixels). The later user instruction removes the showcase caption and every arrow/play/pause icon, retaining slow automatic scrolling with hover pause.
 
-- Chat is a fixed viewport with a docked composer and one conversation scrollbar. Active questions are in the composer, one at a time; notes and answers remain draft-safe and send together. The plan is an optional dialog. No floating Gen overlay covers the input.
-- Fixed the mobile wrapped-flex cross-axis bug discovered at 390 × 500: stage and composer now end at y=500; Send ends at y=482; transcript shrinks to96px while its326px content scrolls. This is a browser viewport check, not a physical iOS/Android keyboard test.
-- Six global navigation destinations fit a single row at390px and705px. Tablet measurements put Calendar’s right edge at627 and Create’s left edge at639 (12px separation), with no document overflow. Restored temporary viewport overrides after checking.
-- Actual browser downloads were opened as files: an8,860-byte materials ZIP with ten entries, full three-chapter product draft, separate social/video/email copy, workflow sketch and UTC calendar import. The selected Funnel outline also downloaded as Markdown. No plan approval, real publishing, emails or payments were triggered by downloads.
-- Funnel Builder now explains its purpose and the choose-stage → pick-video → record/schedule flow. Compact journey selection leaves the recording material readable. Direct idea selection, visible More video ideas, optional focus and quoted credit cost are available.
-- Browser synthetic additive generation appended three ideas (3→6) only to the chosen stage, revealed idea4, retained the other stages and both existing custom notes. Reload retained the six ideas. Scheduled references and creator edits are covered by actual SQLite integration tests. Local synthetic records were retained; no external provider request occurred.
-- Generation preserves graph, old ideas, calendar references and freshness snapshot. Durable intent rejects request-ID reuse for a different stage/focus; uncertain running retries retain the request ID. Credits/leases/CAS/archive and failure-refund checks pass. The0059 migration is additive and verifies upgrade/default replay. Large multilingual libraries save within a bounded8MiB request; existing-idea prompt excerpts stay within the provider input budget without truncating saved material.
+Implementation: `http://localhost:59908/`. Local production build with isolated synthetic records. Design Studio: `http://localhost:5249/design-preview`. Chat: `http://localhost:5219/chat-preview`. The fixtures block all external network/provider/payment/email calls; AI replies are deterministic fixtures passing through the actual application routes, storage and credit logic. Production credentials were not opened or changed.
 
-Evidence: outputs/chat-funnel-clarity-2026-10-27/. Accepted screenshots include funnel-desktop-final.png, funnel-light-final.png, funnel-mobile.png, chat-desktop.png, chat-mobile-final.png, chat-short-viewport-final.png, chat-light-short-final.png and navigation-tablet-final.png. compact-chat-metrics.json and navigation-tablet-metrics.json record measured bounds. chat-short-viewport.png is rejected pre-fix evidence (composer clipped); chat-desktop-final.png is a390px viewport capture despite its filename and is not desktop evidence. The accepted chat-desktop.png is1440 ×1000. Local fixture text/images describe synthetic examples, not real creator results.
+Final production build captured and compared against the source at the same1374 ×1145 viewport and1:1 pixel density. Full comparison: `outputs/final-design-2026-10-30/comparison-final.jpg`. Focused typography/composer comparison: `outputs/final-design-2026-10-30/hero-detail-final.jpg`. Latest implementation screenshot: `outputs/final-design-2026-10-30/landing-final.png`; settled scrolled showcase with glass header and no controls: `outputs/final-design-2026-10-30/showcase-final.png`. No actionable P0/P1/P2 findings remain.
 
-Validation: production build; TypeScript; targeted ESLint (0errors; existing location.assign/unused-variable warnings); chat composer, workspace planning/actions/downloads, legacy planning/subscription, Funnel Builder persistence/navigation/idea-selection, appearance reproducibility and docs tests passed. Physical-device keyboard behavior and live AI quality are not claimed. Existing Render secrets were left closed.
+## Comparison history
 
-Final local result: passed.
+1. `outputs/final-design-2026-10-30/comparison-before.jpg` combines the approved reference and first 1374 × 1145 browser capture, 1 CSS pixel per image pixel. P1: handwritten/grid assets were missing in the first build. Fixed by generating individual rasters and using optimized WebP delivery. P2: headline was too light and the showcase began too low. Fixed weight780, line-height.99, hero spacing and larger composer type.
+2. `outputs/final-design-2026-10-30/comparison-after.jpg` and `hero-detail-comparison.jpg` combine source and revised implementation at identical density and viewport. Grid/note are visible, major region proportions and heavy two-line headline restored. P2: small composer controls enlarged; additional caption and playback controls removed at the user's instruction. Slow seamless scrolling replaces the earlier reversing strip.
+3. Browser at705px found the invisible appearance select extending beyond its icon container and into Sign in. Fixed scoped padding/min-width/box sizing. Final geometry passed:705px viewport/document width705; appearance hit area ends491.5px and Sign in begins504.5px, so they do not overlap. Desktop select width38px is contained in its icon control.
+4. Design Studio at390px found the library squeezed out by the focused canvas. Fixed a dedicated Library drawer, accessible icon control names, and direct Gen entry opens the drawer. Phone screenshot `outputs/final-design-2026-10-30/design-studio-mobile.png`; pages can be selected and the drawer closes back to the fitted canvas. The direct Gen entry drawer regression also passes actual handler tests.
+
+## Required fidelity surfaces
+
+- **Fonts/typography:** locally hosted variable Inter; heading780, two lines on desktop, intentional responsive reflow on phones. Controls enlarged after comparison; no replacement raster UI text. Existing Noto fonts serve editable canvas typography and offline PDF/SVG exports.
+- **Spacing/layout:** same1374 ×1145 reference/browser view at1:1. Source is unframed page content, so no browser/device frame normalization required. Centered930px composer, underlined feature tabs, image showcase and transparent-to-glass sticky header. Intentional auth/credit disclosure is additional functional copy. Desktop,705px and390px checks included.
+- **Colors/tokens:** warm cream, dark ink and FiveGen orange; shared light/dark preference and correct brand variants. Dark theme keeps contrast and intentional product art colors. No theme recolouring of authored designs or exported art.
+- **Images/assets:** all decorative and product imagery is generated raster art. Supplied FiveGen brand reused. Five independent mockup images plus grid and transparent handwritten cue total about730KB optimized WebP. Originals retained outside public delivery in `outputs/final-design-2026-10-30/asset-originals/`. Product images are examples, not attributed customer work or evidence of sales.
+- **Copy/content:** heading and subtitle follow approved option2; task names and chips reflect actual app entry paths. No invented ratings, customers or outcomes. Make it preserves the draft for sign in; sending and paid design generation require explicit user action. User's removal of strip caption/controls supersedes the intermediate implementation.
+
+## Interactions and validation
+
+Browser-tested actual handlers/routes: template selection and review, text edit, numeric positioning, save, image upload as a separate layer, freehand stroke, undo, append two AI-fixture pages, reorder pages, download PDF and PNG. Actual downloaded PDF has1 page at450 ×630pt; PNG is1200 ×1680. Server tests cover all-page export and frozen buyer delivery, ownership and denied access. Proposal is never automatically applied or published.
+
+Chat browser flow: select image+PDF → chips remain local → explicit Send → private upload → actual multimodal fixture response with image count and extracted PDF sentinel → private historical image download. Narrow safe Design Studio action carries the preceding creative brief into the actual generation input and selects Colouring book. No arbitrary model link is activated.
+
+Landing browser flow: per-task edited prompt survives switching tabs, file selected, Make it opens `/signin?return_to=%2F%3Fview%3Dcreate%26intent%3D1` with no text/file data inURL, Back restores both prompt and PDF. No account was created and real OAuth was not exercised. IndexedDB tests cover authenticated restoration, account/chat isolation and the delayed legacy-frame overwrite race.
+
+Hover checked in browser: strip remained at703.5px across successive reads while hovered, then resumed after pointer left. Glass header appeared after scrolling. Console error checks for landing/chat returned none. Reduced motion and focus pauses tested through actual component handlers.
+
+Automated checks passed: TypeScript, production build, focused lint with zero errors (existing image/full-navigation warnings remain), design generation migration/idempotency/refund/owner tests, design export, saved-product/buyer design integration, attachment multipart/SQLite/provider-wire tests, composer/IndexedDB tests, builder/quality/commerce/community-tier regressions, public homepage/SEO/index boundaries, docs28 guides, shared appearance and generated-sheet reproducibility.
+
+## Follow-up polish / limits
+
+- Generated product photo subjects differ from the approved mock while retaining the intended format and art direction; this is expected individual asset generation, not a real-customer claim.
+- Existing product shell names the underlying format Template kit before entering Design Studio. A future format-label refinement can reduce that terminology, without adding a second incompatible product type.
+- Browser QA used synthetic provider transport. It does not establish production model quality, real OAuth, payment, printing hardware or physical touchscreen behavior.
+- Local implementation only; this task has not been deployed to production.
+
+## Final acceptance
+
+All earlierP1/P2 visual and functional findings above were fixed and reviewed again. Desktop1374 ×1145, phone390 ×844, and705 ×950 browser captures had no page-width overflow. The user-requested gallery removal is visible in the final screenshot; hover pause/resume was observed in the browser. Light/dark, saved prompt and attachment handoff, real local downloads, editable content, phone library, and private buyer delivery checks passed at their documented level.
+
+ResidualP3: small optical differences from raster mock typography and independently generated example imagery; added authentic sign-in/file-limit disclosure is intentional. Real provider quality, real authentication and live payments remain outside this isolated verification.

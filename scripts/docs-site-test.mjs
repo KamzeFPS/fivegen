@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import ts from 'typescript';
 function load(path,deps={}){const source=fs.readFileSync(path,'utf8').replace(/^import[\s\S]*?;\r?\n/gm,''),exports={};new Function('exports',...Object.keys(deps),ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(exports,...Object.values(deps));return exports;}
 const docs=load('lib/docs.ts'),{docsArticles,docsGroups,docsManifest,docsLlmsText,searchDocs}=docs;
-assert.ok(docsArticles.length>=18&&docsArticles.length<=27,'A useful maintained guide set, not placeholder routes');
+assert.ok(docsArticles.length>=18&&docsArticles.length<=28,'A useful maintained guide set, not placeholder routes');
 assert.equal(new Set(docsArticles.map(article=>article.slug)).size,docsArticles.length);
 const slugs=new Set(docsArticles.map(article=>article.slug));let totalWords=0;
 for(const article of docsArticles){

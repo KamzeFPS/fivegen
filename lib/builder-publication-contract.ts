@@ -2,6 +2,7 @@ import {z} from 'zod';
 import {sectionSchema,fileSchema} from './product';
 import {builderTypes,builderTypeForFormat,builderTypeDetails} from './builder-contract';
 import type {ProductStudioConfig} from './product-studio-contract';
+import {designDocumentSchema} from './design-document';
 
 // This schema is the only data returned to unauthenticated visitors. Content
 // bodies, original files, lesson recordings and meeting URLs stay private.
@@ -14,7 +15,7 @@ export const builderPublicSnapshotSchema=z.object({
  hasCover:z.boolean().default(false),
 });
 export const builderDeliverySnapshotSchema=z.object({
- studio:z.custom<ProductStudioConfig>().optional(),
+ studio:z.custom<ProductStudioConfig>(value=>{if(!value||typeof value!=='object'||Array.isArray(value))return false;const design=(value as ProductStudioConfig).design;return design===undefined||designDocumentSchema.safeParse(design).success;},'The purchased design is invalid.').optional(),
  title:z.string().max(100),format:z.string().max(100),sections:z.array(sectionSchema).max(30),files:z.array(fileSchema).max(20),
  uploadIds:z.array(z.string().uuid()).max(20),meetingUrl:z.string().max(1500),intakePrompt:z.string().max(1000),
  deliveryFamily:z.enum(['document','course','templates','challenge','service','community','custom']).default('document'),

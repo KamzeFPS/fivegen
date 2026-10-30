@@ -17,7 +17,7 @@ import { freeCreatorPlan } from './creator-plans';
 import {commercePurchaseEmailStatement,purchaseEmailState} from './purchase-email';
 import {fulfillStudioSession,studioSubscriptionEvent,assertStudioSubscriptionAccess,revokeStudioEntitlements} from './product-studio-commerce';
 import {teamSeatAllows,teamSeatOrderIds} from './product-team-server';
-import {sectionHasContent} from './product-readiness';
+import {designHasFinishedPages,sectionHasContent} from './product-readiness';
 import {learningDeliverySections,learnerSectionAccess} from './product-learning-server';
 
 export function commerceMode(): 'live'|'test' {
@@ -113,7 +113,8 @@ export async function assertCommerceContent(product:Record<string,unknown>,selec
     if(snapshot.deliveryFamily==='community'||mixedCommunity){
       if(!snapshot.studio?.community?.enabled&&!safeDeliveryUrl(snapshot.communityUrl))throw new ApiError('Set up your community or add a private HTTPS invitation link.',409);
     }
-    if(!['service','community'].includes(snapshot.deliveryFamily)&&!mixedSessions&&!mixedCommunity&&!snapshot.uploadIds.length&&!snapshot.files.length&&!snapshot.sections.length&&!(snapshot.studio?.templates?.items as {duplicateUrl?:string}[]|undefined)?.some(item=>safeDeliveryUrl(item.duplicateUrl||''))&&!(snapshot.studio?.custom?.blocks as {kind?:string;body?:string;url?:string}[]|undefined)?.some(item=>item.body?.trim()||safeDeliveryUrl(item.url||'')||item.kind==='physical'))throw new ApiError('Add content or original files before selling this product.',409);
+    if(!['service','community'].includes(snapshot.deliveryFamily)&&!mixedSessions&&!mixedCommunity&&!snapshot.uploadIds.length&&!snapshot.files.length&&!snapshot.sections.length&&!(snapshot.studio?.design&&designHasFinishedPages(snapshot.studio.design))&&!(snapshot.studio?.templates?.items as {duplicateUrl?:string}[]|undefined)?.some(item=>safeDeliveryUrl(item.duplicateUrl||''))&&!(snapshot.studio?.custom?.blocks as {kind?:string;body?:string;url?:string}[]|undefined)?.some(item=>item.body?.trim()||safeDeliveryUrl(item.url||'')||item.kind==='physical'))throw new ApiError('Add content or original files before selling this product.',409);
+    if(snapshot.studio?.design&&!designHasFinishedPages(snapshot.studio.design))throw new ApiError('Finish every included design page before selling this product.',409);
     if(snapshot.sections.some(section=>!section.title.trim()||!sectionHasContent(section))||snapshot.files.some(file=>!file.content.trim()))throw new ApiError('Finish every included section and resource before selling this product.',409);
     await verifyBuilderDelivery({id:product.id,owner:product.owner},snapshot,true);return;
   }

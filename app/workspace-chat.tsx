@@ -1,7 +1,9 @@
 'use client';
 
 import {useEffect,useId,useLayoutEffect,useRef,useState} from 'react';
-import {ArrowDown,ArrowRight,ArrowUp,BookOpen,CalendarDays,Check,CheckCircle2,ChevronDown,ClipboardList,CornerDownLeft,ExternalLink,Lightbulb,Loader2,MessageCircle,Package,PenLine,Plus,ShieldCheck,SkipForward,Sparkles} from 'lucide-react';
+import {ArrowDown,ArrowRight,ArrowUp,BookOpen,CalendarDays,Check,CheckCircle2,ChevronDown,ClipboardList,CornerDownLeft,ExternalLink,Lightbulb,Loader2,MessageCircle,Package,Paperclip,PenLine,Plus,FileText,ImageIcon,ShieldCheck,X,SkipForward,Sparkles} from 'lucide-react';
+import {workspaceAttachmentSchema,type WorkspaceAttachment} from '@/lib/workspace-attachments';
+import {addWorkspaceDraftFiles,readWorkspaceAttachmentDraft,writeWorkspaceAttachmentDraft,deleteWorkspaceAttachmentDraft,workspaceAttachmentDraftKey,type WorkspaceAttachmentDraft,type WorkspaceDraftAttachment} from '@/lib/workspace-attachment-draft';
 import {assistantDestination,assistantResourceReceipts,nextAssistantStep} from '@/lib/workspace-assistant';
 import type {AssistantAction,AssistantConversation,AssistantResourceReceipt,AssistantStep,AssistantWorkflow} from '@/lib/workspace-assistant';
 import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
@@ -12,7 +14,8 @@ import './workspace-chat.css';
 type Props={
   conversation:AssistantConversation|null;message:string;sent:string;busy:string;
   name:string;remaining:number;cost:number;credits:number|undefined;aiReady:boolean;unlimited?:boolean;
-  onMessage:(value:string)=>void;onSend:(prompt:string)=>Promise<boolean>;
+  onMessage:(value:string)=>void;onSend:(prompt:string,attachmentIds?:string[])=>Promise<boolean>;
+  attachmentScope?:string;onBusyChange?:(busy:boolean)=>void;onAuthRequired?:()=>void;
   onAction:(stepId:string,decision:'approve'|'skip')=>Promise<boolean>;onVisit:(href:string)=>void;
   onNewChat?:()=>void;
   products?:{id:string;title:string}[];
@@ -23,6 +26,10 @@ type ProductDestination={title:string;id?:string;detail?:string};
 
 const DRAFT_PREFIX='fivegen:workspace-chat:';
 const MAX_MESSAGE=3000;
+const DESIGN_STUDIO_START='/build/new?type=template-kit&design=1&source=ai';
+function designStudioReply(content:string){const known=/\[([^\]\r\n]{1,80})\]\(\/build\/new\?type=template-kit&design=1\)/g;return {available:known.test(content),text:content.replace(known,'$1')};}
+const taskLabels:Record<string,string>={idea:'Develop an idea',marketing:'Plan marketing','product-photos':'Create product photo assets',funnel:'Plan a sales funnel',designs:'Create editable visual designs'};
+const kindLabels:Record<string,string>={ebook:'eBook',invitation:'Invitation','colouring-book':'Colouring book',course:'Course','template-kit':'Template kit'};
 const SUGGESTIONS=[
   {icon:Lightbulb,label:'Start from scratch',prompt:'I want to start from scratch. Help me work out what I can make, who it is for, and the first steps.'},
   {icon:Package,label:'Turn an idea into a product',prompt:'Help me turn an idea into a useful digital product. Ask me what you need, then show me a detailed plan before creating anything.'},
@@ -45,7 +52,7 @@ function actionLabel(action:AssistantAction){
   return action.type==='create_product'?'Approve & create product':action.type==='create_campaign'?'Approve & create campaign':action.type==='create_calendar_event'?'Approve & add to Calendar':'I’ve done this';
 }
 
-export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cost,credits,aiReady,unlimited,onMessage,onSend,onAction,onVisit,onNewChat,products=[]}:Props){
+export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cost,credits,aiReady,unlimited,onMessage,onSend,onAction,onVisit,onNewChat,attachmentScope='guest',onBusyChange,onAuthRequired,products=[]}:Props){
   const messages=conversation?.messages||[];
   const latest=messages.at(-1);
   const questions=latest?.role==='assistant'?(latest.questions||[]).slice(0,3):[];
@@ -64,6 +71,15 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
   const [showLatest,setShowLatest]=useState(false);
   const [planOpen,setPlanOpen]=useState(false);
   const [noteOpen,setNoteOpen]=useState(false);
+  const fileDraftKey=workspaceAttachmentDraftKey(attachmentScope,conversation?.id);
+  const [fileDraft,setFileDraft]=useState<{key:string;draft:WorkspaceAttachmentDraft}>({key:'',draft:{message:'',files:[],updatedAt:0}});
+  const [fileNotice,setFileNotice]=useState(''),[uploadStatus,setUploadStatus]=useState('');
+  const restoredFileMessageRef=useRef('');
+  const fileDraftRef=useRef(fileDraft),fileInputRef=useRef<HTMLInputElement>(null),fileEditsRef=useRef(0);
+  const attachedFiles=fileDraft.key===fileDraftKey?fileDraft.draft.files:[];
+  const filesReady=fileDraft.key===fileDraftKey;
+  const missingFiles=filesReady&&fileDraft.draft.missingFiles&&!attachedFiles.length;
+
   const shellRef=useRef<HTMLDivElement>(null);
   const scrollRef=useRef<HTMLDivElement>(null);
   const inputRef=useRef<HTMLTextAreaElement>(null);
@@ -84,33 +100,63 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
   const questionIndex=answers.id===latest?.id?Math.max(0,Math.min(answers.index||0,questions.length-1)):0;
   const showMessage=!questions.length||noteOpen;
   const answerText=questions.map((question,index)=>answerFor(index).trim()?`${question}\nMy answer: ${answerFor(index).trim()}`:'').filter(Boolean).join('\n\n');
-  const reply=[answerText,message.trim()].filter(Boolean).join('\n\n');
+  const task=filesReady?taskLabels[fileDraft.draft.task||'']:'',productKind=filesReady?kindLabels[fileDraft.draft.productKind||'']:'';
+  const userReply=[answerText,message.trim()].filter(Boolean).join('\n\n');
+  const reply=[task?`Requested work: ${task}.`:'',productKind?`Product format: ${productKind}.`:'',userReply||(attachedFiles.length?'Help me with these attached files.':'') ].filter(Boolean).join('\n\n');
   const tooLong=reply.length>MAX_MESSAGE;
-  const hasDraft=Boolean(message.trim()||answered);
+  const hasDraft=Boolean(message.trim()||answered||attachedFiles.length);
   const isBusy=Boolean(busy||sending||acting);
   const hasCredits=Boolean(unlimited||remaining>0||credits===undefined||credits>=cost);
-  const canSend=reply.length>0&&!tooLong&&!isBusy&&aiReady&&hasCredits;
+  const canSend=(userReply.length>0||attachedFiles.length>0)&&filesReady&&!missingFiles&&!tooLong&&!isBusy&&aiReady&&hasCredits;
   const actionDisabled=isBusy||hasDraft;
 
   useEffect(()=>{messageChangeRef.current=onMessage;},[onMessage]);
 
   useEffect(()=>{
+    let active=true;const edited=fileEditsRef.current;restoredFileMessageRef.current='';
+    void (async()=>{
+      const query=new URLSearchParams(window.location?.search||'');
+      const handoff=!conversation?.id&&attachmentScope!=='guest'&&query.get('intent')==='1'?await readWorkspaceAttachmentDraft('landing'):null;
+      const saved=handoff||await readWorkspaceAttachmentDraft(fileDraftKey),draft:WorkspaceAttachmentDraft=handoff?{...handoff,sourceKey:'landing'}:saved||{message:'',files:[],updatedAt:Date.now()};
+      if(!active)return;
+      const next={key:fileDraftKey,draft};fileDraftRef.current=next;setFileDraft(next);
+      let newerText=false;try{const text=JSON.parse(sessionStorage.getItem(draftKey)||'null');newerText=!handoff&&typeof text?.message==='string'&&Number(text.updatedAt)>Number(saved?.updatedAt||0);}catch{}
+      if(saved&&!newerText&&edited===fileEditsRef.current){restoredFileMessageRef.current=fileDraftKey;messageChangeRef.current(saved.message.slice(0,MAX_MESSAGE));}
+      if(draft.missingFiles&&!draft.files.length)setFileNotice('Your prompt was restored. Select the files again; this browser could not keep them after refresh.');else setFileNotice('');
+      if(handoff){
+        const persisted=await writeWorkspaceAttachmentDraft(fileDraftKey,draft);
+        if(persisted){await deleteWorkspaceAttachmentDraft('landing');query.delete('intent');window.history?.replaceState(null,'',window.location.pathname+(query.size?'?'+query:''));}
+        else if(active&&draft.files.length)setFileNotice('Your files are kept in this tab. Leave it open until your message is sent.');
+      }
+    })();
+    return()=>{active=false;};
+  },[fileDraftKey,attachmentScope,conversation?.id,draftKey]);
+
+  useEffect(()=>{
+    if(fileDraft.key!==fileDraftKey||sending||busy==='planning')return;let active=true;
+    const timer=setTimeout(()=>{void writeWorkspaceAttachmentDraft(fileDraftKey,{...fileDraft.draft,message:message.slice(0,MAX_MESSAGE),updatedAt:Date.now()}).then(persisted=>{if(active&&!persisted&&fileDraft.draft.files.length)setFileNotice('Your browser could not keep files after refresh. Leave this tab open until your message is sent.');});},300);
+    return()=>{active=false;clearTimeout(timer);};
+  },[fileDraftKey,fileDraft,message,sending,busy]);
+
+
+  useEffect(()=>{
+    const handoffRequested=!conversation?.id&&attachmentScope!=='guest'&&new URLSearchParams(window.location?.search||'').get('intent')==='1';
     let saved:SavedDraft|null=null;
-    try{const parsed=JSON.parse(sessionStorage.getItem(draftKey)||'null');if(parsed&&typeof parsed==='object')saved=parsed;}catch{}
+    try{const parsed=JSON.parse(sessionStorage.getItem(draftKey)||'null');if(!handoffRequested&&parsed&&typeof parsed==='object')saved=parsed;}catch{}
     const restored:Record<string,string>={};
     if(saved?.answers?.values&&typeof saved.answers.values==='object')Object.entries(saved.answers.values).slice(0,3).forEach(([key,value])=>{if(/^[0-2]$/.test(key)&&typeof value==='string')restored[key]=value.slice(0,600);});
     const frame=window.requestAnimationFrame(()=>{
       setAnswers({id:typeof saved?.answers?.id==='string'?saved.answers.id:'',values:restored,index:Math.max(0,Math.min(2,Number(saved?.answers?.index)||0))});
-      if(typeof saved?.message==='string')messageChangeRef.current(saved.message.slice(0,MAX_MESSAGE));
+      if(typeof saved?.message==='string'&&restoredFileMessageRef.current!==fileDraftKey)messageChangeRef.current(saved.message.slice(0,MAX_MESSAGE));
       setLoadedKey(draftKey);setLocalError('');setShowLatest(false);setNoteOpen(typeof saved?.message==='string'&&Boolean(saved.message.trim()));followRef.current=true;firstScrollRef.current=true;
     });
     return()=>window.cancelAnimationFrame(frame);
-  },[draftKey]);
+  },[draftKey,fileDraftKey,attachmentScope,conversation?.id]);
 
   useEffect(()=>{
-    if(loadedKey!==draftKey)return;
+    if(loadedKey!==draftKey||!filesReady||sending||busy==='planning')return;
     saveDraft(draftKey,{message:message.slice(0,MAX_MESSAGE),answers,updatedAt:Date.now()});
-  },[draftKey,loadedKey,message,answers]);
+  },[draftKey,loadedKey,message,answers,sending,busy,filesReady]);
 
   useEffect(()=>{
     const pane=scrollRef.current;if(!pane)return;
@@ -150,23 +196,48 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
   function updateAnswer(index:number,value:string){setAnswers({id:latest?.id||'',values:{...currentAnswers,[String(index)]:value.slice(0,600)},index});setLocalError('');}
   function selectQuestion(index:number){setAnswers({id:latest?.id||'',values:currentAnswers,index});}
   function focusMessage(value?:string){
-    if(value!==undefined)onMessage(value);
+    if(value!==undefined){fileEditsRef.current++;onMessage(value);}
     setNoteOpen(true);
     window.requestAnimationFrame(()=>inputRef.current?.focus({preventScroll:true}));
   }
+  function openDesignStudio(replyIndex:number){
+    if(isBusy)return;const brief=messages.slice(0,replyIndex).reverse().find(item=>item.role==='user')?.content.trim().slice(0,1500)||'';
+    try{if(brief)sessionStorage.setItem('fivegen:builder-new-idea',brief);else sessionStorage.removeItem('fivegen:builder-new-idea');}catch{}
+    onVisit(DESIGN_STUDIO_START);
+  }
   function jumpLatest(){followRef.current=true;setShowLatest(false);const pane=scrollRef.current;if(pane)pane.scrollTo({top:pane.scrollHeight,behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});}
   function reviewNext(){setPlanOpen(false);window.requestAnimationFrame(()=>{const pane=scrollRef.current,node=nextRef.current;if(pane&&node)pane.scrollTo({top:node.getBoundingClientRect().top-pane.getBoundingClientRect().top+pane.scrollTop-16,behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});node?.focus({preventScroll:true});});}
+  function chooseFiles(selected:File[]){
+    if(isBusy||!filesReady)return;const result=addWorkspaceDraftFiles(attachedFiles,selected);if(result.error){setLocalError(result.error);return;}
+    if(result.files.length===attachedFiles.length&&result.files.every((item,index)=>item.id===attachedFiles[index].id)){setLocalError('');return;}
+    fileEditsRef.current++;const next={key:fileDraftKey,draft:{...fileDraft.draft,message,files:result.files,uploadRequest:undefined,missingFiles:false}};fileDraftRef.current=next;setFileDraft(next);void writeWorkspaceAttachmentDraft(fileDraftKey,next.draft);setLocalError('');
+  }
+  function removeFile(id:string){
+    if(isBusy)return;fileEditsRef.current++;const next={key:fileDraftKey,draft:{...fileDraft.draft,message,files:attachedFiles.filter(item=>item.id!==id),uploadRequest:undefined,missingFiles:false}};fileDraftRef.current=next;setFileDraft(next);void writeWorkspaceAttachmentDraft(fileDraftKey,next.draft);setLocalError('');
+  }
+  async function stageFiles(key:string,selected:WorkspaceDraftAttachment[]):Promise<WorkspaceAttachment[]>{
+    const pending=selected.filter(item=>!item.uploaded);if(!pending.length)return selected.map(item=>item.uploaded!);
+    const current=fileDraftRef.current.draft,ids=pending.map(item=>item.id),request=current.uploadRequest&&JSON.stringify(current.uploadRequest.fileIds)===JSON.stringify(ids)?current.uploadRequest:{id:crypto.randomUUID(),fileIds:ids};
+    const staged={...current,message,files:selected,uploadRequest:request,updatedAt:Date.now()},next={key,draft:staged};fileDraftRef.current=next;setFileDraft(next);await writeWorkspaceAttachmentDraft(key,staged);
+    const body=new FormData();body.set('requestId',request.id);pending.forEach(item=>body.append('files',item.file,item.file.name));setUploadStatus(`Uploading ${pending.length} ${pending.length===1?'file':'files'}…`);
+    const response=await fetch('/api/studio/assistant/attachments',{method:'POST',body,signal:AbortSignal.timeout(120000)}),data=await response.json().catch(()=>({error:'The upload was interrupted. Your files are kept here so you can retry.'})) as {attachments?:unknown[];error?:string};
+    if(!response.ok){if(response.status===401||response.status===428)onAuthRequired?.();throw new Error(data.error||'Your files could not be uploaded. They are kept here so you can retry.');}
+    const attachments=(data.attachments||[]).map(item=>workspaceAttachmentSchema.parse(item));if(attachments.length!==pending.length)throw new Error('The upload did not finish for every file. Your files are kept here so you can retry.');
+    const completed=new Map(pending.map((item,index)=>[item.id,attachments[index]])),files=selected.map(item=>completed.has(item.id)?{...item,uploaded:completed.get(item.id)!}:item),saved={...staged,files,uploadRequest:undefined,updatedAt:Date.now()};fileDraftRef.current={key,draft:saved};setFileDraft({key,draft:saved});await writeWorkspaceAttachmentDraft(key,saved);return files.map(item=>item.uploaded!);
+  }
   async function submit(){
     if(!canSend||submitRef.current)return;
-    submitRef.current=true;setSending(true);setLocalError('');followRef.current=true;
+    submitRef.current=true;setSending(true);setLocalError('');onBusyChange?.(true);followRef.current=true;const attachmentKey=fileDraftKey,sourceKey=fileDraft.draft.sourceKey,selected=[...attachedFiles];
     try{
-      if(await onSend(reply)){
+      const attachments=await stageFiles(attachmentKey,selected);setUploadStatus('');
+      if(await onSend(reply||'Help me with these attached files.',attachments.map(item=>item.id))){
+        await deleteWorkspaceAttachmentDraft(attachmentKey);if(sourceKey&&(sourceKey==='landing'||sourceKey===workspaceAttachmentDraftKey(attachmentScope)))await deleteWorkspaceAttachmentDraft(sourceKey);const next={key:attachmentKey,draft:{message:'',files:[],updatedAt:Date.now()}};fileDraftRef.current=next;setFileDraft(next);setFileNotice('');
         setAnswers({id:'',values:{}});setNoteOpen(false);onMessage('');
         try{sessionStorage.removeItem(draftKey);}catch{}
         inputRef.current?.focus({preventScroll:true});
       }else setLocalError('Your message wasn’t sent. Your draft is saved here so you can try again.');
-    }catch{setLocalError('Your message wasn’t sent. Your draft is saved here so you can try again.');}
-    finally{submitRef.current=false;setSending(false);}
+    }catch(error){setLocalError(error instanceof Error?error.message:'Your message wasn’t sent. Your draft is saved here so you can try again.');}
+    finally{submitRef.current=false;setSending(false);setUploadStatus('');onBusyChange?.(false);}
   }
   async function decide(step:AssistantStep,decision:'approve'|'skip'){
     if(actionDisabled||actionRef.current||step.id!==next?.id)return;
@@ -191,13 +262,13 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
             <div className="wa-how"><span><b>1</b>Tell me your goal</span><span><b>2</b>Review the plan & drafts</span><span><b>3</b>Approve one step at a time</span></div>
             <p className="wa-existing-path">Already have your content? <button type="button" onClick={()=>onVisit('/build/new?source=upload')}>Import a file</button><span aria-hidden="true"> · </span><button type="button" onClick={()=>onVisit('/build/new?source=manual')}>Write it yourself</button></p>
           </section>}
-          {messages.map((item,index)=><article key={item.id} className={`wa-message wa-${item.role}`}>
+          {messages.map((item,index)=>{const designLink=item.role==='assistant'?designStudioReply(item.content):null;return <article key={item.id} className={`wa-message wa-${item.role}`}>
             <span className="wa-avatar" aria-hidden="true">{item.role==='assistant'?<Sparkles size={17}/>:name.slice(0,1).toUpperCase()||'Y'}</span>
-            <div className="wa-message-body"><strong>{item.role==='assistant'?'Gen':name||'You'}</strong><div className="wa-message-copy">{item.content}</div>
+            <div className="wa-message-body"><strong>{item.role==='assistant'?'Gen':name||'You'}</strong><div className="wa-message-copy">{designLink?.available?designLink.text:item.content}</div>{designLink?.available&&<button type="button" className="wa-primary wa-design-start" disabled={isBusy} onClick={()=>openDesignStudio(index)}>Open Design studio<ArrowRight size={15} aria-hidden="true"/></button>}{!!item.attachments?.length&&<ul className="wa-message-attachments" aria-label="Attached files">{item.attachments.map(file=><li key={file.id}><a href={`/api/studio/assistant/attachments/${encodeURIComponent(file.id)}`} download={file.name}><Paperclip size={14} aria-hidden="true"/><span>{file.name}</span><ArrowDown size={13} aria-hidden="true"/></a>{file.warnings.map((warning,index)=><small key={index}>{warning}</small>)}</li>)}</ul>}
               {item.questions?.length&&!(item.role==='assistant'&&index===messages.length-1&&questions.length>0)?<details className="wa-earlier-questions"><summary>Questions from this reply</summary><ul>{item.questions.slice(0,3).map((question,questionIndex)=><li key={questionIndex}>{question}</li>)}</ul></details>:null}
               {item.role==='assistant'&&<ChatReplyDownload messageId={item.id} content={item.content} questions={item.questions}/>}
             </div>
-          </article>)}
+          </article>;})}
           {sent&&<article className="wa-message wa-user"><span className="wa-avatar" aria-hidden="true">{name.slice(0,1).toUpperCase()||'Y'}</span><div className="wa-message-body"><strong>{name||'You'}</strong><div className="wa-message-copy">{sent}</div></div></article>}
           {Boolean(sent||sending||busy==='planning')&&<p className="wa-thinking" role="status"><Loader2 size={17} className="wa-spin" aria-hidden="true"/>Gen is thinking through your next step…</p>}
           {savedResources.length>0&&<section className="wa-results" aria-label="Created in your workspace"><h2><CheckCircle2 size={17} aria-hidden="true"/>Saved in your workspace</h2>{savedResources.map(receipt=><Result key={`${receipt.planId}:${receipt.stepId}`} step={receipt} onVisit={onVisit}/>)}</section>}
@@ -221,11 +292,15 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
           {showLatest&&<button type="button" className="wa-jump" onClick={jumpLatest}><ArrowDown size={14} aria-hidden="true"/>Jump to latest</button>}
           <form className="wa-composer" onSubmit={event=>{event.preventDefault();void submit();}}>
             {questions.length>0&&<>{!showMessage&&<ChatQuestionStepper questions={questions} index={questionIndex} answered={answered} value={answerFor(questionIndex)} disabled={isBusy} onAnswer={value=>updateAnswer(questionIndex,value)} onIndex={selectQuestion} onSubmit={()=>void submit()}/>}<button type="button" className="wa-note-toggle" aria-expanded={showMessage} onClick={()=>{setNoteOpen(open=>!open);if(!showMessage)window.requestAnimationFrame(()=>inputRef.current?.focus({preventScroll:true}));}} disabled={isBusy}>{showMessage?`Back to questions · ${answered}/${questions.length} answered`:message.trim()?'Review your added note':'Add a note or reply in your own words'}<ChevronDown size={13} aria-hidden="true"/></button></>}
+            {(task||productKind)&&<p className="wa-creation-context"><span>{[task,productKind].filter(Boolean).join(' · ')}</span></p>}
             <label htmlFor={inputId} hidden={!showMessage}>{questions.length?'Anything else?':'Message Gen'}</label>
-            <textarea id={inputId} ref={inputRef} hidden={!showMessage} rows={2} value={message} maxLength={MAX_MESSAGE} disabled={isBusy} placeholder={answered?'Add anything else, or send your answers…':workflow?'Ask anything, refine the plan, or start something new…':'Tell me what’s on your mind…'} aria-describedby={`${helpId}${tooLong||localError?` ${errorId}`:''}`} aria-invalid={tooLong||Boolean(localError)} onChange={event=>{onMessage(event.target.value);setNoteOpen(true);setLocalError('');}} onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing&&event.nativeEvent.keyCode!==229&&!window.matchMedia('(pointer: coarse)').matches){event.preventDefault();void submit();}}}/>
-            <div className="wa-composer-bottom"><span>{!aiReady?'AI is not connected yet':isBusy?acting?'Saving your approved step…':'Gen is working…':unlimited?'Unlimited planning':remaining>0?`${remaining} included ${remaining===1?'message':'messages'} left`:`${cost} credits per message`}</span><button type="submit" disabled={!canSend} className="wa-send">{sending||busy==='planning'?<Loader2 size={17} className="wa-spin" aria-hidden="true"/>:<ArrowUp size={17} aria-hidden="true"/>}<span>{sending||busy==='planning'?'Thinking…':answered?'Send answers':'Send'}</span></button></div>
+            <textarea id={inputId} ref={inputRef} hidden={!showMessage} rows={2} value={message} maxLength={MAX_MESSAGE} disabled={isBusy} placeholder={answered?'Add anything else, or send your answers…':workflow?'Ask anything, refine the plan, or start something new…':'Tell me what’s on your mind…'} aria-describedby={`${helpId}${tooLong||localError?` ${errorId}`:''}`} aria-invalid={tooLong||Boolean(localError)} onChange={event=>{fileEditsRef.current++;onMessage(event.target.value);setNoteOpen(true);setLocalError('');}} onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing&&event.nativeEvent.keyCode!==229&&!window.matchMedia('(pointer: coarse)').matches){event.preventDefault();void submit();}}}/>
+            {!!attachedFiles.length&&<ul className="wa-file-list" aria-label="Files to send">{attachedFiles.map(item=><li key={item.id}><div className="wa-file-chip">{item.file.type.startsWith('image/')?<ImageIcon size={17} aria-hidden="true"/>:<FileText size={17} aria-hidden="true"/>}<span><strong title={item.file.name}>{item.file.name}</strong><small>{Math.max(1,Math.ceil(item.file.size/1024))} KB · {item.uploaded?'Uploaded privately':'Ready to attach'}</small></span><button type="button" disabled={isBusy} aria-label={`Remove ${item.file.name}`} onClick={()=>removeFile(item.id)}><X size={14} aria-hidden="true"/></button></div>{item.uploaded?.warnings.map((warning,index)=><p className="wa-file-warning" key={index}>{warning}</p>)}</li>)}</ul>}
+            <input ref={fileInputRef} className="wa-file-input" type="file" multiple accept="image/png,image/jpeg,image/webp,.pdf,.docx,.txt" aria-label="Attach images or documents" disabled={isBusy||!filesReady} onChange={event=>{const files=Array.from(event.target.files||[]);event.target.value='';chooseFiles(files);}}/>
+            {(uploadStatus||fileNotice)&&<p className="wa-file-status" role="status">{uploadStatus||fileNotice}</p>}{missingFiles&&<button type="button" className="wa-file-reselect" onClick={()=>{const next={key:fileDraftKey,draft:{...fileDraft.draft,missingFiles:false}};fileDraftRef.current=next;setFileDraft(next);setFileNotice('');}}>Continue without files</button>}
+            <div className="wa-composer-bottom"><button type="button" className="wa-attach" aria-label="Attach images or documents" title="PNG, JPEG, WebP, PDF, DOCX, or TXT · 4 files · 8 MB each" disabled={isBusy||!filesReady||attachedFiles.length>=4} onClick={()=>fileInputRef.current?.click()}><Paperclip size={18} aria-hidden="true"/><span>Attach</span></button><span>{!aiReady?'AI is not connected yet':isBusy?acting?'Saving your approved step…':'Gen is working…':unlimited?'Unlimited planning':remaining>0?`${remaining} included ${remaining===1?'message':'messages'} left`:`${cost} credits per message`}</span><button type="submit" disabled={!canSend} className="wa-send">{sending||busy==='planning'?<Loader2 size={17} className="wa-spin" aria-hidden="true"/>:<ArrowUp size={17} aria-hidden="true"/>}<span>{uploadStatus.startsWith('Uploading')?'Uploading…':sending||busy==='planning'?'Thinking…':answered?'Send answers':'Send'}</span></button></div>
           </form>
-          <div className="wa-composer-help" id={helpId}><span>Planning uses your message allowance. Each creation needs its own approval.</span><span className="wa-keyboard-hint"><CornerDownLeft size={12} aria-hidden="true"/>{questions.length&&!showMessage&&questionIndex<questions.length-1?'Enter for next question':'Enter to send'} · Shift + Enter for a new line</span></div>
+          <div className="wa-composer-help" id={helpId}><span>Images and documents are uploaded only when you send. Planning uses your message allowance.</span><span className="wa-keyboard-hint"><CornerDownLeft size={12} aria-hidden="true"/>{questions.length&&!showMessage&&questionIndex<questions.length-1?'Enter for next question':'Enter to send'} · Shift + Enter for a new line</span></div>
           {(tooLong||localError||!hasCredits)&&<p className="wa-inline-error" role="alert" id={errorId}>{tooLong?`Your combined reply is ${reply.length-MAX_MESSAGE} characters too long. Shorten your message or answers to send it.`:localError||'You need more credits to send another planning message.'}</p>}
         </div>
       </section>

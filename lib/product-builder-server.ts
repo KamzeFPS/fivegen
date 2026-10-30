@@ -6,21 +6,28 @@ import {slugify,type ProductContent} from './product';
 import {builderDraftSchema,builderFamily,builderTypeDetails,builderTypeForFormat,builderTypes,defaultBuilderDraft,type BuilderDraft,type BuilderWorkspace,type BuilderCheck} from './builder-contract';
 import {commerceAccount,getCommerceOffer} from './commerce-v2-server';
 import {verifyStoredUpload} from './upload-validation';
-import {evaluateProductReadiness,isUnfinishedPlaceholder,sectionHasContent} from './product-readiness';
+import {designHasFinishedPages,evaluateProductReadiness,isUnfinishedPlaceholder,sectionHasContent} from './product-readiness';
 import {builderRevisionKinds,builderRevisionLabels,builderRevisionRestoreSchema,builderRevisionSnapshot,restoreBuilderEditorialRevision,type BuilderRevisionHistory,type BuilderRevisionKind} from './builder-revision-contract';
 import {validateCurriculum} from './product-curriculum';
 import {productStudioSchema,productStudioPublicationSchema,publishedSectionStudioSchema,safeStudioUrl} from './product-studio-contract';
 import {assertCreatorContextRefs,creatorContextGuard} from './creator-context-server';
+import {designImageIds} from './design-document';
+import {recoverBuilderDesignRuns} from './builder-design-server';
 
 export const builderHeaders={'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer'};
 const fileTypes=['application/pdf','image/png','image/jpeg','image/webp','text/plain','text/csv','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/epub+zip','application/zip','application/octet-stream','application/json','text/html','text/css','text/javascript','application/javascript','text/x-python','audio/mpeg','audio/mp4','audio/wav','audio/x-wav','audio/webm','audio/ogg','audio/flac'];
-async function verifiedAsset(owner:string,productId:string,id:string,kind:'resource'|'video'|'audio'|'cover',integrity=false){
+async function verifiedAsset(owner:string,productId:string,id:string,kind:'resource'|'video'|'audio'|'cover'|'design',integrity=false){
  if(typeof id!=='string')return false;
  const row=await database().prepare("SELECT * FROM uploads WHERE id=? AND owner=? AND product_id=? AND status='completed' AND sha256 IS NOT NULL AND object_key NOT LIKE 'voice/%' AND NOT EXISTS(SELECT 1 FROM creator_voice_sources WHERE upload_id=uploads.id)").bind(id,owner,productId).first();
  if(!row||!/^[a-f0-9]{64}$/.test(String(row.sha256)))return false;
- const mime=String(row.mime);if(kind==='resource'&&!fileTypes.includes(mime)||kind==='video'&&!['video/mp4','video/webm'].includes(mime)||kind==='audio'&&!mime.startsWith('audio/')||kind==='cover'&&!['image/png','image/jpeg','image/webp'].includes(mime))return false;
+ const mime=String(row.mime);if(kind==='design'&&(Number(row.size)<=0||Number(row.size)>8_000_000))return false;if(kind==='resource'&&!fileTypes.includes(mime)||kind==='video'&&!['video/mp4','video/webm'].includes(mime)||kind==='audio'&&!mime.startsWith('audio/')||(kind==='cover'||kind==='design')&&!['image/png','image/jpeg','image/webp'].includes(mime))return false;
  const bucket=(env as unknown as {BUCKET?:R2Bucket}).BUCKET;if(!bucket)return false;
  try{const object=await bucket.get(String(row.object_key));if(!object)return false;if(integrity){await verifyStoredUpload(object.body,Number(row.size),String(row.sha256));return true;}const valid=object.size===Number(row.size);await object.body.cancel().catch(()=>{});return valid;}catch{return false;}
+}
+async function designImagesWithinBudget(owner:string,productId:string,ids:string[]){
+ if(ids.length>20)return false;if(!ids.length)return true;
+ const row=await database().prepare(`SELECT SUM(size) AS total FROM uploads WHERE id IN (${ids.map(()=>'?').join(',')}) AND owner=? AND product_id=? AND status='completed'`).bind(...ids,owner,productId).first();
+ return Number(row?.total||0)<=24_000_000;
 }
 export async function builderReadiness(productId:string,owner:string,draft:BuilderDraft,integrity=false){
  const checks:BuilderCheck[]=[];
@@ -40,12 +47,14 @@ export async function builderReadiness(productId:string,owner:string,draft:Build
  if(draft.sections.length){const complete=await Promise.all(draft.sections.map(async section=>!!section.title.trim()&&sectionHasContent(section)&&(!section.videoId||await verifiedAsset(owner,productId,section.videoId,'video',integrity))&&(!section.studio?.audioId||await verifiedAsset(owner,productId,section.studio.audioId,'audio',integrity))&&(!section.studio||publishedSectionStudioSchema.safeParse(section.studio).success)));check('sections',complete.every(Boolean),'Finish each added section or remove unused sections. Recordings must be available and validated.');}
  const generated=draft.files.length>0&&draft.files.every(file=>!!file.content.trim());
  check('files',validFiles.every(Boolean)&&(!draft.files.length||generated),'Every attached file must be available and validated; generated files must contain usable content.');
+ const hasDesign=designHasFinishedPages(draft.studio?.design);
+ if(draft.studio?.design){const ids=designImageIds(draft.studio.design),withinBudget=await designImagesWithinBudget(owner,productId,ids),images=withinBudget?await Promise.all(ids.map(id=>verifiedAsset(owner,productId,id,'design',integrity))):[];check('design',hasDesign&&withinBudget&&images.every(Boolean),'Finish every design page and use completed, verified images belonging to this product: up to 20 images, 8 MB each and 24 MB combined.');}
  const templates=Array.isArray(draft.studio?.templates?.items)?draft.studio.templates.items as {duplicateUrl?:string;blankUploadId?:string;exampleUploadId?:string}[]:[],cloudTemplates=templates.some(item=>safeStudioUrl(item.duplicateUrl||''));
  const custom=Array.isArray(draft.studio?.custom?.blocks)?draft.studio.custom.blocks as {kind?:string;body?:string;url?:string}[]:[],customContent=draft.type==='custom'&&(custom.some(item=>item.body?.trim()||safeStudioUrl(item.url)||['session','physical'].includes(item.kind||''))||(draft.studio?.custom?.deliveryKinds as string[]|undefined)?.includes('community')===true);
  check('template-files',templates.every(item=>[item.blankUploadId,item.exampleUploadId].every(id=>!id||draft.uploadIds.includes(id))),'Attach each selected template file to this product.');
- if(['document','custom'].includes(family))check('content',written||draft.uploadIds.length>0||generated||customContent,'Write finished sections, generate usable content, or attach your original finished file.');
+ if(['document','custom'].includes(family))check('content',written||draft.uploadIds.length>0||generated||customContent||hasDesign,'Write finished sections, generate usable content, or attach your original finished file.');
  if(family==='templates'){
-  check('templates',draft.uploadIds.length>0||generated||cloudTemplates,'Attach the actual reusable files or create editable templates. A description alone is not a template.');
+  check('templates',draft.uploadIds.length>0||generated||cloudTemplates||hasDesign,'Attach the actual reusable files or create editable templates. A description alone is not a template.');
   check('instructions',!!draft.fields.usageInstructions?.trim()||written,'Add instructions explaining how to use your templates.');
  }
  if(family==='course'||family==='challenge'){
@@ -66,6 +75,7 @@ export async function builderReadiness(productId:string,owner:string,draft:Build
 }
 export async function getBuilderWorkspace(productId:string,owner:string):Promise<BuilderWorkspace>{
  const product=productFromRow(await ownedProduct(productId,owner));
+ await recoverBuilderDesignRuns(productId,owner);
  const row=await database().prepare('SELECT * FROM product_builder_workspaces WHERE product_id=? AND owner=?').bind(productId,owner).first();
  if(!row)throw new ApiError('This product uses its existing editor. Open it from My products.',404);
  const draft=builderDraftSchema.parse(JSON.parse(String(row.data)));
@@ -103,6 +113,7 @@ export async function saveBuilderWorkspace(productId:string,owner:string,input:u
  if(job?.status==='completed')await captureGeneratedBuilderResult(productId,owner);
  const ids=[...value.draft.uploadIds,...value.draft.sections.flatMap(section=>[...(section.videoId?[section.videoId]:[]),...(section.studio?.audioId?[section.studio.audioId]:[])]),...(value.draft.coverUploadId?[value.draft.coverUploadId]:[])];
  for(const id of new Set(ids)){const upload=await database().prepare("SELECT id FROM uploads WHERE id=? AND product_id=? AND owner=? AND status='completed' AND object_key NOT LIKE 'voice/%' AND NOT EXISTS(SELECT 1 FROM creator_voice_sources WHERE upload_id=uploads.id)").bind(id,productId,owner).first();if(!upload)throw new ApiError('Choose a completed upload belonging to this product. Private voice sources cannot be attached.',403);}
+ if(value.draft.studio?.design){const imageIds=designImageIds(value.draft.studio.design);if(!await designImagesWithinBudget(owner,productId,imageIds))throw new ApiError('Use up to 20 design images, 8 MB each and 24 MB combined.',413);for(const id of imageIds){if(!await verifiedAsset(owner,productId,id,'design',true))throw new ApiError('Choose a completed, verified PNG, JPEG, or WebP image belonging to this product.',403);}}
  if(encoded===String(current.data))return getBuilderWorkspace(productId,owner);
  const info=builderTypeDetails[value.draft.type],now=Math.max(Date.now(),Number(current.updated_at)+1),content:ProductContent={sections:value.draft.sections,files:value.draft.files,benefits:value.draft.fields.outcome?[value.draft.fields.outcome]:[],launch:''};
  const results=await database().batch([

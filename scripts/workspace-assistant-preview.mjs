@@ -10,17 +10,25 @@ import {resolve,sep} from 'node:path';
 assert.ok(!process.env.RENDER,'Run this preview locally.');
 const safeEnvironment=new Set(['PATH','HOME','TMPDIR','TMP','TEMP','LANG','LC_ALL','LC_CTYPE','TZ','SystemRoot','SYSTEMROOT','WINDIR']);
 for(const key of Object.keys(process.env))if(!safeEnvironment.has(key))delete process.env[key];
-const appRoot=resolve('.'),port=5218,entryPort=5219,owner='synthetic-design-preview',email='creator@example.test';
-const seeded=spawnSync(process.execPath,['scripts/design-refresh-preview.mjs','--seed-only'],{cwd:appRoot,env:{...process.env},encoding:'utf8',maxBuffer:4*1024*1024,timeout:120000});
-assert.equal(seeded.status,0,seeded.stderr);
-const fixture=JSON.parse(seeded.stdout.trim().split('\n').findLast(line=>line.startsWith('{'))),dataRoot=resolve(fixture.root);
-assert.equal(fixture.synthetic,true);assert.ok(dataRoot.startsWith(resolve('outputs')+sep+'design-refresh-preview-'));
+const anonymous=process.argv.includes('--anonymous'),appRoot=resolve('.'),port=anonymous?59908:5218,entryPort=5219,owner='synthetic-design-preview',email='creator@example.test';
+const resumeArgument=process.argv.find(value=>value.startsWith('--resume='))||(process.argv.includes('--resume')?'--resume='+process.argv[process.argv.indexOf('--resume')+1]:null);
+let fixture,previous,evidenceRoot;
+if(resumeArgument){
+ const metadataPath=resolve(resumeArgument.slice('--resume='.length));assert.ok(metadataPath.startsWith(resolve('outputs')+sep+'workspace-assistant-preview-')&&metadataPath.endsWith(sep+'preview-info.json'),'Resume requires this harness’s own synthetic metadata.');
+ previous=JSON.parse(readFileSync(metadataPath,'utf8'));assert.equal(previous.synthetic,true);assert.equal(previous.providerCalls,false);assert.equal(previous.harness,'workspace-multimodal-preview-v2');assert.equal(previous.anonymous,anonymous);fixture={synthetic:true,root:previous.dataRoot};evidenceRoot=resolve(previous.evidenceRoot);
+}else{
+ const seeded=spawnSync(process.execPath,['scripts/design-refresh-preview.mjs','--seed-only'],{cwd:appRoot,env:{...process.env},encoding:'utf8',maxBuffer:4*1024*1024,timeout:120000});assert.equal(seeded.status,0,seeded.stderr);
+ fixture=JSON.parse(seeded.stdout.trim().split('\n').findLast(line=>line.startsWith('{')));evidenceRoot=resolve('outputs',`workspace-assistant-preview-${anonymous?'anonymous-':''}${Date.now()}`);mkdirSync(evidenceRoot,{recursive:true});
+}
+const dataRoot=resolve(fixture.root);assert.equal(fixture.synthetic,true);assert.ok(dataRoot.startsWith(resolve('outputs')+sep+'design-refresh-preview-'));
 assert.match(readFileSync(resolve(dataRoot,'fixture-only.txt'),'utf8'),/All users, money, files and products are local fixtures/);
 Object.assign(process.env,{FIVEGEN_RUNTIME:'render',NODE_ENV:'production',FIVEGEN_DATA_DIR:dataRoot,APP_ORIGIN:`http://localhost:${port}`,DOCS_ORIGIN:`http://docs.localhost:${port}`,PORT:String(port),ADMIN_EMAILS:email,FIVEGEN_FILE_SALES_ENABLED:'false',STRIPE_COMMERCE_ENABLED:'false',STRIPE_WALLET_CHECKOUT_ENABLED:'false',AUTOMATIONS_WORKER_ENABLED:'false',PURCHASE_EMAILS_WORKER_ENABLED:'false',PRODUCT_REMINDERS_WORKER_ENABLED:'false',SERVICE_INTEGRATIONS_WORKER_ENABLED:'false',STRIPE_MODE:'test',PADDLE_ENVIRONMENT:'sandbox',GOOGLE_CLIENT_ID:'synthetic-chat-preview',GOOGLE_CLIENT_SECRET:'synthetic-chat-preview',CREDENTIAL_ENCRYPTION_KEY:randomBytes(32).toString('base64url'),OPENAI_API_KEY:'synthetic-no-provider-key'});
 const {createStorage}=await import('../runtime/render/storage.mjs'),storage=createStorage(dataRoot),session=randomBytes(32).toString('base64url');
-storage.sqlite.prepare('INSERT INTO render_sessions(hash,user_id,email,name,expires) VALUES(?,?,?,?,?)').run(createHash('sha256').update(session).digest('base64url'),owner,email,'Alex Morgan',Date.now()+86400000);storage.close();
+if(anonymous)storage.sqlite.prepare('DELETE FROM render_sessions').run();else storage.sqlite.prepare('INSERT INTO render_sessions(hash,user_id,email,name,expires) VALUES(?,?,?,?,?)').run(createHash('sha256').update(session).digest('base64url'),owner,email,'Alex Morgan',Date.now()+86400000);storage.close();
 
 function modelFixture(input){
+ if(input.message.includes('[fixture-design]'))return {answer:'Your visual brief is ready to continue in [Design studio](/build/new?type=template-kit&design=1). Review the layout and generation cost there before creating the artwork.',questions:[],plan:null};
+ if(input.attachmentSources?.length){const images=input.attachmentSources.filter(source=>source.kind==='image'),documents=input.attachmentSources.filter(source=>source.kind==='document');return {answer:`LOCAL DEMO · I received ${images.length} actual image reference${images.length===1?'':'s'} and ${documents.length} document excerpt${documents.length===1?'':'s'}.\n\n${documents.map(source=>source.name+': '+source.excerpt.slice(0,260)).join('\n\n')||'Your reference image is supplied as verified image bytes to the model.'}\n\nThe files are available in this chat. Tell me the result you want, then review the next proposed step before creating anything.`,questions:[],plan:null};}
  if(input.message==='Hi'||input.message==='Thanks')return {answer:'Hello! We can talk through an idea, make a plan from scratch, or work on something in your workspace. What would you like to do?',questions:[],plan:null};
  if(input.message.includes('[fixture-questions]'))return {answer:'Before we make a plan, tell me a little about your audience and the result you want to help them reach. We can work through one detail at a time.',questions:['Who is your product for?','What is the biggest problem you can help them solve?','What would you like to make first?'],plan:null};
  return {answer:'Let’s build this from the beginning. First we’ll prepare a useful onboarding guide, then write a small campaign for it, and finally add your launch review to Calendar. I’ve included the exact draft content below. Review the plan and approve the first step when you’re ready; each next step waits for its own approval.',questions:[],plan:{title:'Your freelancer onboarding launch',summary:'A practical guide, three ready-to-review campaign drafts, and a launch review. Each is saved in its own section while we work here in chat.',assumptions:['This is a private draft for independent freelance designers.','You will review the copy and add your own examples before publishing.'],steps:[
@@ -37,13 +45,20 @@ function modelFixture(input){
   {id:'launch-review',title:'Add your launch review to Calendar',description:'Keep a 30-minute internal review for the guide and campaign. This is a reminder for you to review the work.',why:'A deliberate review gives you time to check the content and decide when it is ready to share.',needs:['Review the date, time, and timezone below.'],action:{type:'create_calendar_event',productId:null,productStepId:'onboarding-guide',title:'Review the onboarding guide launch',startAt:Date.UTC(2026,9,29,2),endAt:Date.UTC(2026,9,29,2,30),timezone:'Asia/Ulaanbaatar',kind:'task',notes:'Review the product draft and campaign copy. Confirm your examples, claims, destination links, and next action.'}},
  ]}};
 }
+const modelEvidencePath=resolve(evidenceRoot,'model-evidence.json'),modelRequests=[];
 const local=host=>['localhost','127.0.0.1','[::1]','::1'].includes(host),originalFetch=globalThis.fetch;
 globalThis.fetch=async(input,init)=>{
  const target=new URL(typeof input==='string'||input instanceof URL?input:input.url);
  if(local(target.hostname))return originalFetch(input,init);
  if(target.href==='https://api.openai.com/v1/responses'){
-  const body=JSON.parse(init.body);assert.match(body.instructions,/helpful conversational assistant inside FiveGen/);
-  const marker='Request:\n',payload=JSON.parse(body.input.slice(body.input.lastIndexOf(marker)+marker.length));
+  assert.equal(anonymous,false,'Anonymous preview must never reach an AI transport.');
+  const raw=typeof init?.body==='string'?init.body:input instanceof Request?await input.clone().text():'',body=JSON.parse(raw);assert.match(body.instructions,/helpful conversational assistant inside FiveGen/);
+  const parts=typeof body.input==='string'?[]:body.input.flatMap(message=>message.content||[]),text=typeof body.input==='string'?body.input:parts.filter(part=>part.type==='input_text').map(part=>part.text).join('\n');
+  const marker='Request:\n',index=text.lastIndexOf(marker);assert.ok(index>=0,'Expected a real structured request envelope.');const payload=JSON.parse(text.slice(index+marker.length)),images=[];
+  for(const part of parts.filter(part=>part.type==='input_image')){const match=/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(part.image_url);assert.ok(match,'Image references must contain actual local bytes, never URLs.');const bytes=Buffer.from(match[2],'base64');assert.ok(bytes.length>20&&bytes.length<=8*1024*1024);const {loadImage}=await import('@napi-rs/canvas'),image=await loadImage(bytes);assert.ok(image.width>0&&image.height>0&&image.width<=2048&&image.height<=2048);images.push({mime:match[1],bytes:bytes.length,width:image.width,height:image.height});}
+  assert.equal(images.length,(payload.imageReferenceOrder||[]).length,'Every reference image reaches the actual model envelope.');
+  modelRequests.push({message:payload.message,images,sources:(payload.attachmentSources||[]).map(source=>({id:source.id,name:source.name,kind:source.kind,excerpt:source.excerpt.slice(0,600),currentMessage:source.currentMessage}))});writeFileSync(modelEvidencePath,JSON.stringify({synthetic:true,externalProviderCalls:false,requests:modelRequests},null,2));
+
   if(payload.message.includes('[fixture-fail]'))return Response.json({error:{code:'synthetic_failure'}},{status:503});
   return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(modelFixture(payload))}]}]});
  }
@@ -52,14 +67,18 @@ globalThis.fetch=async(input,init)=>{
 const require=createRequire(import.meta.url);
 for(const name of ['node:http','node:https']){const transport=require(name);for(const operation of ['request','get']){const original=transport[operation];transport[operation]=function(input,...args){const host=typeof input==='string'||input instanceof URL?new URL(input).hostname:String(input?.hostname||input?.host||'localhost').split(':')[0];assert.ok(local(host),'External HTTP(S) disabled.');return original.call(this,input,...args);};}}
 syncBuiltinESMExports();
-const evidenceRoot=resolve('outputs',`workspace-assistant-preview-${Date.now()}`);mkdirSync(evidenceRoot,{recursive:true});
-const info={synthetic:true,providerCalls:false,entryURL:`http://localhost:${entryPort}/chat-preview`,appURL:`http://localhost:${port}/?view=create`,dataRoot,evidenceRoot};
+const info={...previous,synthetic:true,harness:'workspace-multimodal-preview-v2',anonymous,providerCalls:false,entryURL:anonymous?null:`http://localhost:${entryPort}/chat-preview`,appURL:`http://localhost:${port}/${anonymous?'':'?view=create'}`,dataRoot,evidenceRoot,modelEvidencePath};
 writeFileSync(resolve(evidenceRoot,'preview-info.json'),JSON.stringify(info,null,2));
 await (await import('../runtime/render/server.mjs')).start();
-const entry=createServer((req,res)=>{if(req.headers.host!==`localhost:${entryPort}`||req.url!=='/chat-preview'){res.writeHead(404);res.end();return;}res.writeHead(303,{'Set-Cookie':`fivegen-local-session=${session}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`,Location:info.appURL,'Cache-Control':'no-store'});res.end();});
-await new Promise((done,reject)=>{entry.once('error',reject);entry.listen(entryPort,'127.0.0.1',done);});
+if(!anonymous){const entry=createServer((req,res)=>{if(req.headers.host!==`localhost:${entryPort}`||req.url!=='/chat-preview'){res.writeHead(404);res.end();return;}res.writeHead(303,{'Set-Cookie':`fivegen-local-session=${session}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`,Location:info.appURL,'Cache-Control':'no-store'});res.end();});
+await new Promise((done,reject)=>{entry.once('error',reject);entry.listen(entryPort,'127.0.0.1',done);});}
+if(process.argv.includes('--check')&&anonymous){const response=await fetch(info.appURL),html=await response.text();assert.equal(response.status,200);assert.match(html,/FiveGen/);assert.doesNotMatch(html,/creator@example.test|synthetic-design-preview/);const denied=await fetch(`http://localhost:${port}/api/workspace`);assert.equal(denied.status,401);writeFileSync(resolve(evidenceRoot,'http-check.json'),JSON.stringify({passed:true,anonymous:true,externalProviderCalls:false},null,2));console.log('Passed: anonymous landing HTTP and authentication isolation; no session cookies or AI transport.');console.log(JSON.stringify(info));process.exit(0);}
 if(process.argv.includes('--check')){
  const call=async(path,body)=>{const response=await fetch(`http://localhost:${port}${path}`,{method:body?'POST':'GET',headers:{Cookie:`fivegen-local-session=${session}`,Origin:`http://localhost:${port}`,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const result=await response.json();assert.ok(response.ok,JSON.stringify({status:response.status,result}));return result;};
+ const {createCanvas}=await import('@napi-rs/canvas'),{PDFDocument,StandardFonts}=await import('pdf-lib'),canvas=createCanvas(160,100),context=canvas.getContext('2d');context.fillStyle='#d9f4ea';context.fillRect(0,0,160,100);context.fillStyle='#224c3b';context.fillRect(25,25,60,50);const png=canvas.toBuffer('image/png');writeFileSync(resolve(evidenceRoot,'synthetic-reference.png'),png);
+ const pdf=await PDFDocument.create(),font=await pdf.embedFont(StandardFonts.Helvetica);pdf.addPage([400,250]).drawText('SOURCE_BRIEF_SENTINEL: practical woodland birthday invitation.',{x:25,y:180,size:13,font});const pdfBytes=await pdf.save();writeFileSync(resolve(evidenceRoot,'synthetic-brief.pdf'),pdfBytes);
+ const files=new FormData();files.set('requestId',randomUUID());files.append('files',new File([png],'synthetic-reference.png',{type:'image/png'}));files.append('files',new File([pdfBytes],'synthetic-brief.pdf',{type:'application/pdf'}));files.append('files',new File(['TEXT_BRIEF_SENTINEL: keep the original green accent.'],'synthetic-notes.txt',{type:'text/plain'}));
+ const uploaded=await fetch(`http://localhost:${port}/api/studio/assistant/attachments`,{method:'POST',headers:{Cookie:`fivegen-local-session=${session}`,Origin:`http://localhost:${port}`},body:files}),attachments=await uploaded.json();assert.equal(uploaded.status,200,JSON.stringify(attachments));assert.equal(attachments.attachments.length,3);const attached=await call('/api/studio/assistant',{id:randomUUID(),requestId:randomUUID(),message:'Read my actual image and document references.',attachmentIds:attachments.attachments.map(file=>file.id),expectedUpdatedAt:0,maxCredits:0,timezone:'Asia/Ulaanbaatar'});assert.equal(attached.conversation.messages[0].attachments.length,3);assert.match(attached.conversation.messages.at(-1).content,/SOURCE_BRIEF_SENTINEL/);assert.match(attached.conversation.messages.at(-1).content,/TEXT_BRIEF_SENTINEL/);assert.equal(modelRequests.at(-1).images.length,1);assert.equal(modelRequests.at(-1).sources.filter(source=>source.kind==='document').length,2);const privateFile=await fetch(`http://localhost:${port}/api/studio/assistant/attachments/${attachments.attachments[0].id}`);assert.equal(privateFile.status,401);
  const first=await call('/api/studio/assistant',{id:randomUUID(),requestId:randomUUID(),message:'Create my onboarding guide, campaign drafts, and a launch review on October 29 at 10 AM Asia/Ulaanbaatar for 30 minutes.',expectedUpdatedAt:0,maxCredits:0,timezone:'Asia/Ulaanbaatar'});
  let conversation=first.conversation;assert.equal(conversation.workflow.steps.length,3);
  for(const step of conversation.workflow.steps){
@@ -71,8 +90,8 @@ if(process.argv.includes('--check')){
  const continued=await call('/api/studio/assistant',{id:conversation.id,requestId:randomUUID(),message:'Thanks',expectedUpdatedAt:conversation.updatedAt,maxCredits:0,timezone:'Asia/Ulaanbaatar'});
  assert.equal(continued.conversation.workflow.steps.filter(step=>step.status==='completed').length,3);
  assert.equal(continued.conversation.productId,conversation.productId);
- writeFileSync(resolve(evidenceRoot,'http-check.json'),JSON.stringify({passed:true,conversationId:conversation.id,steps:conversation.workflow.steps.map(step=>({id:step.id,status:step.status,result:step.result})),providerCalls:false},null,2));
- console.log('Passed: native HTTP planning → approved product with builder sections → native campaign drafts → calendar item → continued chat. Synthetic model transport, isolated real storage.');
+ writeFileSync(resolve(evidenceRoot,'http-check.json'),JSON.stringify({passed:true,attachments:{conversationId:attached.conversation.id,ids:attachments.attachments.map(file=>file.id),actualImages:modelRequests.find(request=>request.images.length)?.images},conversationId:conversation.id,steps:conversation.workflow.steps.map(step=>({id:step.id,status:step.status,result:step.result})),providerCalls:false},null,2));
+ console.log('Passed: native HTTP image/PDF/TXT upload → real multimodal bytes and document excerpts → private historical files; planning → approved product with builder sections → native campaign drafts → calendar item → continued chat. Synthetic model transport, isolated real storage.');
  console.log(JSON.stringify(info));process.exit(0);
 }
 console.log(JSON.stringify(info));

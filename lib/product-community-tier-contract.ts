@@ -47,6 +47,7 @@ export function communityTierResourceIssues(snapshot:TierSnapshot){
  const config=communityAdvancedSchema.parse(snapshot.studio?.community||{}),available=new Set<string>([...(snapshot.uploadIds||[]).map(id=>`upload:${id}`),...(snapshot.files||[]).map(file=>`file:${file.name}`),...(snapshot.sections||[]).map((section,index)=>`section:${section.id||`section-${index}`}`)]);
  const custom=snapshot.studio?.custom,blocks=Array.isArray(custom?.blocks)?custom.blocks:[],templates=Array.isArray(snapshot.studio?.templates?.items)?snapshot.studio.templates.items:[];
  for(const [prefix,items] of [['block',blocks],['template',templates]] as const)for(const item of items)if(item&&typeof item==='object'&&'id' in item)available.add(`${prefix}:${String(item.id)}`);
+ if(snapshot.studio?.design)available.add('template:design');
  const fields=snapshot.fields&&typeof snapshot.fields==='object'?snapshot.fields as Record<string,unknown>:{};
  if(snapshot.deliveryFamily==='service'||snapshot.type==='consulting'||snapshot.type==='coaching'||fields.customDelivery==='service'||Array.isArray(custom?.deliveryKinds)&&custom.deliveryKinds.includes('sessions')||blocks.some(block=>block&&typeof block==='object'&&'kind' in block&&block.kind==='session'))available.add('service:sessions');
  return (config.tiers||[]).flatMap(tier=>tier.resourceIds.filter(id=>!available.has(id)).map(id=>({tierId:tier.id,resourceId:id,message:`${tier.name}: choose resources that are attached to this product.`})));
@@ -63,6 +64,7 @@ export function communityTierDelivery<T extends TierSnapshot>(snapshot:T):T{
  const studio=snapshot.studio||{},community=studio.community||{},safeCommunity:NonNullable<ProductStudioConfig['community']>={...community,channels:(community.channels||['General']).filter(channel=>tier.channels.includes(channel)),events:(community.events||[]).filter(event=>tier.eventIds.includes(event.id)),membership:{id:tier.id,name:tier.name,billing:tier.billing,priceCents:tier.priceCents},availablePlans:communityPublicTiers(community)};
  delete safeCommunity.purchasedTierId;delete safeCommunity.weeklyPrompts;delete safeCommunity.onboarding;delete safeCommunity.bundleTierId;delete safeCommunity.tiers;
  const clean:ProductStudioConfig={...studio,community:safeCommunity};
+ if(!tier.resourceIds.includes('template:design'))delete clean.design;
  if(studio.custom)clean.custom={...studio.custom,deliveryKinds:Array.isArray(studio.custom.deliveryKinds)?studio.custom.deliveryKinds.filter(kind=>kind!=='sessions'||tier.resourceIds.includes('service:sessions')):[],blocks:Array.isArray(studio.custom.blocks)?studio.custom.blocks.filter(block=>block&&typeof block==='object'&&'id' in block&&tier.resourceIds.includes(`block:${String(block.id)}`)):[]};
  if(studio.templates)clean.templates={...studio.templates,items:Array.isArray(studio.templates.items)?studio.templates.items.filter(item=>item&&typeof item==='object'&&'id' in item&&tier.resourceIds.includes(`template:${String(item.id)}`)):[],walkthroughUrl:''};
  const serviceAllowed=tier.resourceIds.includes('service:sessions');if(!serviceAllowed)delete clean.service;

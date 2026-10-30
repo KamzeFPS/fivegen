@@ -33,6 +33,8 @@ async function load(path){
  const result=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));delete globalThis[key];return result;
 }
 Object.assign(deps,await load('lib/workspace-assistant.ts'));
+Object.assign(deps,await load('lib/workspace-attachments.ts'));
+Object.assign(deps,await load('lib/creator-context-request.ts'));
 const route=await load('app/api/studio/assistant/route.ts'),legacy=await load('app/api/studio/conversations/route.ts');
 const post=(input,origin='http://localhost')=>route.POST(new Request('http://localhost/api/studio/assistant',{method:'POST',headers:{'Content-Type':'application/json',origin},body:JSON.stringify(input)}));
 const get=id=>route.GET(new Request('http://localhost/api/studio/assistant?id='+id));

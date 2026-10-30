@@ -1,5 +1,6 @@
 import {z} from 'zod';
 import {formats} from './product';
+import type {WorkspaceAttachment} from './workspace-attachments';
 
 const text=z.string().trim().min(1);
 const stamp=z.number().int().min(Date.UTC(2000,0,1)).max(Date.UTC(2101,0,1));
@@ -41,7 +42,7 @@ export type AssistantStepResult={label:string;href:string|null;resourceId?:strin
 export type AssistantResourceReceipt={planId:string;stepId:string;type:AssistantAction['type'];title:string;result:AssistantStepResult};
 export type AssistantStep=AssistantStepProposal&{status:'pending'|'completed'|'skipped';result?:AssistantStepResult;error?:string};
 export type AssistantWorkflow=Omit<AssistantPlanProposal,'steps'>&{id:string;steps:AssistantStep[]};
-export type AssistantMessage={id:string;role:'user'|'assistant';content:string;questions?:string[]};
+export type AssistantMessage={id:string;role:'user'|'assistant';content:string;questions?:string[];attachments?:WorkspaceAttachment[]};
 export type AssistantConversation={id:string;messages:AssistantMessage[];plan:null;workflow:AssistantWorkflow|null;resources?:AssistantResourceReceipt[];productId:string|null;updatedAt:number};
 export type AssistantEnvelope={kind:'workspace-assistant';workflow:AssistantWorkflow|null;resources?:AssistantResourceReceipt[]};
 

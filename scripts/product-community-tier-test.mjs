@@ -15,7 +15,7 @@ async function sourceModule(source){const names=new Set([...source.matchAll(/^ex
 async function load(path,names){let source=readFileSync(path,'utf8');if(names){const parsed=ts.createSourceFile(path,source,ts.ScriptTarget.Latest,true);source=parsed.statements.filter(statement=>(ts.isFunctionDeclaration(statement)&&names.includes(statement.name?.text))||(ts.isVariableStatement(statement)&&statement.declarationList.declarations.some(declaration=>names.includes(declaration.name.getText(parsed))))).map(statement=>statement.getText(parsed)).join('\n');}else source=source.replace(/^import[\s\S]*?;\r?\n/gm,'');return sourceModule(source);}
 await load('lib/product-studio-commerce.ts',['assertStudioSubscriptionAccess']);
 await load('lib/commerce-v2-server.ts',['customerOrder']);
-for(const path of ['lib/product-curriculum.ts','lib/product-decision-contract.ts','lib/product-community-tier-contract.ts','lib/product-studio-contract.ts','lib/product.ts','lib/builder-contract.ts','lib/builder-publication-contract.ts','lib/product-community-tiers.ts'])await load(path);
+for(const path of ['lib/product-curriculum.ts','lib/product-decision-contract.ts','lib/product-community-tier-contract.ts','lib/design-document.ts','lib/product-studio-contract.ts','lib/product.ts','lib/builder-contract.ts','lib/builder-publication-contract.ts','lib/product-community-tiers.ts'])await load(path);
 await load('lib/builder-delivery-server.ts',['builderOrderDelivery']);
 await load('lib/product-learning-server.ts',['parseJson','safeStudentUrl','paidStudentOrder','assertStudentPurchaser','studentContext']);
 await load('lib/product-community-server.ts');

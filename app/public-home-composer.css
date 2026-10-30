@@ -1,0 +1,55 @@
+.public-home-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.public-home-create{position:relative;max-width:930px;margin:22px auto 0;text-align:left}
+.public-home-idea-note{position:absolute;left:-178px;top:58px;width:165px;height:auto;object-fit:contain;pointer-events:none}
+.public-home-task-tabs{display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:28px;border-bottom:1px solid var(--ph-line)}
+.public-home-task-tabs button{display:inline-flex;flex:1;align-items:center;justify-content:center;gap:12px;min-height:50px;padding:11px 12px 13px;white-space:nowrap;border:0;border-bottom:3px solid transparent;border-radius:0;background:transparent;color:var(--ph-muted);font-size:15.5px;line-height:1.3;margin-bottom:-1px;transition:color .15s,border-color .15s}
+.public-home-task-tabs button[aria-selected=true]{border-bottom-color:var(--ph-accent);color:#bd4d00;font-weight:500}
+html[data-appearance=dark] .public-home-task-tabs button[aria-selected=true]{color:#ff9c4d}
+.public-home-task-tabs button:hover{color:var(--ph-ink)}
+.public-home-composer{background:var(--ph-panel);border:1px solid var(--ph-line);border-radius:21px;box-shadow:0 9px 28px #5a442109;padding:19px 24px 12px}
+.public-home-composer textarea{display:block;resize:vertical;min-height:82px;max-height:300px;width:100%;padding:11px 6px 19px;line-height:1.65;font-size:21px;border:0;background:transparent;color:var(--ph-muted);outline-offset:2px;overflow-wrap:anywhere}
+.public-home-composer textarea:focus{color:var(--ph-ink)}
+.public-home-composer textarea::placeholder{color:var(--ph-muted);opacity:1}
+.public-home-composer-bar{display:flex;align-items:center;justify-content:space-between;gap:18px;border-top:1px solid #87837414;padding-top:11px}
+html[data-appearance=dark] .public-home-composer-bar{border-top-color:var(--ph-line)}
+.public-home-attach{display:flex;align-items:center;gap:15px;min-width:0;color:var(--ph-muted)}
+.public-home-attach button{background:transparent;color:var(--ph-muted);border:0;display:inline-flex;align-items:center;gap:10px;min-height:41px;padding:7px;font-size:15px;white-space:nowrap}
+.public-home-attach button:hover{color:var(--ph-ink)}
+.public-home-attach button svg{color:var(--ph-ink)}
+.public-home-attach>span{font-size:11px;border-left:1px solid var(--ph-line);padding-left:15px;white-space:nowrap}
+.public-home-composer-bar .public-home-primary{min-height:44px;padding:10px 19px;border-radius:16px;font-size:16px}
+.public-home-attachments{display:flex;flex-wrap:wrap;gap:8px;list-style:none;margin:0;padding:0 4px 14px}
+.public-home-attachments li{display:flex;align-items:center;gap:7px;max-width:calc(50% - 4px);padding:7px 8px;border:1px solid var(--ph-line);border-radius:9px;color:var(--ph-muted);background:var(--ph-bg);min-width:0}
+.public-home-attachments li>svg{flex:none;color:#bd5900}
+.public-home-attachments li>span{font-size:11px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.public-home-attachments small{display:block;font-size:9px;color:var(--ph-muted)}
+.public-home-attachments li button{display:flex;align-items:center;justify-content:center;flex:none;background:transparent;border:0;padding:5px;color:var(--ph-muted);min-width:26px;min-height:30px}
+.public-home-composer-error{font-size:12px;color:#a43a14;background:var(--ph-panel);border:1px solid #e3a68e;border-radius:9px;padding:10px 13px;margin:10px 0!important;line-height:1.6}
+html[data-appearance=dark] .public-home-composer-error{color:#ffb79c}
+.public-home-try{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:9px 12px;margin-top:24px}
+.public-home-try>span{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ph-muted);margin-right:4px}
+.public-home-try button{border:1px solid #b9b5ab29;background:var(--ph-panel);color:var(--ph-muted);min-height:38px;padding:8px 19px;border-radius:22px;font-size:14px;line-height:1.3}
+.public-home-try button:hover{border-color:#ef9a56;color:var(--ph-ink)}
+.public-home-composer-help{font-size:10px;line-height:1.7;color:var(--ph-muted);text-align:center;margin-top:15px!important}
+.public-home-composer-help>span{white-space:nowrap;margin-left:5px}
+.public-home main>.public-home-showcase{max-width:1600px;padding-inline:0;padding-top:0;padding-bottom:40px}
+.public-home-showcase-heading{text-align:center;padding-inline:24px;margin-bottom:14px}
+.public-home-showcase h2{font-size:39px;letter-spacing:-.04em;line-height:1.3;font-weight:600}
+.public-home-projects{display:flex;gap:0;overflow:auto;padding:0 27px 15px;scrollbar-width:thin;scrollbar-color:var(--ph-line) transparent;overscroll-behavior-x:contain}
+.public-home-project-group{display:flex;flex:none;gap:22px;padding-right:22px}
+.public-home-project{display:block;flex:0 0 clamp(238px,18.1vw,290px);min-width:0;padding-bottom:6px}
+.public-home-project>img{display:block;width:100%;height:auto;aspect-ratio:.79;object-fit:cover;border-radius:6px;margin-bottom:12px;background:var(--ph-soft)}
+.public-home-project>span,.public-home-project h3,.public-home-project>small{margin-inline:7px}
+.public-home-project>span{display:block;font-size:11px;color:var(--ph-muted);line-height:1.5}
+.public-home-project h3{font-size:15px;line-height:1.4;letter-spacing:-.03em;font-weight:550;margin-top:3px}
+.public-home-project>small{display:inline-flex;align-items:center;gap:5px;color:var(--ph-muted);font-size:10px;margin-top:6px;opacity:0;transition:opacity .15s}
+.public-home-project:hover>small,.public-home-project:focus-visible>small{opacity:1}
+.public-home-project:focus-visible{outline-offset:-3px}
+@media(max-width:1250px){.public-home-idea-note{display:none}}
+@media(max-width:1100px){.public-home-create{max-width:850px}.public-home-task-tabs{gap:7px}.public-home-task-tabs button{gap:8px;padding-inline:12px;font-size:14px}.public-home-showcase h2{font-size:35px}}
+@media(max-width:900px){.public-home-create{max-width:720px}.public-home-task-tabs button{padding-inline:10px;font-size:13px;gap:7px}.public-home-task-tabs button svg{width:18px}.public-home-project{flex-basis:248px}}
+@media(max-width:700px){.public-home-create{margin-top:28px}.public-home-task-tabs{justify-content:flex-start;overflow:auto;margin-inline:-22px;padding:3px 22px 0;scrollbar-width:none;gap:0;margin-bottom:19px}.public-home-task-tabs::-webkit-scrollbar{display:none}.public-home-task-tabs button{min-height:47px;padding:10px 15px;flex:none;font-size:13px}.public-home-composer{padding:13px 12px 10px;border-radius:18px}.public-home-composer textarea{font-size:14px;min-height:96px;padding:7px 4px 17px;line-height:1.7}.public-home-composer-bar{gap:10px;padding-top:9px}.public-home-attach{gap:0}.public-home-attach button{gap:7px;padding:6px 2px;font-size:14px;min-height:40px}.public-home-attach>span{display:none}.public-home-composer-bar .public-home-primary{padding:10px 15px;min-height:42px;font-size:15px;border-radius:13px;gap:12px}.public-home-try{gap:8px;margin-top:20px}.public-home-try>span{font-size:11px}.public-home-try button{font-size:12px;padding-inline:12px;min-height:31px}.public-home-composer-help{font-size:9px;max-width:300px;margin:14px auto 0!important}.public-home-composer-help>span{display:block;margin:1px 0 0}.public-home-attachments li{max-width:100%}.public-home main>.public-home-showcase{padding-bottom:20px}.public-home-showcase-heading{padding-inline:22px;margin-bottom:19px;gap:15px;align-items:flex-start}.public-home-showcase h2{font-size:29px;line-height:1.2;max-width:340px;margin:auto}.public-home-showcase-heading p{font-size:10px;max-width:280px;margin:10px auto 0}.public-home-projects{padding-inline:22px;gap:0}.public-home-project-group{gap:13px;padding-right:13px}.public-home-project{flex-basis:238px}.public-home-project>img{border-radius:12px}.public-home-project>span,.public-home-project h3,.public-home-project>small{margin-inline:0}.public-home-project h3{font-size:14px}.public-home-project>small{opacity:1}}
+@media(prefers-reduced-motion:reduce){.public-home-projects{scroll-behavior:auto}}
+
+
+.public-home-projects{scrollbar-width:none}.public-home-projects::-webkit-scrollbar{display:none}

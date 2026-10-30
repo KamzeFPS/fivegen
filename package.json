@@ -52,10 +52,13 @@
     "test:service-integrations": "node scripts/service-integrations-test.mjs",
     "test:audit": "node scripts/audit-implementation-test.mjs",
     "test:clarity": "node scripts/creator-clarity-preflight.mjs",
-    "test:seo": "node scripts/seo-metadata-test.mjs && node scripts/public-home-test.mjs && node scripts/search-indexing-boundary-test.mjs",
+    "test:seo": "node scripts/seo-metadata-test.mjs && node scripts/public-home-test.mjs && node scripts/public-home-composer-test.mjs && node scripts/search-indexing-boundary-test.mjs",
     "test:funnel-builder": "node scripts/funnel-builder-test.mjs && node scripts/funnel-builder-navigation-test.mjs && node scripts/funnel-journey-ui-test.mjs",
     "test:calendar": "node scripts/workspace-calendar-test.mjs && node scripts/workspace-calendar-ui-test.mjs",
-    "test:appearance": "node scripts/appearance-test.mjs && node scripts/generate-appearance-surfaces.cjs --check"
+    "test:appearance": "node scripts/appearance-test.mjs && node scripts/generate-appearance-surfaces.cjs --check",
+    "test:design-studio": "node scripts/design-studio-ui-test.mjs && node scripts/builder-design-generation-test.mjs && node scripts/design-export-test.mjs && node scripts/design-integration-test.mjs",
+    "test:workspace-attachments": "node scripts/workspace-attachments-test.mjs && node scripts/chat-composer-ui-test.mjs",
+    "preview:design-studio": "node scripts/design-studio-preview.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

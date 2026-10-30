@@ -1,0 +1,4 @@
+import {sqliteTable,text,integer,index} from 'drizzle-orm/sqlite-core';
+
+export const workspaceAttachmentBatches=sqliteTable('workspace_attachment_batches',{id:text('id').primaryKey(),owner:text('owner').notNull(),intent:text('intent').notNull(),response:text('response').notNull(),createdAt:integer('created_at').notNull()});
+export const workspaceAttachments=sqliteTable('workspace_attachments',{id:text('id').primaryKey(),owner:text('owner').notNull(),batchId:text('batch_id').notNull().references(()=>workspaceAttachmentBatches.id),name:text('name').notNull(),mime:text('mime').notNull(),size:integer('size').notNull(),sha256:text('sha256').notNull(),kind:text('kind',{enum:['image','document']}).notNull(),objectKey:text('object_key').notNull(),excerpt:text('excerpt').notNull(),warnings:text('warnings').notNull(),createdAt:integer('created_at').notNull()},table=>[index('idx_workspace_attachments_owner').on(table.owner,table.createdAt)]);

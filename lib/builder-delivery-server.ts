@@ -4,6 +4,7 @@ import {builderDeliverySnapshotSchema,builderPublishedPresentation,type BuilderD
 import {verifyStoredUpload} from './upload-validation';
 import {assertCommunityTierEntitlement} from './product-community-tiers';
 import {communityTierDelivery,communityTierAllows} from './product-community-tier-contract';
+import {designImageIds} from './design-document';
 
 export async function builderPublishedDelivery(productId:string){
  const row=await database().prepare('SELECT * FROM product_builder_publications WHERE product_id=?').bind(productId).first();
@@ -67,10 +68,12 @@ export async function builderPrivateCover(order:Record<string,unknown>){
  return new Response(body,{headers:{'Content-Type':mime,'Content-Length':String(upload.size),'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox",'Cross-Origin-Resource-Policy':'same-origin','Vary':'Cookie'}});
 }
 export async function verifyBuilderDelivery(product:{id:unknown;owner:unknown},snapshot:BuilderDeliverySnapshot,integrity=false){
- const ids=[...new Set([...snapshot.uploadIds,...snapshot.sections.flatMap(section=>[section.videoId,section.studio?.audioId]).filter((id):id is string=>!!id)])];
+ const designImages=snapshot.studio?.design?designImageIds(snapshot.studio.design):[];
+ const ids=[...new Set([...snapshot.uploadIds,...designImages,...snapshot.sections.flatMap(section=>[section.videoId,section.studio?.audioId]).filter((id):id is string=>!!id)])];
  for(const id of ids){
   const upload=await database().prepare("SELECT * FROM uploads WHERE id=? AND product_id=? AND owner=? AND status='completed' AND object_key NOT LIKE 'voice/%' AND NOT EXISTS(SELECT 1 FROM creator_voice_sources WHERE upload_id=uploads.id)").bind(id,product.id,product.owner).first();
   if(!upload||!/^[a-f0-9]{64}$/.test(String(upload.sha256||'')))throw new ApiError('A product file is unavailable or unverified. Upload it again before publishing or selling.',409);
+  if(designImages.includes(id)&&(!['image/png','image/jpeg','image/webp'].includes(String(upload.mime))||Number(upload.size)>8_000_000))throw new ApiError('Use verified PNG, JPEG, or WebP design images up to 8 MB.',409);
   if(snapshot.sections.some(section=>section.videoId===id)&&!['video/mp4','video/webm'].includes(String(upload.mime)))throw new ApiError('Choose a completed MP4 or WebM recording for every video lesson.',409);
   if(snapshot.sections.some(section=>section.studio?.audioId===id)&&!String(upload.mime).startsWith('audio/'))throw new ApiError('Choose a completed audio file for every audio lesson.',409);
   const object=await (env as unknown as {BUCKET?:R2Bucket}).BUCKET?.get(String(upload.object_key));
