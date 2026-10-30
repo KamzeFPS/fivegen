@@ -36,7 +36,10 @@ function incompleteProductMessage(action:GenerateAction,issues:z.ZodIssue[]){
  else if(path[0]==='benefits')detail='AI did not return the product benefits in the requested format.';
  return `${detail} Your brief is saved and this attempt was not charged. Approve generation again to retry.`;
 }
-function boundedSource(value:string,budget=2500){let result='';for(const point of value){if(new TextEncoder().encode(result+point).length>budget)return result+' [source excerpt ends]';result+=point;}return result;}
+function boundedSource(value:string,budget:number){
+ const bytes=new TextEncoder().encode(value);if(bytes.length<=budget)return value;if(budget<32)return '';
+ return new TextDecoder().decode(bytes.subarray(0,budget-30)).replace(/\ufffd+$/,'')+' [source excerpt ends]';
+}
 
 /** One explicitly approved provider call creates a complete written product.
  * The existing monthly product allowance and per-text-step price stay in force. */
@@ -66,9 +69,19 @@ export async function prepareAssistantProduct(owner:string,conversationId:string
  for(const message of (JSON.parse(String(row.messages)) as AssistantMessage[]).slice().reverse())for(const file of message.attachments||[])if(ids.length<4&&!ids.includes(file.id)&&referenceBytes+file.size<=20*1024*1024){ids.push(file.id);referenceBytes+=file.size;}
  const sources=await workspaceAttachmentContext(ids,owner),ai=await providerSettings(owner);
  if(ai.config.paused||!ai.connected[ai.config.textProvider])throw new ApiError('AI writing is not connected or is paused. Your plan and files are saved.',503);
- const sourceContext=sources.sources.map(source=>({name:source.attachment.name,excerpt:boundedSource(source.excerpt),warnings:source.attachment.warnings}));
  const requirements=generationRequirements(action),generatedSchema=generatedProductSchema(action);
- const prompt=JSON.stringify({approvedBrief:action,writingRequirements:requirements,referenceMaterial:sourceContext,referenceLimit:'Only the supplied bounded excerpts and actual reference images are available; omitted pages and unsupported content were not read.'});
+ const encoder=new TextEncoder(),requestContext={approvedBrief:action,writingRequirements:requirements,referenceLimit:'Only the supplied extracted text and actual reference images are available; source warnings still apply, and omitted pages and unsupported content were not read.'};
+ const sourceHeaders=sources.sources.map(source=>({name:source.attachment.name,excerpt:'',warnings:source.attachment.warnings}));
+ // Use the available extracted document instead of reducing every source to
+ // 2,500 bytes. Keep the combined provider envelope bounded for all formats.
+ let sourceBudget=Math.max(0,50000-encoder.encode(JSON.stringify({...requestContext,referenceMaterial:sourceHeaders})).length),prompt='';
+ for(;;){
+  const perSourceBudget=Math.floor(sourceBudget/Math.max(1,sources.sources.length));
+  const sourceContext=sources.sources.map((source,index)=>({...sourceHeaders[index],excerpt:boundedSource(source.excerpt,perSourceBudget)}));
+  prompt=JSON.stringify({...requestContext,referenceMaterial:sourceContext});
+  if(encoder.encode(prompt).length<=54000||!sourceBudget)break;
+  sourceBudget=Math.floor(sourceBudget*.75);
+ }
  if(new TextEncoder().encode(prompt).length>54000)throw new ApiError('The approved brief and references are too long for one generation. Shorten the additional instructions or use fewer references.',413);
  const run=await claimProductRun(owner,productId,job!.run_id?String(job!.run_id):null,permission.maxCredits>0);charge.runId=run.id;
  const cost=run.mode==='credits'?textCredits(ai.config.textProvider):0;
