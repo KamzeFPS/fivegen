@@ -90,7 +90,7 @@ try{
   let workspace=await builder.createBuilderWorkspace(owner,{type,source:'upload',requestId:randomUUID()});const original=await upload(workspace.product.id);
   const draft=completeDraft(workspace);Object.assign(draft,{sections:[],files:[],uploadIds:[original]});workspace=await save(workspace,draft);
   assert.equal(workspace.draft.sections.length,0);publishedReady(workspace,`${type} original upload`);
-  if(type==='book')await assert.rejects(()=>publication.publishBuilderProduct(workspace.product.id,owner,{expectedVersion:workspace.version}),error=>error.status===409&&/editorial review/i.test(error.message),'A complete product still needs a deliberate version-bound editorial review');
+  if(type==='book')await assert.rejects(()=>publication.publishBuilderProduct(workspace.product.id,owner,{expectedVersion:workspace.version}),error=>error.status===409&&/confirm this saved version/i.test(error.message),'A complete product still needs a deliberate version-bound confirmation before publishing');
   workspace=await reviewedPublish(workspace.product.id,owner,{expectedVersion:workspace.version});
   const purchasedPresentation=(await deps.builderPublishedDelivery(workspace.product.id)).snapshot;
   assert.equal(purchasedPresentation.builderType,type,'Published delivery freezes the dedicated builder type');

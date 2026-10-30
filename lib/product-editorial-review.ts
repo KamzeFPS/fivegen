@@ -1,6 +1,6 @@
 import type {BuilderDraft} from './builder-contract';
 
-export const editorialReviewEngineVersion=1;
+export const editorialReviewEngineVersion=2;
 export type EditorialLocation={path:string;label:string;field?:string;sectionId?:string;sectionIndex?:number;start?:number;end?:number};
 export type EditorialFinding={id:string;kind:'repetition'|'promise'|'verification'|'example'|'action'|'attribution';title:string;message:string;excerpt:string;suggestedAction:string;location:EditorialLocation;relatedLocations?:EditorialLocation[]};
 export type EditorialRecord={status:'confirmed'|'revised';note:string;evidence:string;reviewedAt:number};
@@ -39,15 +39,19 @@ export function reviewEditorialDraft(draft:BuilderDraft){
  const comparisons=bodies.map(unit=>({unit,tokens:words(unit.text).length,shingles:shingles(unit.text)}));
  for(let i=0;i<comparisons.length;i++){const current=comparisons[i];if(current.tokens<60)continue;for(let j=0;j<i;j++){const prior=comparisons[j];if(prior.tokens<60||Math.min(current.tokens,prior.tokens)/Math.max(current.tokens,prior.tokens)<.65)continue;let common=0;for(const item of current.shingles)if(prior.shingles.has(item))common++;if(2*common/(current.shingles.size+prior.shingles.size)>=.82){add('repetition',current.unit,'Sections are very similar','These saved sections share most of their wording. This is a text comparison, not a plagiarism check.','Give each section a distinct purpose, or explain why the repeated wording is useful.',0,180,[prior.unit.location]);break;}}}
  const promise=/\b(?:guaranteed?|risk[- ]free|never fail|always works?|100\s*%\s*(?:success|effective|safe|proven)|(?:double|triple)\s+(?:your\s+)?(?:income|revenue|sales)|(?:instant|effortless)\s+(?:results?|success|income)|cures?\s+(?:all|every|cancer|diabetes)|clinically proven|scientifically proven|no\s+(?:risk|effort)\s+(?:required|needed))\b|баталгаатай|эрсдэлгүй|гарантирован\p{L}*|без\s+риска/iu;
- const number=/\b\d[\d,.]*(?:\s*%|\b)|[$€£]\s*\d|\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d/iu;
- const quotation=/[“«][^”»\n]{15,}[”»]|"[^"\n]{20,}"/u;
+ // Counts, timings and quoted prompts are common teaching tools. Flag claims
+ // of evidence or measured results, rather than the presence of a digit alone.
+ const measuredClaim=/(?:\b(?:research|stud(?:y|ies)|survey|report|data|statistics?|trial|experiment|analysis|evidence)\b[^.!?\n]{0,80}\b(?:found|shows?|showed|reports?|reported|suggests?|suggested|concluded|indicates?|indicated|reveals?|revealed|estimates?|estimated)\b|\baccording to\s+(?:(?:a|an|the)\s+)?(?:research|stud(?:y|ies)|survey|report|data|statistics?)\b|\b\d[\d,.]*\s*(?:%|percent)\s+of\s+(?:people|adults|children|users|customers|clients|respondents|participants|businesses|creators|students|workers)\b|\b\d[\d,.]*\s*(?:%|percent)\s+(?:growth|increase|decrease|reduction|improvement|success|failure|conversion|retention)\b|\b(?:grew|increased|decreased|reduced|improved|boosted|doubled|tripled|earned|saved|averaged|rose|fell|dropped|yielded|achieved)\b[^.!?\n]{0,50}(?:\b\d[\d,.]*|[$€£]\s*\d))/iu;
+ const quotation=/[“«][^”»\n]{2,}[”»]|"[^"\n]{2,}"/gu;
+ const quoteAttribution=/\b(?:said|says|wrote|writes|stated|stating|recalled|explained|testified|according to|testimonial|testimony|customer review|client review|customer feedback)\b|\b(?:quote|quotation)\s+(?:from|by)\b/iu;
+ const quoteByline=/[—–]\s*\p{Lu}[\p{L}.-]*(?:\s+\p{Lu}[\p{L}.-]*)?/u;
+ const teachingQuote=/\b(?:prompt|instruction|command|button|label|example|sample)\b[^.!?\n]{0,60}$/iu;
  const urls=/https?:\/\/[^\s<>"')\]]+/giu;
  for(const unit of units){
   if(unit.role!=='link'){
    const claim=promise.exec(unit.text);if(claim)add('promise',unit,'Review a strong promise','This wording could imply a guaranteed result or unusually strong evidence. The check has not established whether the promise is supported.','Add specific, relevant evidence and qualifications, or revise the promise to describe an outcome you can support.',claim.index,claim.index+claim[0].length);
-   const withoutLinks=unit.text.replace(urls,match=>' '.repeat(match.length)),stat=number.exec(withoutLinks),quote=quotation.exec(withoutLinks),verify=stat||quote;
-   const ordinalHeading=/\.title$/.test(unit.location.path)&&/^(?:chapter|section|lesson|step|day|phase|part)\s+\d+(?:\W|$)/i.test(unit.text.trim());
-   if((verify&&!ordinalHeading)||unit.role==='quote')add('verification',unit,unit.role==='quote'||quote?'Verify this quotation or testimonial':'Verify numbers, dates, or measurements','A human editor should check the original source, context, currency, and permission where relevant. This tool has not fact-checked this passage.','Record the source and what you checked, or explain why this is an illustrative example rather than a factual claim.',verify?.index||0,(verify?.index||0)+(verify?.[0].length||150));
+   const withoutLinks=unit.text.replace(urls,match=>' '.repeat(match.length)),stat=measuredClaim.exec(withoutLinks),quote=Array.from(withoutLinks.matchAll(quotation)).find(match=>{const before=withoutLinks.slice(Math.max(0,match.index-100),match.index),around=before+'\n'+withoutLinks.slice(match.index+match[0].length,match.index+match[0].length+100);return !teachingQuote.test(before)&&(quoteAttribution.test(around)||quoteByline.test(around));}),verify=stat||quote;
+   if(verify||unit.role==='quote')add('verification',unit,unit.role==='quote'||quote?'Verify this quotation or testimonial':'Verify this research or measured result','A human editor should check the original source, context, currency, and permission where relevant. This tool has not fact-checked this passage.','Record the source and what you checked, or explain why this is an illustrative example rather than a factual claim.',verify?.index||0,(verify?.index||0)+(verify?.[0].length||150));
   }
   for(const link of unit.text.matchAll(urls)){const around=unit.text.slice(Math.max(0,link.index-100),Math.min(unit.text.length,link.index+link[0].length+100));if(/\b(?:source|credit|license|courtesy|attribution)\s*[:—-]|©|эх\s+сурвалж|источник\s*:/iu.test(around))continue;add('attribution',unit,'Check an external resource and its credit','This saved text links to an external resource without an obvious nearby source or credit. A link alone does not establish ownership, permission, or accuracy.','Confirm the destination and usage rights yourself. Add a useful source/credit where needed, or record why attribution is not applicable.',link.index,link.index+link[0].length);break;}
  }
