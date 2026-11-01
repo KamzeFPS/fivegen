@@ -13,7 +13,7 @@ export function completedWorkspaceProduct(conversation:AssistantConversation|nul
  if(!productId||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(productId))return null;
  if(step.result.resourceId&&step.result.resourceId!==productId)return null;
  const href='/build/'+encodeURIComponent(productId);
- if(step.result.href!==href)return null;
+ if(step.result.href!==href&&step.result.href!==href+'?area=content')return null;
  const output=step.action.type==='generate_product'?{delivery:step.action.delivery,exportFormat:step.action.exportFormat,...(step.action.delivery!=='in_app'&&step.action.exportFormat?{downloadHref:`/api/builder/${encodeURIComponent(productId)}/export?format=${step.action.exportFormat}`}:{})}:{};
- return {key:[approval.conversationId,approval.planId,approval.stepId,productId].join(':'),conversationId:approval.conversationId,planId:approval.planId,title:step.action.title,href,...output};
+ return {key:[approval.conversationId,approval.planId,approval.stepId,productId].join(':'),conversationId:approval.conversationId,planId:approval.planId,title:step.action.title,href:step.result.href,...output};
 }

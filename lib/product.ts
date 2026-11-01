@@ -67,7 +67,7 @@ export const briefSchema = z.object({
   language: z.string().max(50).optional(),
   quality: z.enum(["balanced", "premium"]).optional(),
   angle: z.string().max(2000).optional(),
-  duration: z.number().int().min(3).max(30).optional(),
+  duration: z.number().int().min(1).max(30).optional(),
 });
 export type Brief = z.infer<typeof briefSchema>;
 export type ProductContent = z.infer<typeof contentSchema>;

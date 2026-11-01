@@ -54,5 +54,5 @@ export function builderBrief(draft:BuilderDraft){
  const fields={...draft.fields},basics=draft.studio?.basics;
  if(typeof basics?.problem==='string')fields.problem=basics.problem;
  if(typeof basics?.prerequisites==='string')fields.prerequisites=basics.prerequisites;
- return {title:draft.title,description:draft.description,audience:draft.audience,format,price:draft.priceCents/100,color:'orange' as const,language:draft.language,quality:'premium' as const,duration:Math.max(3,Math.min(30,Number(draft.fields.unitCount)||7)),instructions:`Outcome: ${draft.fields.outcome||''}\nRequested ${info.plural}: ${draft.fields.unitCount||''}\nTone: ${draft.fields.tone||''}\n${Object.entries(fields).filter(([key])=>!['meetingUrl','communityUrl'].includes(key)).map(([key,value])=>`${key}: ${value}`).join('\n')}`};
+ return {title:draft.title,description:draft.description,audience:draft.audience,format,price:draft.priceCents/100,color:'orange' as const,language:draft.language,quality:'premium' as const,duration:Math.max(1,Math.min(30,Number(draft.fields.unitCount)||7)),instructions:`Outcome: ${draft.fields.outcome||''}\nRequested ${info.plural}: ${draft.fields.unitCount||''}\nTone: ${draft.fields.tone||''}\n${Object.entries(fields).filter(([key])=>!['meetingUrl','communityUrl'].includes(key)).map(([key,value])=>`${key}: ${value}`).join('\n')}`};
 }

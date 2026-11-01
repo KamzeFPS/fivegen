@@ -68,8 +68,8 @@ export function evaluateProductReadiness(draft:BuilderDraft,options:ReadinessOpt
  if((family==='course'||family==='challenge')&&(!hasSections||bodyComplete))add('learning-content',bodyComplete?'ready':'blocker',family==='course'?'Lessons':'Daily activities',bodyComplete?'Each added item has written content or a recording.':`Add finished ${family==='course'?'lesson content or recordings':'activity instructions'} to every item.`,{step:'content'},`Edit ${family==='course'?'lessons':'activities'}`);
  if(family==='service'){
   for(const [key,label] of [['serviceScope','Service scope'],['outcome','Session outcome'],['preparation','Client preparation']] as const){const ready=!!draft.fields[key]?.trim()&&!isUnfinishedPlaceholder(draft.fields[key]);add(`service-${key}`,ready?'ready':'blocker',label,ready?`${label} is included.`:`Describe ${label.toLowerCase()} so clients know what to expect.`,{step:'details',field:key},`Edit ${label.toLowerCase()}`);}
-  const duration=Number(draft.fields.durationMinutes),ready=duration>=15&&duration<=180;
-  add('service-duration',ready?'ready':'blocker','Session duration',ready?'Session duration is set.':'Set a session duration between 15 and 180 minutes.',{step:'details',field:'durationMinutes'},'Set duration');
+  const duration=Number(draft.fields.durationMinutes),ready=Number.isInteger(duration)&&duration>=15&&duration<=240;
+  add('service-duration',ready?'ready':'blocker','Session duration',ready?'Session duration is set.':'Set a whole-number session duration between 15 and 240 minutes.',{step:'details',field:'durationMinutes'},'Set duration');
  }
  if(family==='community')for(const [key,label] of [['memberPromise','Member promise'],['welcome','Member welcome'],['rules','Community rules']] as const){const ready=!!draft.fields[key]?.trim()&&!isUnfinishedPlaceholder(draft.fields[key]);add(`community-${key}`,ready?'ready':'blocker',label,ready?`${label} is included.`:`Add your ${label.toLowerCase()} to make onboarding clear.`,{step:'details',field:key},`Edit ${label.toLowerCase()}`);}
 

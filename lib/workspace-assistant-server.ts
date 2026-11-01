@@ -6,7 +6,7 @@ import {campaignSaveSchema} from './campaign';
 import {adoptBuilderWorkspace} from './product-builder-server';
 import {createCalendarEvent} from './workspace-calendar-server';
 import {prepareAssistantProduct,releaseAssistantProductAttempt,type AssistantGenerationCharge} from './workspace-product-generation';
-import {assistantPlanProposalSchema,assistantResourceReceipts,readAssistantEnvelope,type AssistantConversation,type AssistantMessage,type AssistantStep,type AssistantStepResult,type AssistantWorkflow} from './workspace-assistant';
+import {assistantPlanProposalSchema,assistantResourceReceipts,assistantProductReview,assistantSectionsAreFinished,readAssistantEnvelope,type AssistantConversation,type AssistantMessage,type AssistantStep,type AssistantStepResult,type AssistantWorkflow} from './workspace-assistant';
 
 export const workspaceAssistantActionRequestSchema=z.object({
   conversationId:z.string().uuid(),planId:z.string().uuid(),stepId:z.string().regex(/^[a-z0-9-]{1,64}$/),
@@ -68,8 +68,9 @@ async function executeStep(owner:string,input:ActionRequest,workflow:AssistantWo
   await assertActionGuard(guard);
   if(action.type==='manual')return {label:'Marked complete',href:null,summary:'You confirmed that you completed this action.'};
   if(action.type==='create_product'||action.type==='generate_product'){
+    if(action.type==='create_product'&&!assistantSectionsAreFinished(action.sections))throw new ApiError('This copy has unfinished placeholders. Provide the finished text, or ask Gen to generate a product from your brief.',400);
     const brief=briefSchema.parse({...action,price:0,color:'orange'}),generated=action.type==='generate_product'?await prepareAssistantProduct(owner,input.conversationId,id,action,input,guard,charge):null;
-    const sections=await Promise.all((action.type==='create_product'?action.sections:generated?.sections||[]).map(async(section,index)=>({...section,id:await stepResourceId(input.conversationId,input.planId,step.id,`section-${index}`)}))),content=sections.length?contentSchema.parse(generated?{...generated,sections}:{sections,benefits:[],launch:'',files:[]}):null;
+    const sections=await Promise.all((action.type==='create_product'?action.sections:generated?.sections||[]).map(async(section,index)=>({...section,id:action.type==='generate_product'&&'id' in section&&section.id?section.id:await stepResourceId(input.conversationId,input.planId,step.id,`section-${index}`)}))),content=sections.length?contentSchema.parse(generated?{...generated,sections}:{sections,benefits:[],launch:'',files:[]}):null;
     if(content)await assertActionGuard(guard);
     if(content)
     await db.batch([
@@ -87,7 +88,7 @@ async function executeStep(owner:string,input:ActionRequest,workflow:AssistantWo
     const saved=await activeProduct(id,owner);await assertActionGuard(guard);
     await adoptBuilderWorkspace(id,owner,{language:action.language,source:'ai',...(action.type==='generate_product'?{productDetails:{buyerProblem:action.buyerProblem,outcome:action.outcome,creatorExpertise:action.creatorExpertise,prerequisites:action.prerequisites,instructions:action.instructions,delivery:action.delivery,exportFormat:action.exportFormat}}:{})});
     const savedContent=contentSchema.parse(JSON.parse(String(saved.content))),savedSections=savedContent.sections;
-    return {label:'Open product draft',href:'/build/'+id,resourceId:id,productId:id,summary:`${action.type==='generate_product'?'Generated and saved':'Saved'} “${String(saved.title)}” in Products with ${savedSections.length} written ${savedSections.length===1?'section':'sections'}${action.type==='generate_product'?` and ${savedContent.files?.length||0} practical supporting files`:''}. Open the product to review its current content.`};
+    return {label:'Open product draft',href:'/build/'+id+'?area=content',resourceId:id,productId:id,summary:`${action.type==='generate_product'?'Generated and saved':'Saved'} “${String(saved.title)}” as a private ${action.format} draft with ${savedSections.length} written ${savedSections.length===1?'section':'sections'}${savedContent.files?.length?` and ${savedContent.files.length} supporting ${savedContent.files.length===1?'file':'files'}`:''}. Open the product to review its current content.`};
   }
   const productId=await stepProductId(step,workflow,owner);
   if(action.type==='create_campaign'){
@@ -134,7 +135,7 @@ export async function executeWorkspaceAssistantAction(owner:string,value:unknown
     await assertActionGuard(guard);
     const nextWorkflow:AssistantWorkflow={...workflow,steps:workflow.steps.map(item=>item.id===step.id?{...reviewedStep,status:input.decision==='skip'?'skipped':'completed',...(result?{result}:{}),error:undefined}:item)};
     const resources=assistantResourceReceipts({kind:'workspace-assistant',resources:assistantResourceReceipts(readAssistantEnvelope(row.plan)),workflow:nextWorkflow});
-    const nextStep=nextWorkflow.steps.find(item=>item.status==='pending'),content=(input.decision==='skip'?`Skipped “${step.title}”.`:result!.summary)+(nextStep?` Next: “${nextStep.title}”. Review this step and approve it when you are ready.`:' This plan is complete. You can keep chatting or ask for another plan.');
+    const nextStep=nextWorkflow.steps.find(item=>item.status==='pending'),review=result?.productId&&(reviewedStep.action.type==='generate_product'||reviewedStep.action.type==='create_product')?` ${assistantProductReview(reviewedStep.action)}`:'',content=(input.decision==='skip'?`Skipped “${step.title}”.`:result!.summary)+review+(nextStep?` Next: “${nextStep.title}”. Review this step and approve it when you are ready.`:review?'':step.action.type==='create_campaign'?' Your campaign copy is saved as drafts. Review the message and recipient or channel before sharing it yourself. Nothing has been sent or posted.':' The reviewed steps are complete. Tell Gen the next result you want help with.');
     const messages=[...conversation(row,workflow).messages,{id:input.requestId+'-action',role:'assistant' as const,content}],updatedAt=Math.max(Date.now(),input.expectedUpdatedAt+1),productId=row.product_id?String(row.product_id):['create_product','generate_product'].includes(step.action.type)&&result?.productId?result.productId:null;
     const response:ActionResponse={conversation:{id:input.conversationId,messages,plan:null,workflow:nextWorkflow,resources,productId,updatedAt},...(result?{result}:{})},encodedPlan=JSON.stringify({kind:'workspace-assistant',workflow:nextWorkflow,resources}),encodedMessages=JSON.stringify(messages),encodedResponse=JSON.stringify(response);
     const committed=await db.batch([

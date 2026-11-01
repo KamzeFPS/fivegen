@@ -2,11 +2,11 @@ import type {Brief,ProductContent} from './product';
 import {findRepeatedSectionBodies,isUnfinishedPlaceholder} from './product-readiness';
 
 function expectedUnits(brief:Brief){
- if(brief.format==='Challenge')return brief.duration||7;
- if(brief.format==='Coaching session'||brief.format==='Consulting / Mentorship')return 3;
  const requested=/\bRequested [^\n:]{1,40}:\s*(\d{1,2})(?:\s|$)/i.exec(brief.instructions||'');
  const count=requested?Number(requested[1]):undefined;
- return count&&count>=3&&count<=30?count:undefined;
+ if(count&&count>=1&&count<=30)return count;
+ if(brief.format==='Challenge')return brief.duration||7;
+ return undefined;
 }
 export function generatedOutlineError(brief:Brief,sections:{title:string;objective:string}[]){
  const expected=expectedUnits(brief);

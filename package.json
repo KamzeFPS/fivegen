@@ -69,7 +69,8 @@
     "test:template-kits": "node scripts/template-kit-workspace-test.mjs && node scripts/template-kit-editor-test.mjs && node scripts/template-kit-reader-test.mjs && node scripts/template-kit-export-test.mjs",
     "test:challenges": "node scripts/challenge-content-test.mjs && node scripts/challenge-editor-test.mjs && node scripts/challenge-reader-test.mjs",
     "test:client-workspaces": "node scripts/consulting-editor-test.mjs && node scripts/consulting-reader-test.mjs && node scripts/service-presentation-test.mjs",
-    "test:communities": "node scripts/community-editor-test.mjs && node scripts/community-reader-test.mjs && node scripts/product-community-ui-test.mjs && node scripts/product-community-tier-test.mjs"
+    "test:communities": "node scripts/community-editor-test.mjs && node scripts/community-reader-test.mjs && node scripts/product-community-ui-test.mjs && node scripts/product-community-tier-test.mjs",
+    "test:gen": "node scripts/gen-product-profiles-test.mjs && node scripts/workspace-assistant-scenarios-test.mjs && npm run test:workspace-chat && node scripts/generation-credit-test.mjs && node scripts/builder-agent-ui-guard-test.mjs && node scripts/generated-builder-adoption-test.mjs && node scripts/workspace-intake-regression-test.mjs && node scripts/workspace-assistant-preview-fixture-test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

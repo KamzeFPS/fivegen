@@ -18,6 +18,11 @@ export function ChatQuestionStepper({questions,index,answered,value,disabled,onA
     field.style.height='auto';field.style.height=`${Math.min(field.scrollHeight,96)}px`;
   },[value,current]);
   function select(next:number){onIndex(next);input.current?.focus({preventScroll:true});}
+  function defer(kind:'unsure'|'skip'){
+    if(disabled)return;
+    onAnswer(kind==='unsure'?'I’m not sure yet. Recommend a sensible starting point using what I have already shared.':'I’m skipping this question for now. Continue with what I have already shared and state any necessary assumptions.');
+    if(current<questions.length-1)select(current+1);else input.current?.focus({preventScroll:true});
+  }
   return <section className="chat-followup" aria-label="Questions from Gen">
     <div className="chat-followup-top"><span>Question {current+1} of {questions.length}</span><span><CheckCircle2 size={13} aria-hidden="true"/>{answered} answered</span></div>
     <label htmlFor={id}>{questions[current]}</label>
@@ -25,6 +30,7 @@ export function ChatQuestionStepper({questions,index,answered,value,disabled,onA
       if(event.key!=='Enter'||event.shiftKey||event.nativeEvent.isComposing||event.nativeEvent.keyCode===229||window.matchMedia('(pointer: coarse)').matches)return;
       event.preventDefault();if(current<questions.length-1)select(current+1);else onSubmit();
     }}/>
-    <div className="chat-followup-navigation"><span>Send any answers together. Skip anything you’re unsure of.</span><div><button type="button" disabled={disabled||current===0} aria-label="Previous question" onClick={()=>select(current-1)}><ChevronLeft size={15} aria-hidden="true"/></button><button type="button" disabled={disabled||current===questions.length-1} aria-label="Next question" onClick={()=>select(current+1)}><ChevronRight size={15} aria-hidden="true"/></button></div></div>
+    <div className="chat-followup-choices" aria-label="Optional question responses"><button type="button" disabled={disabled} onClick={()=>defer('unsure')}>Not sure yet</button><button type="button" disabled={disabled} onClick={()=>defer('skip')}>Skip for now</button></div>
+    <div className="chat-followup-navigation"><span>Send your responses when you’re ready. These choices don’t send anything.</span><div><button type="button" disabled={disabled||current===0} aria-label="Previous question" onClick={()=>select(current-1)}><ChevronLeft size={15} aria-hidden="true"/></button><button type="button" disabled={disabled||current===questions.length-1} aria-label="Next question" onClick={()=>select(current+1)}><ChevronRight size={15} aria-hidden="true"/></button></div></div>
   </section>;
 }

@@ -296,7 +296,7 @@ export function GenerationProgress({
       {job && !completed && (
         <Progress className="generation-meter" value={percent} />
       )}
-      <AlertDialog open={creditConfirm} onOpenChange={setCreditConfirm}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Approve one AI generation step?</AlertDialogTitle><AlertDialogDescription>{nextStepLabel}. This step uses {confirmedCost} credits{confirmedCost===0?' through your included generation access':''}. This approves one model call only. The next outline, section or supporting-file package requires another approval. Failed paid steps are refunded.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Not now</AlertDialogCancel><AlertDialogAction onClick={()=>void run(true)}>Approve step · {confirmedCost} credits</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <AlertDialog open={creditConfirm} onOpenChange={setCreditConfirm}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Approve one AI generation step?</AlertDialogTitle><AlertDialogDescription>{nextStepLabel}. This step uses {confirmedCost} credits{confirmedCost===0?' through your included generation access':''}. This approves one model call only. Each remaining generation step requires another approval. Failed paid steps are refunded.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Not now</AlertDialogCancel><AlertDialogAction onClick={()=>void run(true)}>Approve step · {confirmedCost} credits</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       {error && (
         <p role="alert" className="generation-error">
           {error}

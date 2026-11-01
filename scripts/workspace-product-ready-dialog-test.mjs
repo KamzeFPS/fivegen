@@ -15,7 +15,7 @@ function harness(output=completion){
  return{tree,calls,find,button,click:label=>{const control=button(label);assert.ok(control,label+' exists');control.props.onClick();}};
 }
 {
- const app=harness();assert.equal(app.find('test-Dialog').props.open,true);assert.match(text(app.find('test-DialogTitle')),/product draft is ready/i);assert.match(text(app.find('test-DialogDescription')),/private product.*Review.*first customer/i);assert.ok(text(app.tree).includes(completion.title));assert.deepEqual(app.calls,{open:0,close:0,images:0,marketing:0},'Nothing navigates or generates merely because a product completed');
+ const app=harness();assert.equal(app.find('test-Dialog').props.open,true);assert.match(text(app.find('test-DialogTitle')),/product draft is ready/i);assert.match(text(app.find('test-DialogDescription')),/private product.*Review.*next/i);assert.ok(text(app.tree).includes(completion.title));assert.deepEqual(app.calls,{open:0,close:0,images:0,marketing:0},'Nothing navigates or generates merely because a product completed');
  const content=app.find('test-DialogContent');let focused=0,prevented=0;app.button('Open product').props.ref.current={focus(){focused++;}};content.props.onOpenAutoFocus({preventDefault(){prevented++;}});assert.equal(focused,1);content.props.onCloseAutoFocus({preventDefault(){prevented++;}});assert.equal(prevented,2);
  assert.match(text(app.tree),/Every AI step asks for your approval/);assert.notEqual(content.props.showCloseButton,false,'The standard close control remains available');
 }

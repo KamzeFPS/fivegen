@@ -14,10 +14,11 @@ const copy=()=>structuredClone(conversation),input=structuredClone(conversation)
 assert.ok(ready);assert.equal(ready.conversationId,approval.conversationId);assert.equal(ready.title,step.action.title);assert.equal(ready.href,'/build/'+productId);assert.ok(ready.key);
 assert.deepEqual(conversation,input,'Matching a confirmed result does not change saved product or conversation data');
 assert.deepEqual(completedWorkspaceProduct(conversation,approval),ready,'Matching is deterministic for a single saved step');
+const contentRoute=copy();contentRoute.workflow.steps[0].result.href='/build/'+productId+'?area=content';assert.equal(completedWorkspaceProduct(contentRoute,approval).href,contentRoute.workflow.steps[0].result.href,'A confirmed content route opens the actual format editor');
 for(const field of ['conversationId','planId','stepId'])assert.equal(completedWorkspaceProduct(conversation,{...approval,[field]:'different'}),null,'An approval is scoped to its exact '+field);
 for(const status of ['pending','skipped']){const changed=copy();changed.workflow.steps[0].status=status;assert.equal(completedWorkspaceProduct(changed,approval),null,'Only a completed save can produce a success event');}
 for(const type of ['manual','create_campaign','create_calendar_event']){const changed=copy();changed.workflow.steps[0].action.type=type;assert.equal(completedWorkspaceProduct(changed,approval),null,'A non-product step cannot create a product completion');}
-for(const href of ['https://example.test/build/'+productId,'//example.test/build/'+productId,'javascript:alert(1)','/build/new','/build/'+productId+'?redirect=elsewhere','/build/'+otherId]){
+for(const href of ['https://example.test/build/'+productId,'//example.test/build/'+productId,'javascript:alert(1)','/build/new','/build/'+productId+'?redirect=elsewhere','/build/'+productId+'?area=people','/build/'+productId+'?area=content&redirect=elsewhere','/build/'+productId+'?area=content#another','/build/'+productId+'?mode=member&area=content','/build/'+otherId]){
  const changed=copy();changed.workflow.steps[0].result.href=href;assert.equal(completedWorkspaceProduct(changed,approval),null,'Only the confirmed canonical builder URL is actionable');
 }
 for(const field of ['productId','resourceId']){const changed=copy();changed.workflow.steps[0].result[field]=otherId;assert.equal(completedWorkspaceProduct(changed,approval),null,'Conflicting saved resource identities cannot direct the creator to another product');}

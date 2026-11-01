@@ -69,7 +69,8 @@ try{
  owner='another-owner';assert.equal((await get(input.id)).status,404);assert.equal((await post({...input,requestId:randomUUID()})).status,404);assert.equal((await post(input)).status,409);owner='assistant-owner';
  assert.equal((await post({...input,requestId:randomUUID(),message:'A stale turn'})).status,409);
  output={answer:'Here is a detailed first draft plan. Review and approve the first step when you are ready.',questions:[],plan:productPlan()};
- const proposalId=randomUUID(),planned=await success(post({...input,requestId:proposalId,message:'Make me a written handoff guide for new illustrators and prepare a launch announcement.',expectedUpdatedAt:first.conversation.updatedAt}));
+ const suppliedFinishedCopy=productPlan().steps[0].action.sections.map(section=>section.body).join('\n\n');
+ const proposalId=randomUUID(),planned=await success(post({...input,requestId:proposalId,message:'Save my supplied finished handoff guide as-is and prepare a launch announcement. Here is the complete copy:\n\n'+suppliedFinishedCopy,expectedUpdatedAt:first.conversation.updatedAt}));
  assert.equal(planned.conversation.workflow.id,proposalId);assert.ok(planned.conversation.workflow.steps.every(step=>step.status==='pending'));assert.equal(planned.conversation.plan,null);
  assert.deepEqual(lastInput.conversation.messages,first.conversation.messages.map(({role,content})=>({role,content})));assert.deepEqual(resourceCounts(),before,'A complete proposal still creates no products, campaigns or events');
  let state=await success(get(input.id));assert.deepEqual(state.conversation,planned.conversation);

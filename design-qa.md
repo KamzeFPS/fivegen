@@ -2,6 +2,16 @@
 
 Final result: passed. Deployment status is reported separately after the Render rollout and health verification.
 
+## Gen creation workflow - 2026-11-01
+
+Gen now plans and generates native artifacts for all 11 product types. Chat generation and the staged editor path share format-specific schemas and canonical mapping: manuscript, guide actions/examples, executable playbook graphs, course modules/practice, actual template files, challenge activities, client preparation/intake, community welcome/channels and supported custom content/files. Native structure is persisted with stable content identities and recovered without duplicate generation. Explicit Apply preserves confirmed delivery, private links, prices, original uploads, access rules and learning settings.
+
+Brief questions are limited to missing decisions; exact answers, later corrections and explicit new-product scope survive the bounded recent context. Skip/Not sure never sends a request. A necessary question cannot accompany an executable plan. Native saving accepts supplied copy rather than bypassing generation with an AI sketch. Each AI stage retains separate allowance/credit approval, paid stages require a ceiling, and failures retain refund/retry guards. Marketing, images, publishing, messages, bookings and member activity are separate from product generation.
+
+Passed: `npm run test:gen`, builder regression suite, all nine dedicated format suites (28 scripts), TypeScript, reproducible appearance surfaces and the Render production build. The built runtime passed private image/PDF/TXT reference upload, approved product generation, real PDF export, campaign draft/calendar persistence and continued chat. Browser checks covered uncertainty controls, separate generation approval/delivery choice, the completion popup, persistent review/download controls and the correct native Guide buyer preview. The browser-downloaded PDF had eight pages and contained the expected scope/checklist content.
+
+All model/provider responses and account records used in these checks were isolated synthetic fixtures. These tests verify orchestration, persistence, editor compatibility and boundaries; they do not measure live-model writing quality. No live provider calls, paid credits, customer messages or production product writes were used. Local evidence: `outputs/gen-product-scenarios/`, `outputs/workspace-assistant-preview-*/` and `outputs/gen-workflow-release-qa/completion.png`.
+
 ## Selected references
 
 Book uses the approved manuscript editor/reader and the follow-up selection-to-image controls. Guide uses Outcome Roadmap with editable steps. Playbook uses Decision Map. Mini Course uses Focus Classroom. Full Course uses Curriculum Classroom. Template Kit uses Guided Workspace. Challenge uses Momentum Track. Consulting uses Client Workspace. The user explicitly chose the same Client Workspace for Coaching, with coaching wording and a default single appointment. Community uses Member Home, confirmed with the matching attached image.
