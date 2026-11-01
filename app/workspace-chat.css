@@ -24,10 +24,8 @@
 .wa-home .wa-thread { width:100%; max-width:1010px; margin:0 auto; padding-top:clamp(44px,13.2vh,123px); }
 .wa-home-intro { flex:none; text-align:center; margin-bottom:44px; }
 .wa-home-intro > img { display:block; width:48px; height:48px; object-fit:contain; margin:0 auto 25px; }
-.wa-journey-path{display:flex;justify-content:center;flex-wrap:wrap;gap:10px 24px;list-style:none;padding:0;margin:24px 0 0;counter-reset:journey;color:var(--wa-muted);font-size:12px;line-height:1.8}.wa-journey-path li{counter-increment:journey}.wa-journey-path li:before{content:counter(journey);display:inline-grid;place-items:center;width:22px;height:22px;border:1px solid var(--wa-border);border-radius:50%;margin-right:7px;color:var(--wa-accent);font-variant-numeric:tabular-nums}
 .wa-generation-brief{padding:20px;border:1px solid var(--wa-border);border-radius:12px;margin:18px 0;background:var(--wa-panel)}.wa-generation-brief h3{font-size:17px;line-height:1.5}.wa-generation-brief>p{font-size:13px;line-height:1.8;margin:10px 0;color:var(--wa-muted)}.wa-generation-brief dl{display:grid;gap:15px;margin:18px 0}.wa-generation-brief dt{font-size:11px;color:var(--wa-muted);margin-bottom:5px}.wa-generation-brief dd{margin:0;font-size:13px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}.wa-generation-brief details{font-size:12px;line-height:1.8}.wa-generation-brief summary{cursor:pointer;min-height:36px;display:flex;align-items:center}.wa-generation-brief details p{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:10px;color:var(--wa-muted)}
 .workspace-assistant .wa-home-intro > h1 { font-size:clamp(31px,3.3vw,48px); font-weight:650; letter-spacing:-1.85px; line-height:1.18; }
-.workspace-assistant .wa-home-intro > p { margin-top:15px; color:var(--wa-muted); font-size:clamp(16px,1.55vw,23px); line-height:1.6; }
 .wa-home .wa-transcript { display:none; }
 .wa-home .wa-compose-dock { padding:0; background:transparent; }
 .wa-home .wa-composer { padding:22px 24px 18px; border-radius:18px; background:var(--wa-panel); }
@@ -38,15 +36,9 @@
 .wa-home .wa-send { min-height:46px; min-width:132px; padding:10px 19px; gap:11px; border-radius:12px; background:#ff6b0b; border-color:#ff6b0b; color:#fff; font-size:15px; font-weight:500; flex-direction:row-reverse; }
 .wa-home .wa-send:disabled { opacity:1; background:color-mix(in srgb,#ff6b0b 12%,var(--wa-panel)); color:var(--wa-muted); border-color:var(--wa-border); }
 .wa-home .wa-send:hover:not(:disabled) { background:#ed5c00; }
-.wa-home .wa-composer-help { justify-content:center; text-align:center; padding-top:12px; font-size:13px; }
 .wa-home-suggestions { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:12px 23px; margin-top:38px; color:var(--wa-muted); font-size:14px; }
 .wa-home-suggestions > button { border:0; border-radius:3px; padding:7px 0; background:none; color:var(--wa-muted); font-size:14px; text-decoration:underline; text-underline-offset:5px; }
 .wa-home-suggestions > button:hover { color:var(--wa-text); }
-.wa-home-options { margin-top:16px; text-align:center; color:var(--wa-muted); font-size:12px; }
-.wa-home-options > summary { display:inline-block; padding:7px; min-height:32px; cursor:pointer; list-style:none; }
-.wa-home-options > summary::-webkit-details-marker { display:none; }
-.wa-home-options > div { display:flex; justify-content:center; gap:18px; }
-.wa-home-options button { min-height:36px; padding:5px; background:none; border:0; font:inherit; color:var(--wa-text); text-decoration:underline; text-underline-offset:4px; }
 .wa-home-browse { display:flex; flex:none; align-items:center; justify-content:center; gap:10px; align-self:center; margin:auto 0 32px; padding:12px; min-height:44px; background:none; border:0; color:var(--wa-muted); font:inherit; font-size:14px; text-decoration:underline; text-underline-offset:5px; }
 @media(max-height:780px) and (min-width:901px) {
   .wa-home .wa-thread { padding-top:45px; }
@@ -70,14 +62,11 @@
   .wa-home .wa-thread { padding-top:36px; }
   .wa-home-intro > img { width:36px; height:36px; margin-bottom:22px; }
   .workspace-assistant .wa-home-intro > h1 { font-size:31px; letter-spacing:-1.1px; }
-  .workspace-assistant .wa-home-intro > p { font-size:16px; max-width:310px; margin:13px auto 0; }
   .wa-home .wa-composer { padding:18px 17px 15px; border-radius:15px; }
   .workspace-assistant.wa-home .wa-composer > textarea { min-height:88px; font-size:16px; }
   .wa-home .wa-send { min-width:112px; min-height:44px; font-size:14px; padding:10px 12px; }
   .wa-home .wa-attach { font-size:13px; }
-  .wa-home .wa-composer-help { font-size:11px; }
   .wa-home-suggestions { margin-top:24px; gap:5px 16px; font-size:12px; }
-  .wa-home-suggestions > span { width:100%; }
   .wa-home-suggestions > button { font-size:12px; min-height:36px; }
   .wa-home-browse { margin-top:28px; margin-bottom:12px; font-size:13px; }
 }
