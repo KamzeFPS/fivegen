@@ -2,6 +2,12 @@
 
 Final result: passed. Deployment status is reported separately after the Render rollout and health verification.
 
+## Playbook button contrast follow-up - 2026-11-02
+
+Corrected Add answer, Previous step and Next step inheriting the surrounding dark background while retaining paper-surface dark text. The editor now binds semantic button tokens to its own palette, with explicit paper-surface outline, hover/active, disabled and primary styles. Header and sidebar button colors remain scoped to their dark surfaces. Enabled labels and icons render #20272b on white; disabled controls use a separate gray fill and remain legible without reducing the whole button opacity.
+
+The built runtime passed actual Add answer and Previous/Next navigation. Browser computed styles and screenshots confirm readable enabled and disabled controls in both light and dark app appearance, with no phone horizontal overflow. Appearance was restored to System. Focus rings remain visible. Existing Playbook suites, production build, generated-appearance reproducibility and whitespace validation pass. Synthetic local data only, no paid generation or production content edits. Evidence: outputs/playbook-button-qa/buttons-enabled.png and buttons.png.
+
 ## Playbook editor clarity - 2026-11-02
 
 The default editor now shows one step at a time: name, instructions and the next step. Questions expose answer-to-destination rows, with reader guidance and extra settings in optional disclosures. The process picker and readable step list replace the oversized canvas/inspector as the primary workflow; the selected Decision Map remains available under Flow map. New instructions and questions connect to the selected path automatically. Deleting a simple instruction reconnects its actual successor; ambiguous decision paths require an explicit replacement destination.

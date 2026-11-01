@@ -1,5 +1,6 @@
 .playbook-editor{
  --pe-paper:#f8f8f5;--pe-field:#fff;--pe-ink:#20272b;--pe-muted:#65716f;--pe-line:#dce0da;--pe-orange:#f77c27;--pe-soft:#fff0e3;--pe-night:#14191c;--pe-rail:#1c2225;--pe-rail-text:#f1f3ef;--pe-rail-muted:#b0bab7;--pe-good:#357253;--pe-warning:#855d26;--pe-warning-bg:#fff7e8;--pe-danger:#a94437;
+ --background:var(--pe-paper);--foreground:var(--pe-ink);--primary:var(--pe-orange);--primary-foreground:var(--pe-night);--accent:var(--pe-soft);--accent-foreground:var(--pe-ink);--border:var(--pe-line);--input:var(--pe-line);--ring:var(--pe-orange);
  width:100%;min-width:0;background:var(--pe-paper);color:var(--pe-ink);font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color-scheme:light;
 }
 .playbook-editor *{box-sizing:border-box}
@@ -48,7 +49,12 @@
 .pe-add-buttons{display:grid;gap:8px;margin-top:20px}
 .pe-add-buttons [data-slot=button]{justify-content:flex-start;background:transparent;color:var(--pe-rail-text);border-color:var(--pe-muted)}
 .pe-outline-bottom{display:grid;gap:4px;border-top:1px solid var(--pe-muted);margin-top:26px;padding-top:16px}
+/* Keep paper-surface controls independent of the surrounding dark app theme. */
 .pe-workspace{min-width:0;background:var(--pe-paper)}
+.playbook-editor .pe-workspace [data-slot=button][data-variant=outline]{background:var(--pe-field);color:var(--pe-ink);border-color:var(--pe-line);box-shadow:none}
+.playbook-editor .pe-workspace [data-slot=button][data-variant=outline]:not(:disabled):is(:hover,:active){background:var(--pe-soft);color:var(--pe-ink);border-color:var(--pe-orange)}
+.playbook-editor .pe-workspace [data-slot=button][data-variant=outline]:disabled{background:#ecefeb;color:var(--pe-muted);border-color:var(--pe-line);opacity:1;cursor:not-allowed}
+.playbook-editor .pe-workspace [data-slot=button][data-variant=default]{background:var(--pe-orange);color:var(--pe-night);border:1px solid var(--pe-orange)}
 .pe-feedback{padding:13px 28px;font-size:14px;background:var(--pe-field);border-bottom:1px solid var(--pe-line);color:var(--pe-good);overflow-wrap:anywhere}
 .pe-feedback.is-error{color:var(--pe-danger)}
 .pe-procedure-bar{display:flex;justify-content:space-between;align-items:center;gap:15px;min-height:85px;padding:18px 30px;border-bottom:1px solid var(--pe-line);background:var(--pe-field)}
