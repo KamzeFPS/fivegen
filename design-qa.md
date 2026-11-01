@@ -2,6 +2,16 @@
 
 Final result: passed. Deployment status is reported separately after the Render rollout and health verification.
 
+## Playbook editor clarity - 2026-11-02
+
+The default editor now shows one step at a time: name, instructions and the next step. Questions expose answer-to-destination rows, with reader guidance and extra settings in optional disclosures. The process picker and readable step list replace the oversized canvas/inspector as the primary workflow; the selected Decision Map remains available under Flow map. New instructions and questions connect to the selected path automatically. Deleting a simple instruction reconnects its actual successor; ambiguous decision paths require an explicit replacement destination.
+
+Incomplete drafts show one concrete issue with Fix this and associated inline errors. Actual browser checks covered a looping connection, repeated answer labels and a missing destination, followed by explicit corrections. Additional focused tests cover action labels, empty routes, disconnected/legacy/malformed graphs, confirmed type changes and removals, stable note/file metadata, stale procedure/product callbacks and save/export duplicate guards. Cycle-safe map layout does not change authored connections.
+
+The built local runtime passed connected step and nested-question insertion, authored text and next-route preservation after refresh, map-card return to the editor, and the actual buyer preview following a new step with its complete instructions. Phone navigation closes after selection and both the 390px phone and 1280px desktop form have no horizontal overflow. Process label contrast and optional guidance density were corrected during visual QA. The temporary viewport was reset.
+
+Passed: npm run test:playbooks, canonical decision/gallery tests, full TypeScript, production Render build, generated appearance reproducibility and whitespace validation. An independent read-only review found no remaining P1/P2. Evidence: outputs/playbook-clarity-qa/desktop.png, question-desktop.png, mobile.png and repair.png. These checks used isolated synthetic records and local source files. No provider calls, credits or production product records were used. Deployment status is reported after the rollout.
+
 ## Gen creation workflow - 2026-11-01
 
 Gen now plans and generates native artifacts for all 11 product types. Chat generation and the staged editor path share format-specific schemas and canonical mapping: manuscript, guide actions/examples, executable playbook graphs, course modules/practice, actual template files, challenge activities, client preparation/intake, community welcome/channels and supported custom content/files. Native structure is persisted with stable content identities and recovered without duplicate generation. Explicit Apply preserves confirmed delivery, private links, prices, original uploads, access rules and learning settings.
