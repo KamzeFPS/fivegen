@@ -2,12 +2,14 @@ import {z} from 'zod';
 import {ApiError,binding,database} from './server';
 import {parseJson,safeStudentUrl,studentContext,assertStudentPurchaser,type StudentContext} from './product-learning-server';
 import type {ProductStudioConfig} from './product-studio-contract';
-import {communityAdvancedSchema,communityTierAllows,communityPublicTiers,selectedCommunityTier} from './product-community-tier-contract';
+import {communityAdvancedSchema,communityEventSchema,communityTierAllows,communityPublicTiers,selectedCommunityTier} from './product-community-tier-contract';
 import {assertCommunityTierEntitlement} from './product-community-tiers';
 
-const communityConfig=z.object({enabled:z.boolean().default(false),requireAgreement:z.boolean().default(true),channels:z.array(z.string().trim().min(1).max(80)).min(1).max(20).default(['General']),allowMemberPosts:z.boolean().default(true),events:z.array(z.object({id:z.string().max(80),title:z.string().min(1).max(180),startsAt:z.number().int().positive(),durationMinutes:z.number().min(1).max(1440),url:z.string().max(1500).default(''),description:z.string().max(4000).default('')})).max(100).default([])}).and(communityAdvancedSchema);
+// Old permissive publications could freeze0 as an unfinished event date. Accept
+// only that sentinel for historical reading, then omit it from actual events.
+const communityConfig=z.object({enabled:z.boolean().default(false),requireAgreement:z.boolean().default(true),channels:z.array(z.string().trim().min(1).max(80)).min(1).max(20).default(['General']),allowMemberPosts:z.boolean().default(true),events:z.array(communityEventSchema.extend({startsAt:z.number().int().nonnegative()})).max(100).default([])}).and(communityAdvancedSchema);
 async function communityContext(req:Request,id:string){
- const context=await studentContext(req,id),config=communityConfig.parse(context.studio.community||{}),challenge=context.studio.challenge as {groupFeed?:boolean}|undefined,snapshot={studio:context.studio as ProductStudioConfig};
+ const context=await studentContext(req,id),parsed=communityConfig.parse(context.studio.community||{}),config={...parsed,events:parsed.events.filter(event=>event.startsAt!==0)},challenge=context.studio.challenge as {groupFeed?:boolean}|undefined,snapshot={studio:context.studio as ProductStudioConfig};
  if(context.enrollment.removed)throw new ApiError('Your community membership has been removed. Contact the creator.',403);
  if(!config.enabled&&!challenge?.groupFeed)throw new ApiError('The creator has not opened a native community for this product.',409);
  await assertCommunityTierEntitlement(id,snapshot);
@@ -17,6 +19,10 @@ async function communityContext(req:Request,id:string){
 type CommunityContext=Awaited<ReturnType<typeof communityContext>>;
 const canModerate=(context:StudentContext)=>context.enrollment.role==='moderator';
 function assertCommunityReady(context:CommunityContext){if(context.config.requireAgreement&&!context.enrollment.rules_accepted_at)throw new ApiError('Read and agree to the community rules first.',409);if(context.config.onboarding?.requireProfile&&!context.done.has('profile'))throw new ApiError('Add your member profile before joining the conversation.',409);}
+function communityIntroductionChannel(context:CommunityContext){
+ const channels=context.config.channels.filter(channel=>communityTierAllows(context.snapshot,'channel',channel)),requested=context.config.onboarding?.introductionChannel;
+ return requested&&channels.includes(requested)?requested:channels[0]||'';
+}
 export async function communityState(req:Request,id:string){
  const context=await communityContext(req,id),db=database(),{config}=context,tier=selectedCommunityTier(context.snapshot),channels=config.channels.filter(channel=>communityTierAllows(context.snapshot,'channel',channel)),ready=(!config.requireAgreement||!!context.enrollment.rules_accepted_at)&&(!config.onboarding?.requireProfile||context.done.has('profile'));
  const posts=ready?(await db.prepare("SELECT p.*,EXISTS(SELECT 1 FROM product_community_prompt_posts schedule WHERE schedule.post_id=p.id) scheduled FROM product_community_posts p LEFT JOIN product_enrollments e ON e.order_id=p.order_id LEFT JOIN commerce_orders o ON o.id=p.order_id WHERE p.product_id=? AND p.mode=? AND p.hidden=0 AND (p.parent_id IS NULL OR EXISTS(SELECT 1 FROM product_community_posts parent LEFT JOIN product_enrollments pe ON pe.order_id=parent.order_id LEFT JOIN commerce_orders po ON po.id=parent.order_id WHERE parent.id=p.parent_id AND parent.product_id=p.product_id AND parent.mode=p.mode AND parent.hidden=0 AND (parent.order_id IS NULL OR (po.status='paid' AND pe.removed=0)))) AND (p.order_id IS NULL OR (o.status='paid' AND e.removed=0)) ORDER BY p.pinned DESC,p.created_at DESC LIMIT 250").bind(context.order.product_id,context.order.mode).all()).results:[];
@@ -28,7 +34,7 @@ export async function communityState(req:Request,id:string){
  }));
  const members=ready?(await db.prepare("SELECT e.name,e.bio,e.role,e.cohort,e.order_id FROM product_enrollments e JOIN commerce_orders o ON o.id=e.order_id WHERE e.product_id=? AND e.mode=? AND e.removed=0 AND e.rules_accepted_at IS NOT NULL AND o.status='paid' ORDER BY e.name LIMIT 100").bind(context.order.product_id,context.order.mode).all()).results:[];
  const publication=await db.prepare('SELECT slug FROM product_builder_publications WHERE product_id=? AND owner=?').bind(context.order.product_id,context.order.owner).first(),steps=(config.onboarding?.steps||[]).map(step=>({...step,completed:context.done.has(step.id)}));
- return {welcome:context.welcome,rules:context.rules,requiresAgreement:config.requireAgreement,agreed:!!context.enrollment.rules_accepted_at,channels,allowMemberPosts:config.allowMemberPosts,moderator:canModerate(context),profile:{name:String(context.enrollment.name),bio:String(context.enrollment.bio)},posts:items,members:members.map(row=>({name:String(row.name),bio:String(row.bio),role:String(row.role),cohort:String(row.cohort),mine:row.order_id===id})),events:ready?config.events.filter(event=>communityTierAllows(context.snapshot,'event',event.id)).map(event=>({...event,url:safeStudentUrl(event.url)})):[],membership:tier?{id:tier.id,name:tier.name,billing:tier.billing,priceCents:tier.priceCents}:null,plans:communityPublicTiers(config),planUrl:publication?'/b/'+encodeURIComponent(String(publication.slug)):'',onboarding:{steps,introPrompt:config.onboarding?.introPrompt||'',introductionDone:context.done.has('introduction'),requireProfile:!!config.onboarding?.requireProfile,profileComplete:context.done.has('profile')}};
+ return {welcome:context.welcome,rules:context.rules,requiresAgreement:config.requireAgreement,agreed:!!context.enrollment.rules_accepted_at,channels,allowMemberPosts:config.allowMemberPosts,moderator:canModerate(context),profile:{name:String(context.enrollment.name),bio:String(context.enrollment.bio)},posts:items,members:members.map(row=>({name:String(row.name),bio:String(row.bio),role:String(row.role),cohort:String(row.cohort),mine:row.order_id===id})),events:ready?config.events.filter(event=>communityTierAllows(context.snapshot,'event',event.id)).map(event=>({...event,url:safeStudentUrl(event.url)})):[],membership:tier?{id:tier.id,name:tier.name,billing:tier.billing,priceCents:tier.priceCents}:null,plans:communityPublicTiers(context.studio.community),planUrl:publication?'/b/'+encodeURIComponent(String(publication.slug)):'',onboarding:{steps,introPrompt:config.onboarding?.introPrompt||'',introductionDone:context.done.has('introduction'),introductionChannel:communityIntroductionChannel(context),requireProfile:!!config.onboarding?.requireProfile,profileComplete:context.done.has('profile')}};
 }
 const actionSchema=z.discriminatedUnion('action',[
  z.object({action:z.literal('agree')}),
@@ -54,7 +60,7 @@ export async function communityAction(req:Request,id:string,input:unknown){
  if(Number(context.enrollment.muted_until)>now)throw new ApiError('Posting is temporarily paused for your account.',403);
  if(value.action==='introduction'){
   if(!context.config.onboarding?.introPrompt)throw new ApiError('This community has no introduction step.');
-  const channel=context.config.channels.find(item=>communityTierAllows(context.snapshot,'channel',item));if(!channel)throw new ApiError('Your plan has no community channel.',403);
+  const channel=communityIntroductionChannel(context);if(!channel)throw new ApiError('Your plan has no community channel.',403);
   const postId=crypto.randomUUID();await db.batch([db.prepare("INSERT OR IGNORE INTO product_community_onboarding(order_id,step_id,completed_at,reference_id) VALUES (?,'introduction',?,?)").bind(id,now,postId),db.prepare("INSERT INTO product_community_posts(id,product_id,owner,mode,order_id,channel,name,body,created_at) SELECT ?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM product_community_onboarding WHERE order_id=? AND step_id='introduction' AND reference_id=?)").bind(postId,context.order.product_id,context.order.owner,context.order.mode,id,channel,context.enrollment.name,value.body,now,id,postId)]);return communityState(req,id);
  }
  if(value.action==='post'){

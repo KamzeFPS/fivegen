@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
+import {randomUUID} from 'node:crypto';
+import {resolve} from 'node:path';
+import {pathToFileURL} from 'node:url';
+import ts from 'typescript';
+import {unzipSync,strFromU8} from 'fflate';
+
+const root=resolve('outputs/course-content-export-tests',randomUUID());mkdirSync(root,{recursive:true});
+for(const name of ['export','product-decision-contract','product-document-archive','product-studio-markdown','product-studio-export'])writeFileSync(resolve(root,name+'.mjs'),ts.transpileModule(readFileSync(`lib/${name}.ts`,'utf8'),{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText.replace(/from '(\.\/[^']+)'/g,"from '$1.mjs'"));
+const {studioExportMarkdown,createStudioExport}=await import(pathToFileURL(resolve(root,'product-studio-export.mjs'))),example='COURSE_EXAMPLE_ORIGINAL: a small weekly meal plan solves one useful problem.',practice='COURSE_PRACTICE_ORIGINAL: define your reader, result and smallest useful deliverable.',reflection='COURSE_REFLECTION_ORIGINAL: record one limitation to review.';
+const document={title:'A complete practical course',description:'A useful course handout that preserves examples and real learner activities.',audience:'Creators',language:'English',writing:{showToc:false},sections:[{title:'Build a useful first version',objective:'Prepare one useful first version.',body:'ORIGINAL_COURSE_TEACHING',studio:{courseExample:example,actionStep:'Write one useful product scope.',assignment:{prompt:practice,required:true},reflection,quiz:[{question:'COURSE_KNOWLEDGE_QUESTION',options:['One useful result','Every feature'],correctIndex:0,explanation:'ANSWER_KEY_EXPLANATION_SECRET'}]}}],files:[],originals:[],images:{}};
+const markdown=studioExportMarkdown(document);for(const marker of [example,practice,reflection,'COURSE_KNOWLEDGE_QUESTION','One useful result','Every feature'])assert.ok(markdown.includes(marker));assert.equal(markdown.split(example).length-1,1,'A course example appears once');assert.ok(!markdown.includes('correctIndex')&&!markdown.includes('ANSWER_KEY_EXPLANATION_SECRET'),'Exported learner material never serializes the answer key or grading explanation');
+for(const format of ['html','epub','pdf']){
+ const output=await createStudioExport(document,format);writeFileSync(resolve(root,'lesson.'+output.extension),output.bytes);let text;
+ if(format==='html')text=new TextDecoder().decode(output.bytes);
+ else if(format==='epub'){const archive=unzipSync(output.bytes);text=Object.entries(archive).filter(([name])=>name.endsWith('.xhtml')).map(([,bytes])=>strFromU8(bytes)).join('\n');}
+ else{const pdfjs=await import('pdfjs-dist/legacy/build/pdf.mjs'),task=pdfjs.getDocument({data:output.bytes.slice(),useSystemFonts:false}),pdf=await task.promise;text='';for(let index=1;index<=pdf.numPages;index++)text+=(await(await pdf.getPage(index)).getTextContent()).items.map(item=>item.str||'').join(' ')+'\n';await task.destroy();}
+ for(const marker of ['COURSE_EXAMPLE_ORIGINAL','COURSE_PRACTICE_ORIGINAL','COURSE_REFLECTION_ORIGINAL','COURSE_KNOWLEDGE_QUESTION'])assert.ok(text.includes(marker),format+' preserves '+marker);assert.equal((text.match(/COURSE_EXAMPLE_ORIGINAL/g)||[]).length,1);assert.ok(!text.includes('ANSWER_KEY_EXPLANATION_SECRET')&&!text.includes('correctIndex'),format+' excludes answer keys');
+}
+const duplicate={...document,sections:document.sections.map(section=>({...section,studio:{...section.studio,guideExample:example}}))};assert.equal((studioExportMarkdown(duplicate).match(/COURSE_EXAMPLE_ORIGINAL/g)||[]).length,1,'A converted document does not duplicate an identical old Guide example');
+const challenge={...document,sections:[{title:'Make a useful sample',body:'ORIGINAL_CHALLENGE_ACTIVITY',studio:{challengeExample:'ORIGINAL_CHALLENGE_EXAMPLE',challengeChecklist:[{id:'first',text:'ORIGINAL_CHALLENGE_ACTION'}],actionStep:'STALE_CHALLENGE_ACTION',assignment:{prompt:'ORIGINAL_CHALLENGE_CHECK_IN',required:false},reflection:'ORIGINAL_CHALLENGE_REFLECTION'}}]};
+const challengeHtml=new TextDecoder().decode((await createStudioExport(challenge,'html')).bytes);for(const marker of ['ORIGINAL_CHALLENGE_ACTIVITY','ORIGINAL_CHALLENGE_EXAMPLE','ORIGINAL_CHALLENGE_ACTION','ORIGINAL_CHALLENGE_CHECK_IN','ORIGINAL_CHALLENGE_REFLECTION'])assert.ok(challengeHtml.includes(marker));assert.equal((challengeHtml.match(/ORIGINAL_CHALLENGE_ACTION/g)||[]).length,1);assert.ok(!challengeHtml.includes('STALE_CHALLENGE_ACTION'));challenge.sections[0].studio.challengeChecklist=[];assert.ok(!studioExportMarkdown(challenge).includes('STALE_CHALLENGE_ACTION'),'An explicitly cleared Challenge checklist does not restore old actions');
+console.log('Course content export passed: actual HTML/EPUB/PDF preserve one course example, practice prompt, reflection and quiz exercise without saved answer key or grading explanation. '+root);

@@ -1,10 +1,11 @@
 import {env} from 'cloudflare:workers';
 import {ApiError,database} from './server';
-import {builderDeliverySnapshotSchema,builderPublishedPresentation,type BuilderDeliverySnapshot} from './builder-publication-contract';
+import {builderDeliverySnapshotSchema,builderPublishedPresentation,builderBuyerPresentation,builderDeliveredStudio,type BuilderDeliverySnapshot} from './builder-publication-contract';
 import {verifyStoredUpload} from './upload-validation';
 import {assertCommunityTierEntitlement} from './product-community-tiers';
 import {communityTierDelivery,communityTierAllows} from './product-community-tier-contract';
 import {designImageIds} from './design-document';
+import {learnerSectionAccess} from './product-learning-server';
 
 export async function builderPublishedDelivery(productId:string){
  const row=await database().prepare('SELECT * FROM product_builder_publications WHERE product_id=?').bind(productId).first();
@@ -20,9 +21,10 @@ export async function builderOrderDelivery(orderId:string){
  if(!row)return null;
  // Recover presentation stripped by older checkout code only from the exact
  // purchased publication version. Sections, files and grants remain frozen.
- const recovered=row.content_snapshot?builderPublishedPresentation(JSON.parse(String(row.content_snapshot)),JSON.parse(String(row.public_snapshot))):{};
+ const recovered:Partial<ReturnType<typeof builderPublishedPresentation>>=row.content_snapshot?builderPublishedPresentation(JSON.parse(String(row.content_snapshot)),JSON.parse(String(row.public_snapshot))):{};
  const purchased=JSON.parse(String(row.snapshot));
- return builderDeliverySnapshotSchema.parse({...recovered,...purchased});
+ const studio=purchased.studio?builderDeliveredStudio(purchased.studio,(recovered.studio?.service||{}) as Record<string,unknown>,true):recovered.studio;
+ return builderDeliverySnapshotSchema.parse({...recovered,...purchased,...(studio?{studio}:{})});
 }
 export async function builderBuyerDelivery(orderId:string){const raw=await builderOrderDelivery(orderId);if(!raw)return null;await assertCommunityTierEntitlement(orderId,raw);return communityTierDelivery(raw);}
 export async function builderBuyerCover(order:Record<string,unknown>,snapshot:BuilderDeliverySnapshot|null){
@@ -91,6 +93,13 @@ export async function builderDownloadMetadata(orderId:string,productId:string,ow
 }
 export async function builderPrivateDownload(req:Request,order:Record<string,unknown>,uploadId:string){
  const raw=await builderOrderDelivery(String(order.id)),snapshot=await builderBuyerDelivery(String(order.id)),grant=await database().prepare('SELECT upload_id FROM product_builder_upload_grants WHERE order_id=? AND upload_id=?').bind(order.id,uploadId).first();if(!snapshot||raw&&!communityTierAllows(raw,'upload',uploadId)||!snapshot.uploadIds.includes(uploadId)&&!grant)throw new ApiError('File not found in this purchase.',404);
+ // Older purchased snapshots also listed lesson recordings as downloadable
+ // originals. Those grants must obey the same first matching lesson lock as
+ // protected playback, before any recording bytes are read from storage.
+ if(['course','challenge'].includes(builderBuyerPresentation(snapshot,snapshot.format).deliveryFamily)){
+  const index=snapshot.sections.findIndex(section=>section.videoId===uploadId||section.studio?.audioId===uploadId);
+  if(index>=0)await learnerSectionAccess(req,String(order.id),snapshot.sections[index].id||`section-${index}`);
+ }
  const upload=await database().prepare("SELECT * FROM uploads WHERE id=? AND product_id=? AND owner=? AND status='completed' AND object_key NOT LIKE 'voice/%' AND NOT EXISTS(SELECT 1 FROM creator_voice_sources WHERE upload_id=uploads.id)").bind(uploadId,order.product_id,order.owner).first();
  if(!upload)throw new ApiError('File unavailable. Contact your creator.',404);
  const object=await (env as unknown as {BUCKET?:R2Bucket}).BUCKET?.get(String(upload.object_key));if(!object||object.size!==Number(upload.size))throw new ApiError('File unavailable. Contact your creator.',404);

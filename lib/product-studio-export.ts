@@ -1,7 +1,7 @@
 import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {createRequire} from 'node:module';
-import {PDFDocument,PDFDict,PDFName,StandardFonts,rgb,type PDFFont,type PDFPage} from 'pdf-lib';
+import {PDFDocument,PDFDict,PDFName,PDFHexString,PDFOperator,PDFOperatorNames,StandardFonts,rgb,type PDFFont,type PDFPage} from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import {zipSync,strToU8} from 'fflate';
 import {escapeHtml} from './export';
@@ -10,36 +10,91 @@ import {ProductDocumentError} from './product-document-archive';
 import {decisionGraphText} from './product-decision-contract';
 
 export type StudioExportAsset={name:string;mime:string;bytes:Uint8Array};
-export type StudioExportDocument={title:string;description:string;audience:string;language:string;subtitle?:string;writing?:Record<string,unknown>;sections:{id?:string;title:string;body:string;objective?:string;category?:string;studio?:Record<string,unknown>}[];files:{name:string;content:string;description?:string}[];originals:StudioExportAsset[];images:Record<string,StudioExportAsset>;cover?:StudioExportAsset;license?:string;usageInstructions?:string};
+export type StudioExportDocument={title:string;description:string;audience:string;language:string;subtitle?:string;writing?:Record<string,unknown>;guide?:Record<string,unknown>;playbook?:Record<string,unknown>;templates?:Record<string,unknown>;originalFileNames?:{id:string;name:string}[];sections:{id?:string;title:string;body:string;objective?:string;category?:string;studio?:Record<string,unknown>}[];files:{name:string;content:string;description?:string}[];originals:StudioExportAsset[];images:Record<string,StudioExportAsset>;cover?:StudioExportAsset;license?:string;usageInstructions?:string};
 export type StudioExportFormat='html'|'pdf'|'epub'|'markdown'|'zip';
 const value=(input:unknown)=>typeof input==='string'?input:'';
 const themeColors={minimal:'#375669',editorial:'#b7653c',classic:'#66544b'};
 const theme=(doc:StudioExportDocument)=>value(doc.writing?.theme) in themeColors?value(doc.writing?.theme) as keyof typeof themeColors:'editorial';
 const filename=(name:string)=>name.replace(/[\\/\x00-\x1f]/g,'_').replace(/^\.+/,'').slice(0,150)||'resource';
 const dataUrl=(asset:StudioExportAsset)=>`data:${asset.mime};base64,${Buffer.from(asset.bytes).toString('base64')}`;
-function enrichedBody(section:StudioExportDocument['sections'][number]){
+function exportSections(doc:StudioExportDocument):StudioExportDocument['sections']{
+ const rows=Array.isArray(doc.templates?.items)?doc.templates.items:[],templates:StudioExportDocument['sections']=[];
+ for(const item of rows){
+  if(!item||typeof item!=='object'||Array.isArray(item))continue;
+  const row=item as Record<string,unknown>,name=value(row.name);if(!name.trim())continue;
+  const parts:string[]=[];if(value(row.description).trim())parts.push(value(row.description));
+  for(const [key,label] of [['useCase','When to use it'],['software','Works with']])if(value(row[key]).trim())parts.push(`**${label}:** ${value(row[key])}`);
+  const steps=Array.isArray(row.steps)?row.steps.filter((step):step is string=>typeof step==='string'&&!!step.trim()):[];
+  if(steps.length)parts.push('### How to use this template\n\n'+steps.map((step,index)=>`${index+1}. ${step}`).join('\n'));
+  for(const [prefix,label] of [['blank','Blank template'],['example','Worked example']]){
+   const upload=value(row[prefix+'UploadId']),authored=value(row[prefix+'FileName']);
+   // Resolve names from the same explicitly attached resource set as the
+   // package. Unknown IDs/names never become promised export deliverables.
+   const file=upload?doc.originalFileNames?.find(file=>file.id===upload)?.name:doc.files.find(file=>file.name===authored)?.name;
+   if(file)parts.push(`**${label}:** ${file}`);
+  }
+  if(value(row.duplicateUrl)){try{const url=new URL(value(row.duplicateUrl));if(url.protocol==='https:'&&!url.username&&!url.password)parts.push('**Source template:** '+url.href);}catch{}}
+  templates.push({title:'Template: '+name,body:parts.join('\n\n')});
+ }
+ return [...doc.sections,...templates];
+}
+function enrichedBody(section:StudioExportDocument['sections'][number],includedFiles:StudioExportDocument['files']=[]){
   const fields=section.studio||{},parts:string[]=[];
   const decisions=decisionGraphText(fields.decisionGraph);if(fields.decisionGraph!==undefined&&!decisions)throw new ProductDocumentError('Finish connecting the decision flow before exporting. Every branch must lead to an existing outcome.');
   if(section.objective)parts.push(`> [!NOTE]\n> Learning objective: ${section.objective}`);
   if(value(fields.imageUrl))parts.push(`![${section.title}](${value(fields.imageUrl)})`);
   parts.push(section.body);
-  for(const [key,label] of [['takeaway','Key takeaway'],['actionStep','Action step'],['why','Why it matters'],['mistakes','Common mistakes'],['role','Owner / role'],['inputs','Inputs'],['outputs','Outputs'],['kpi','Success measures'],['decision','Decision points']])if(value(fields[key])&&(key!=='decision'||!decisions))parts.push(`### ${label}\n\n${value(fields[key])}`);
+  for(const example of new Set([value(fields.guideExample),value(fields.courseExample),value(fields.challengeExample)].filter(text=>!!text.trim())))parts.push(`### Example\n\n${example}`);
+  const checklist=Array.isArray(fields.challengeChecklist)?fields.challengeChecklist:fields.guideChecklist;
+  const guideActions=Array.isArray(checklist)?checklist.flatMap(item=>item&&typeof item==='object'&&!Array.isArray(item)&&value((item as Record<string,unknown>).text).trim()?[value((item as Record<string,unknown>).text)]:[]):null;
+  if(guideActions?.length)parts.push(`### Your action\n\n${guideActions.map(text=>'- [ ] '+text).join('\n')}`);
+  for(const [key,label] of [['takeaway','Key takeaway'],['actionStep','Action step'],['why','Why it matters'],['mistakes','Common mistakes'],['trigger','When to use this procedure'],['role','Owner / role'],['inputs','Inputs'],['outputs','Outputs'],['definitionOfDone','Definition of done'],['kpi','Success measures'],['decision','Decision points']])if(value(fields[key])&&(key!=='decision'||!decisions)&&(key!=='actionStep'||guideActions===null))parts.push(`### ${label}\n\n${value(fields[key])}`);
   if(typeof fields.minutes==='number')parts.push(`**Time required:** ${fields.minutes} minutes`);
-  if(decisions)parts.push('### Decision flow\n\n'+decisions);
+  const assignment=fields.assignment&&typeof fields.assignment==='object'&&!Array.isArray(fields.assignment)?fields.assignment as Record<string,unknown>:{};
+  if(value(assignment.prompt).trim())parts.push(`### Practice submission\n\n${value(assignment.prompt)}${assignment.required===true?'\n\nCreator approval is required before completing this lesson in the course.':''}`);
+  if(value(fields.reflection).trim())parts.push(`### Reflection\n\n${value(fields.reflection)}`);
+  const quiz=Array.isArray(fields.quiz)?fields.quiz.flatMap((item,index)=>{if(!item||typeof item!=='object'||Array.isArray(item))return [];const row=item as Record<string,unknown>,options=Array.isArray(row.options)?row.options.filter((option):option is string=>typeof option==='string'):[];return value(row.question).trim()&&options.length?[`${index+1}. ${value(row.question)}\n${options.map(option=>'   - '+option).join('\n')}`]:[];}):[];
+  // A printable lesson can include the exercise, never the saved answer key or
+  // correctness explanation that the live grading endpoint releases later.
+  if(quiz.length)parts.push('### Knowledge check\n\n'+quiz.join('\n\n'));
+  if(decisions){
+    parts.push('### Decision flow\n\n'+decisions);
+    const details=fields.playbookNodeDetails&&typeof fields.playbookNodeDetails==='object'&&!Array.isArray(fields.playbookNodeDetails)?fields.playbookNodeDetails as Record<string,unknown>:{};
+    // decisionGraphText has already validated the complete canonical graph.
+    // Iterate its actual nodes only; deleted or otherwise orphaned notes never
+    // become buyer content, and the complete flow is emitted exactly once.
+    for(const node of (fields.decisionGraph as {nodes:{id:string;label:string}[]}).nodes){
+      const item=Object.hasOwn(details,node.id)?details[node.id]:null,row=item&&typeof item==='object'&&!Array.isArray(item)?item as Record<string,unknown>:{},content:string[]=[];
+      if(value(row.body).trim())content.push(value(row.body));
+      if(value(row.inputs).trim())content.push('**Inputs:** '+value(row.inputs));
+      if(value(row.example).trim())content.push('**Example:**\n\n'+value(row.example));
+      const files=Array.isArray(row.fileNames)?[...new Set(row.fileNames.filter((name):name is string=>typeof name==='string'&&!!name.trim()&&includedFiles.some(file=>file.name===name)))]:[];
+      if(files.length)content.push('**Supporting files:** '+files.join(', '));
+      if(content.length)parts.push(`#### ${node.label}\n\n${content.join('\n\n')}`);
+    }
+  }
   return parts.filter(Boolean).join('\n\n');
 }
-function front(doc:StudioExportDocument){return [['Copyright',value(doc.writing?.copyright)],['Dedication',value(doc.writing?.dedication)]].filter(([,text])=>!!text);}
+function front(doc:StudioExportDocument){
+ const sections=[['Copyright',value(doc.writing?.copyright)],['Dedication',value(doc.writing?.dedication)]],strings=(input:unknown)=>Array.isArray(input)?input.filter((item):item is string=>typeof item==='string'&&!!item.trim()):[];
+ if(value(doc.guide?.quickStart).trim())sections.push(['Quick start',value(doc.guide?.quickStart)]);
+ const checklist=strings(doc.guide?.checklist);if(checklist.length)sections.push(['Quick checklist',checklist.map(item=>'- [ ] '+item).join('\n')]);
+ const faq=Array.isArray(doc.guide?.faq)?doc.guide.faq.flatMap(item=>{if(!item||typeof item!=='object'||Array.isArray(item))return [];const row=item as Record<string,unknown>;return value(row.question).trim()&&value(row.answer).trim()?[`### ${value(row.question)}\n\n${value(row.answer)}`]:[];}):[];if(faq.length)sections.push(['Questions & troubleshooting',faq.join('\n\n')]);
+ const phases=strings(doc.playbook?.phases),kpis=strings(doc.playbook?.kpis);if(phases.length)sections.push(['The process at a glance',phases.map((phase,index)=>`${index+1}. ${phase}`).join('\n')]);if(kpis.length)sections.push(['Success measures',kpis.map(kpi=>'- '+kpi).join('\n')]);
+ return sections.filter(([,text])=>!!text);
+}
 function back(doc:StudioExportDocument){return [['About the author',value(doc.writing?.aboutAuthor)],['Acknowledgments',value(doc.writing?.acknowledgments)],['How to use these resources',doc.usageInstructions||''],['License terms',doc.license||'']].filter(([,text])=>!!text);}
 const title=(doc:StudioExportDocument)=>value(doc.writing?.coverTitle)||doc.title;
 const subtitle=(doc:StudioExportDocument)=>value(doc.writing?.coverSubtitle)||doc.subtitle||'';
 const css=(doc:StudioExportDocument)=>`*{box-sizing:border-box}body{margin:0;color:#282b2e;background:#fff;font:16px/1.8 ${doc.writing?.font==='sans'?'Arial,sans-serif':'Georgia,serif'}}main{max-width:850px;margin:auto;padding:48px}h1,h2,h3{line-height:1.25;break-after:avoid}h1{font-size:46px}h2{font-size:30px;margin-top:36px}h3{font-size:20px}a{color:${themeColors[theme(doc)]}}.cover{padding:40px 0 80px;border-bottom:5px solid ${themeColors[theme(doc)]};min-height:600px}.cover img{max-width:100%;max-height:360px;object-fit:contain}.subtitle{font-size:22px}.author{margin-top:28px}.chapter{break-before:page;padding-top:26px}.toc{padding:24px 0}.toc li{margin:12px 0}blockquote,.studio-callout{border-left:4px solid ${themeColors[theme(doc)]};padding:14px 20px;background:#f4f4f2;margin:24px 0}.studio-callout>strong{font:600 12px Arial,sans-serif;text-transform:uppercase}.studio-rich-image{margin:26px 0;break-inside:avoid}.studio-rich-image img{display:block;max-width:100%;max-height:620px;object-fit:contain}.studio-rich-image figcaption{font:12px/1.6 Arial,sans-serif;color:#61656a;margin-top:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f4f4f2;padding:18px}code{font-size:13px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px;text-align:left}.studio-footnotes{border-top:1px solid #ccc;margin-top:28px;font-size:12px}.studio-footnotes li>p{display:inline}.chapter p{orphans:3;widows:3}@media print{@page{size:A4;margin:18mm}main{padding:0}.cover{break-after:page;min-height:240mm}body{font-size:11pt}.toc{break-after:page}a{text-decoration:none}}`;
 export function studioExportMarkdown(doc:StudioExportDocument){
-  return `# ${title(doc)}\n\n${subtitle(doc)?subtitle(doc)+'\n\n':''}${value(doc.writing?.author)?'By '+value(doc.writing?.author)+'\n\n':''}${doc.description}\n\n`+front(doc).map(([heading,text])=>`## ${heading}\n\n${text}`).join('\n\n')+'\n\n'+(doc.writing?.showToc===false?'':'## Contents\n\n'+doc.sections.map((section,index)=>`${index+1}. ${section.title}`).join('\n')+'\n\n')+doc.sections.map(section=>`## ${section.title}\n\n${enrichedBody(section)}`).join('\n\n')+'\n\n'+back(doc).map(([heading,text])=>`## ${heading}\n\n${text}`).join('\n\n');
+  const sections=exportSections(doc);
+  return `# ${title(doc)}\n\n${subtitle(doc)?subtitle(doc)+'\n\n':''}${value(doc.writing?.author)?'By '+value(doc.writing?.author)+'\n\n':''}${doc.description}\n\n`+front(doc).map(([heading,text])=>`## ${heading}\n\n${text}`).join('\n\n')+'\n\n'+(doc.writing?.showToc===false?'':'## Contents\n\n'+sections.map((section,index)=>`${index+1}. ${section.title}`).join('\n')+'\n\n')+sections.map(section=>`## ${section.title}\n\n${enrichedBody(section,doc.files)}`).join('\n\n')+'\n\n'+back(doc).map(([heading,text])=>`## ${heading}\n\n${text}`).join('\n\n');
 }
 export function studioExportHtml(doc:StudioExportDocument){
   const assets=Object.fromEntries(Object.entries(doc.images).flatMap(([key,asset])=>[[key,dataUrl(asset)],[`/api/uploads/${key}`,dataUrl(asset)],[`upload:${key}`,dataUrl(asset)]]));
   const render=(body:string)=>renderStudioMarkdown(body,assets);
-  return `<!doctype html><html lang="${escapeHtml(doc.language||'en')}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none';img-src data:;style-src 'unsafe-inline';base-uri 'none';form-action 'none'"><title>${escapeHtml(title(doc))}</title><style>${css(doc)}</style></head><body><main><header class="cover">${doc.cover?`<img src="${dataUrl(doc.cover)}" alt="${escapeHtml(title(doc))} cover">`:''}<h1>${escapeHtml(title(doc))}</h1>${subtitle(doc)?`<p class="subtitle">${escapeHtml(subtitle(doc))}</p>`:''}${value(doc.writing?.author)?`<p class="author">${escapeHtml(value(doc.writing?.author))}</p>`:''}<p>${escapeHtml(doc.description)}</p></header>${front(doc).map(([heading,text])=>`<section class="chapter"><h2>${heading}</h2>${render(text)}</section>`).join('')}${doc.writing?.showToc===false?'':`<nav class="toc" aria-label="Contents"><h2>Contents</h2><ol>${doc.sections.map((section,index)=>`<li><a href="#chapter-${index+1}">${escapeHtml(section.title)}</a></li>`).join('')}</ol></nav>`}${doc.sections.map((section,index)=>`<section class="chapter" id="chapter-${index+1}">${section.category?`<p>${escapeHtml(section.category)}</p>`:''}<h2>${escapeHtml(section.title)}</h2>${render(enrichedBody(section))}</section>`).join('')}${back(doc).map(([heading,text])=>`<section class="chapter"><h2>${heading}</h2>${render(text)}</section>`).join('')}</main></body></html>`;
+  return `<!doctype html><html lang="${escapeHtml(doc.language||'en')}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none';img-src data:;style-src 'unsafe-inline';base-uri 'none';form-action 'none'"><title>${escapeHtml(title(doc))}</title><style>${css(doc)}</style></head><body><main><header class="cover">${doc.cover?`<img src="${dataUrl(doc.cover)}" alt="${escapeHtml(title(doc))} cover">`:''}<h1>${escapeHtml(title(doc))}</h1>${subtitle(doc)?`<p class="subtitle">${escapeHtml(subtitle(doc))}</p>`:''}${value(doc.writing?.author)?`<p class="author">${escapeHtml(value(doc.writing?.author))}</p>`:''}<p>${escapeHtml(doc.description)}</p></header>${front(doc).map(([heading,text])=>`<section class="chapter"><h2>${heading}</h2>${render(text)}</section>`).join('')}${doc.writing?.showToc===false?'':`<nav class="toc" aria-label="Contents"><h2>Contents</h2><ol>${exportSections(doc).map((section,index)=>`<li><a href="#chapter-${index+1}">${escapeHtml(section.title)}</a></li>`).join('')}</ol></nav>`}${exportSections(doc).map((section,index)=>`<section class="chapter" id="chapter-${index+1}">${section.category?`<p>${escapeHtml(section.category)}</p>`:''}<h2>${escapeHtml(section.title)}</h2>${render(enrichedBody(section,doc.files))}</section>`).join('')}${back(doc).map(([heading,text])=>`<section class="chapter"><h2>${heading}</h2>${render(text)}</section>`).join('')}</main></body></html>`;
 }
 export function studioExportEpub(doc:StudioExportDocument){
   const entries:Record<string,Uint8Array|[Uint8Array,{level:0}]>={mimetype:[strToU8('application/epub+zip'),{level:0}],'META-INF/container.xml':strToU8('<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>'),'OEBPS/style.css':strToU8(css(doc))};
@@ -48,7 +103,7 @@ export function studioExportEpub(doc:StudioExportDocument){
   const coverPath=doc.cover?`images/cover.${doc.cover.mime==='image/jpeg'?'jpg':doc.cover.mime==='image/webp'?'webp':'png'}`:'';
   if(doc.cover){entries['OEBPS/'+coverPath]=doc.cover.bytes;imageItems.push(`<item id="cover-image" href="${coverPath}" media-type="${doc.cover.mime}" properties="cover-image"/>`);}
   const xhtml=(name:string,body:string)=>`<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="${escapeHtml(doc.language||'en')}"><head><title>${escapeHtml(name)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head><body>${body.replace(/<(img|br|hr)(\s[^>]*?)?\/?>/g,(_,tag:string,attributes:string)=>'<'+tag+(attributes||'').replace(/\/$/,'')+'/>').replace(/ loading="lazy"/g,'')}</body></html>`;
-  const chapters=[...front(doc).map(([heading,body])=>({title:heading,body})),...doc.sections.map(section=>({title:section.title,body:enrichedBody(section)})),...back(doc).map(([heading,body])=>({title:heading,body}))];
+  const chapters=[...front(doc).map(([heading,body])=>({title:heading,body})),...exportSections(doc).map(section=>({title:section.title,body:enrichedBody(section,doc.files)})),...back(doc).map(([heading,body])=>({title:heading,body}))];
   entries['OEBPS/title.xhtml']=strToU8(xhtml(title(doc),`<section class="cover">${coverPath?`<img src="${coverPath}" alt="${escapeHtml(title(doc))} cover"/>`:''}<h1>${escapeHtml(title(doc))}</h1><p class="subtitle">${escapeHtml(subtitle(doc))}</p><p>${escapeHtml(value(doc.writing?.author))}</p><p>${escapeHtml(doc.description)}</p></section>`));
   chapters.forEach((chapter,index)=>{entries[`OEBPS/chapter-${index+1}.xhtml`]=strToU8(xhtml(chapter.title,`<section class="chapter"><h1>${escapeHtml(chapter.title)}</h1>${renderStudioMarkdown(chapter.body,mappings)}</section>`));});
   entries['OEBPS/nav.xhtml']=strToU8(xhtml('Contents',`<nav epub:type="toc" id="toc"><h1>Contents</h1><ol><li><a href="title.xhtml">${escapeHtml(title(doc))}</a></li>${chapters.map((chapter,index)=>`<li><a href="chapter-${index+1}.xhtml">${escapeHtml(chapter.title)}</a></li>`).join('')}</ol></nav>`));
@@ -118,11 +173,18 @@ export async function studioExportPdf(input:StudioExportDocument){
       }}flush();
     }y-=5;
   }
-  async function image(asset:StudioExportAsset,alt:string){const embedded=await pdfImage(doc,asset),scale=Math.min(usable/embedded.width,360/embedded.height,1),imageWidth=embedded.width*scale,imageHeight=embedded.height*scale;check(imageHeight+30);page.drawImage(embedded,{x:margin+(usable-imageWidth)/2,y:y-imageHeight,width:imageWidth,height:imageHeight});y-=imageHeight+8;if(alt)text(alt,9,italic,rgb(.4,.4,.4));y-=8;}
+  async function image(asset:StudioExportAsset,alt:string,caption=alt){const embedded=await pdfImage(doc,asset),scale=Math.min(usable/embedded.width,360/embedded.height,1),imageWidth=embedded.width*scale,imageHeight=embedded.height*scale;check(imageHeight+30);
+    // Retain alternative text with the figure, independently of its visible
+    // caption. The document is not represented as a fully tagged PDF.
+    page.pushOperators(PDFOperator.of(PDFOperatorNames.BeginMarkedContentSequence,[PDFName.of('Figure'),`<< /Alt ${PDFHexString.fromText(alt)} >>`]));
+    page.drawImage(embedded,{x:margin+(usable-imageWidth)/2,y:y-imageHeight,width:imageWidth,height:imageHeight});page.pushOperators(PDFOperator.of(PDFOperatorNames.EndMarkedContent));
+    y-=imageHeight+8;if(caption)text(caption,9,italic,rgb(.4,.4,.4));y-=8;}
   const assetFor=(url:string)=>input.images[url]||input.images[url.replace(/^\/api\/uploads\/|^upload:/,'')];
   async function markdown(body:string){
     const lines=body.replace(/\r\n?/g,'\n').split('\n');let code=false;
-    for(const line of lines){if(/^\s*```/.test(line)){code=!code;continue;}if(!line.trim()){y-=6;continue;}const picture=/!\[([^\]]*)\]\(([^)]+)\)/.exec(line);if(picture){if(picture.index)text(line.slice(0,picture.index));const asset=assetFor(picture[2]);if(asset)await image(asset,picture[1]);else text('[Image unavailable: '+picture[1]+']',10,italic);if(picture.index+picture[0].length<line.length)text(line.slice(picture.index+picture[0].length));continue;}
+    for(const line of lines){if(/^\s*```/.test(line)){code=!code;continue;}if(!line.trim()){y-=6;continue;}
+      const pictures=code?[]:[...line.matchAll(/!\[((?:\\.|[^\]\\\r\n])*)\]\(([^\s)]+)(?:[ \t]+"((?:\\.|[^"\\\r\n])*)")?[ \t]*\)/g)];
+      if(pictures.length){let cursor=0;for(const picture of pictures){if(picture.index!>cursor)text(line.slice(cursor,picture.index));const decode=(source:string)=>source.replace(/\\([\\\[\]"])/g,'$1'),alt=decode(picture[1]),caption=picture[3]===undefined?alt:decode(picture[3]),asset=assetFor(picture[2]);if(asset)await image(asset,alt,caption);else text('[Image unavailable: '+(caption||alt)+']',10,italic);cursor=picture.index!+picture[0].length;}if(cursor<line.length)text(line.slice(cursor));continue;}
       const heading=/^(#{1,6})\s+(.+)/.exec(line);if(heading){check(50);y-=10;text(heading[2],Math.max(12,22-heading[1].length*2),bold);continue;}
       if(/^>\s*\[!/.test(line)){text(line.replace(/^>\s*\[!([^\]]+)\]/,'$1'),10,bold,rgb(.35,.3,.23),12);continue;}
       if(/^>/.test(line)){text(line.replace(/^>\s?/,''),11,italic,rgb(.35,.35,.35),14);continue;}
@@ -132,8 +194,8 @@ export async function studioExportPdf(input:StudioExportDocument){
   }
   if(input.cover)await image(input.cover,'');text(title(input),30,bold);if(subtitle(input))text(subtitle(input),16);if(value(input.writing?.author))text(value(input.writing?.author),13,italic);y-=16;text(input.description,11);
   for(const [heading,body] of front(input)){next();text(heading,24,bold);await markdown(body);}
-  if(input.writing?.showToc!==false){next();text('Contents',24,bold);input.sections.forEach((section,index)=>text(`${index+1}. ${section.title}`,12));}
-  for(const section of input.sections){next();if(section.category)text(section.category,10,italic);text(section.title,24,bold);await markdown(enrichedBody(section));}
+  if(input.writing?.showToc!==false){next();text('Contents',24,bold);exportSections(input).forEach((section,index)=>text(`${index+1}. ${section.title}`,12));}
+  for(const section of exportSections(input)){next();if(section.category)text(section.category,10,italic);text(section.title,24,bold);await markdown(enrichedBody(section,input.files));}
   for(const [heading,body] of back(input)){next();text(heading,24,bold);await markdown(body);}
   const pages=doc.getPages();pages.forEach((entry,index)=>entry.drawText(`${index+1} / ${pages.length}`,{x:width-margin-40,y:28,font:normal,size:8,color:rgb(.45,.45,.45)}));
   // Base-14 symbol fonts need an explicit Unicode map: without it some PDF

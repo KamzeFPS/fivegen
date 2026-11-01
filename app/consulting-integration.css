@@ -1,0 +1,31 @@
+/* Dedicated Consulting surfaces retain their own paper canvas and app chrome. */
+.pb-app.is-consulting-workspace .workspace-shell.has-product{display:block;min-height:100dvh}
+.pb-app.is-consulting-workspace .workspace-stage{display:block;width:100%;min-width:0;flex:none;padding:0;margin:0}
+.pb-app.is-consulting-workspace .pb-layout{display:block;max-width:none;width:100%;padding:0;margin:0;gap:0}
+.pb-app.is-consulting-workspace .pb-main{width:100%;max-width:none;min-width:0;padding:0;margin:0;outline:none;container-type:normal}
+.pb-app.is-consulting-workspace .consulting-editor :is(h1,h2,h3,label){color:var(--cse-ink)}
+.pb-app.is-consulting-workspace .consulting-editor .cse-header{color:#f5f4f1}
+.pb-member-preview-dialog.is-consulting-preview[data-slot=dialog-content]{display:flex;flex-direction:column;gap:0;width:calc(100vw - 32px);max-width:1600px;height:calc(100dvh - 32px);max-height:calc(100dvh - 32px);padding:0;overflow:hidden;border-radius:10px}
+.pb-member-preview-dialog.is-consulting-preview>[data-slot=dialog-header]{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.pb-member-preview-dialog.is-consulting-preview>.pb-preview-content{flex:1;min-height:0;max-height:none;overflow:auto;padding:0;margin:0}
+.pb-member-preview-dialog.is-consulting-preview>[data-slot=dialog-footer],.pb-member-preview-dialog.is-consulting-preview>button[data-slot=dialog-close]{display:none}
+.is-consulting-preview .member-delivery-preview{height:100%;padding:0;margin:0;border:0;border-radius:0;overflow:auto}
+.is-consulting-preview .member-delivery-preview>.consulting-reader{height:100%;min-height:0}
+.is-consulting-preview .ops-preview-checks{display:none}
+.customer-portal.buyer-library.is-consulting-reading{width:100%;max-width:none;padding:0;margin:0;min-height:100dvh}
+.customer-portal.buyer-library.is-consulting-reading>header,.customer-portal.buyer-library.is-consulting-reading>.buyer-page-heading,.customer-portal.buyer-library.is-consulting-reading .buyer-library-rail{display:none}
+.customer-portal.buyer-library.is-consulting-reading .buyer-layout{display:block;max-width:none;width:100%;gap:0;padding:0;margin:0}
+.customer-portal.buyer-library.is-consulting-reading .buyer-product{min-width:0;padding:0;margin:0;border:0;background:transparent;border-radius:0}
+.customer-portal.buyer-library.is-consulting-reading .buyer-product>.consulting-reader{min-height:100dvh}
+.customer-portal.buyer-library.is-consulting-reading .buyer-product>.purchase-help{max-width:900px;margin-inline:auto}
+@media(max-width:640px){.pb-member-preview-dialog.is-consulting-preview[data-slot=dialog-content]{width:100vw;max-width:none;height:100dvh;max-height:100dvh;border-radius:0;border:0}}
+.customer-portal.buyer-library.is-consulting-reading .buyer-product-extras{max-width:1100px;margin-inline:auto;padding-inline:24px}
+.consulting-editor .pb-session-availability{padding:0;border:0;background:transparent;color:var(--cse-ink)}
+.consulting-editor .pb-session-availability h2{font-size:22px;margin:0 0 12px}
+.consulting-editor .pb-session-availability p{font-size:13px;line-height:1.8;color:var(--cse-muted)}
+.consulting-editor .pb-session-availability input{width:100%;min-width:0;padding:10px;border:1px solid var(--cse-line);border-radius:4px;background:white;color:var(--cse-ink)}
+.consulting-editor .pb-session-availability .button.secondary{background:white;color:var(--cse-ink);border:1px solid var(--cse-line)}
+.consulting-editor .pb-session-availability .text-link{color:#9b4816}
+.consulting-editor .cse-toggle{flex-direction:row}
+
+.consulting-editor .pb-session-availability .pb-field>span{color:var(--cse-ink)}

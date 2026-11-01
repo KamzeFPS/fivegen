@@ -33,6 +33,11 @@
     "test:growth:suite": "node scripts/commerce-v2-test.mjs && node scripts/automation-test.mjs && node scripts/voice-campaign-test.mjs && node scripts/growth-strategy-test.mjs",
     "test:growth:suite:runtime": "node scripts/creator-suite-runtime-test.mjs",
     "preview:connect": "node --env-file-if-exists=.env.render.local scripts/stripe-connect-preview.mjs",
+    "test:full-courses": "node scripts/full-course-editor-test.mjs && node scripts/full-course-reader-test.mjs",
+    "test:mini-courses": "node scripts/mini-course-editor-test.mjs && node scripts/mini-course-reader-test.mjs",
+    "test:playbooks": "node scripts/playbook-flow-test.mjs && node scripts/playbook-editor-test.mjs && node scripts/playbook-reader-test.mjs",
+    "test:guides": "node scripts/guide-content-test.mjs && node scripts/guide-editor-test.mjs && node scripts/guide-reader-test.mjs",
+    "test:books": "node scripts/book-manuscript-test.mjs && node scripts/book-buyer-export-test.mjs && node scripts/book-reader-test.mjs && node scripts/book-editor-test.mjs",
     "test:builders": "node scripts/product-foundation-test.mjs && node scripts/product-builder-test.mjs && node scripts/account-payments-test.mjs && node scripts/builder-assistant-test.mjs && node scripts/builder-revision-test.mjs && node scripts/product-quality-test.mjs && node scripts/generation-step-consent-test.mjs && node scripts/product-preview-clarity-test.mjs && node scripts/product-download-next-step-test.mjs && node scripts/buyer-download-preview-test.mjs",
     "test:buyer-access": "node scripts/commerce-v2-test.mjs && node scripts/customer-portal-test.mjs",
     "test:marketing-plugins": "node scripts/marketing-plugins-test.mjs",
@@ -60,7 +65,11 @@
     "test:workspace-attachments": "node scripts/workspace-attachments-test.mjs && node scripts/chat-composer-ui-test.mjs",
     "preview:design-studio": "node scripts/design-studio-preview.mjs",
     "test:marketing-images": "node scripts/marketing-image-test.mjs && node scripts/marketing-image-ui-test.mjs",
-    "test:domains": "node scripts/workspace-domains-test.mjs && node scripts/workspace-domains-ui-test.mjs && node scripts/public-host-actions-test.mjs && node scripts/creator-catalog-test.mjs && node scripts/catalog-host-test.mjs"
+    "test:domains": "node scripts/workspace-domains-test.mjs && node scripts/workspace-domains-ui-test.mjs && node scripts/public-host-actions-test.mjs && node scripts/creator-catalog-test.mjs && node scripts/catalog-host-test.mjs",
+    "test:template-kits": "node scripts/template-kit-workspace-test.mjs && node scripts/template-kit-editor-test.mjs && node scripts/template-kit-reader-test.mjs && node scripts/template-kit-export-test.mjs",
+    "test:challenges": "node scripts/challenge-content-test.mjs && node scripts/challenge-editor-test.mjs && node scripts/challenge-reader-test.mjs",
+    "test:client-workspaces": "node scripts/consulting-editor-test.mjs && node scripts/consulting-reader-test.mjs && node scripts/service-presentation-test.mjs",
+    "test:communities": "node scripts/community-editor-test.mjs && node scripts/community-reader-test.mjs && node scripts/product-community-ui-test.mjs && node scripts/product-community-tier-test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

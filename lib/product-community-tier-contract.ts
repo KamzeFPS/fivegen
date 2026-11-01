@@ -10,8 +10,12 @@ export const communityTierSchema=z.object({
 }).superRefine((tier,context)=>{if(tier.billing==='free'&&tier.priceCents!==0)context.addIssue({code:'custom',path:['priceCents'],message:'Free membership must have a zero price.'});if(tier.billing!=='free'&&tier.priceCents<50)context.addIssue({code:'custom',path:['priceCents'],message:'Paid memberships need a recurring price of at least 0.50.'});});
 export type CommunityTier=z.infer<typeof communityTierSchema>;
 const safeLink=(value:string)=>{if(!value)return true;try{const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password;}catch{return false;}};
+export const communityEventSchema=z.object({
+ id:z.string().min(1).max(80),title:z.string().trim().min(1).max(200),startsAt:z.number().int().positive('Choose a date and time for this event.'),durationMinutes:z.number().int().min(1).max(1440),
+ url:z.string().max(2000).refine(value=>{if(!value)return true;try{const url=new URL(value);return ['http:','https:'].includes(url.protocol)&&!url.username&&!url.password;}catch{return false;}},'Use a complete HTTP or HTTPS link.').default(''),description:z.string().max(50000).default(''),
+});
 export const communityOnboardingSchema=z.object({
- requireProfile:z.boolean().default(false),introPrompt:z.string().max(3000).default(''),
+ requireProfile:z.boolean().default(false),introPrompt:z.string().max(3000).default(''),introductionChannel:z.string().trim().max(80).optional(),
  steps:z.array(z.object({id:z.string().uuid(),title:z.string().trim().min(1).max(180),body:z.string().max(5000).default(''),url:z.string().max(2000).refine(safeLink,'Use a complete HTTPS link.').default('')})).max(20).default([]),
 });
 export const communityWeeklyPromptSchema=z.object({id:z.string().uuid(),body:z.string().trim().min(1).max(5000),channel:z.string().trim().min(1).max(80),weekday:z.number().int().min(0).max(6),hour:z.number().int().min(0).max(23),timezone:z.string().max(100).default('UTC').refine(value=>{try{new Intl.DateTimeFormat('en',{timeZone:value});return true;}catch{return false;}},'Choose a valid time zone.'),enabled:z.boolean().default(true)});
@@ -23,6 +27,7 @@ export const communityAdvancedSchema=z.object({
  unique(config.tiers?.map(tier=>tier.id)||[],'tiers');unique(config.onboarding?.steps.map(step=>step.id)||[],'onboarding');unique(config.weeklyPrompts?.map(prompt=>prompt.id)||[],'weeklyPrompts');
  if(config.bundleTierId&&!config.tiers?.some(tier=>tier.id===config.bundleTierId))context.addIssue({code:'custom',path:['bundleTierId'],message:'Choose an existing membership plan for bundles.'});
  const channels=Array.isArray(config.channels)?config.channels:['General'],events=Array.isArray(config.events)?config.events.map(event=>event&&typeof event==='object'&&'id' in event?event.id:''):[];
+ if(config.onboarding?.introductionChannel&&!channels.includes(config.onboarding.introductionChannel))context.addIssue({code:'custom',path:['onboarding','introductionChannel'],message:'Choose an introduction channel that exists in this community.'});
  for(const [index,tier] of (config.tiers||[]).entries()){if(tier.channels.some(channel=>!channels.includes(channel)))context.addIssue({code:'custom',path:['tiers',index,'channels'],message:'Choose channels that exist in this community.'});if(tier.eventIds.some(id=>!events.includes(id)))context.addIssue({code:'custom',path:['tiers',index,'eventIds'],message:'Choose events that exist in this community.'});}
  for(const [index,prompt] of (config.weeklyPrompts||[]).entries())if(!channels.includes(prompt.channel))context.addIssue({code:'custom',path:['weeklyPrompts',index,'channel'],message:'Choose a channel that exists in this community.'});
 });

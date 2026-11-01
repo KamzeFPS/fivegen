@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {ApiError,database,ownedProduct} from './server';
 import {getBuilderWorkspace,builderReadiness} from './product-builder-server';
-import {builderPublicSnapshotSchema,builderDeliverySnapshotSchema} from './builder-publication-contract';
+import {builderPublicSnapshotSchema,builderDeliverySnapshotSchema,builderDeliveredStudio} from './builder-publication-contract';
 import {builderPdfUpdateGrantStatement} from './builder-delivery-server';
 import {getCommerceOffer,saveCommerceOffer,publicCommerceOffer,commerceSlots,commerceMode} from './commerce-v2-server';
 import {builderFamily} from './builder-contract';
@@ -34,7 +34,7 @@ export async function publishBuilderProduct(productId:string,owner:string,input:
  const snapshot=builderPublicSnapshotSchema.parse({title:draft.title,description:draft.description,audience:draft.audience,format:product.format,benefits:product.content.benefits,outline:orderedSections.map(section=>section.title),priceCents:displayPriceCents,currency:draft.currency,hasCover:!!draft.coverUploadId,studio:publicStudio(draft.studio),preview:draft.sections.filter(section=>section.id&&draft.studio?.sales?.previewSectionIds?.includes(section.id)).slice(0,5).map(section=>({title:section.title,body:section.body}))});
  const family=builderFamily(draft);
  const sections=family==='community'&&!draft.sections.length?[{title:'Welcome to the community',body:draft.fields.welcome||''},{title:'Our community guidelines',body:draft.fields.rules||''}]:orderedSections;
- const delivery=builderDeliverySnapshotSchema.parse({studio:draft.studio,title:draft.title,format:product.format,sections,files:draft.files,uploadIds:draft.uploadIds,meetingUrl:draft.fields.meetingUrl||'',intakePrompt:draft.fields.intakePrompt||'What would you like help with?',deliveryFamily:family,communityUrl:draft.fields.communityUrl||'',serviceScope:draft.fields.serviceScope||'',preparation:draft.fields.preparation||'',builderType:draft.type,description:draft.description,coverUploadId:draft.coverUploadId,welcome:draft.fields.welcome||'',rules:draft.fields.rules||'',usageInstructions:draft.fields.usageInstructions||'',compatibleTools:draft.fields.compatibleTools||'',dailyTime:draft.fields.dailyTime||'',completionCriteria:draft.fields.completionCriteria||''});
+ const delivery=builderDeliverySnapshotSchema.parse({studio:builderDeliveredStudio(draft.studio,draft.fields),title:draft.title,format:product.format,sections,files:draft.files,uploadIds:draft.uploadIds,meetingUrl:draft.fields.meetingUrl||'',intakePrompt:draft.fields.intakePrompt||'What would you like help with?',deliveryFamily:family,communityUrl:draft.fields.communityUrl||'',serviceScope:draft.fields.serviceScope||'',preparation:draft.fields.preparation||'',builderType:draft.type,description:draft.description,coverUploadId:draft.coverUploadId,welcome:draft.fields.welcome||'',rules:draft.fields.rules||'',usageInstructions:draft.fields.usageInstructions||'',compatibleTools:draft.fields.compatibleTools||'',dailyTime:draft.fields.dailyTime||'',completionCriteria:draft.fields.completionCriteria||''});
  const reviewGuard=await editorialReviewPublicationGuard(productId,owner,expectedVersion,draft);
  const now=Date.now(),commitToken=crypto.randomUUID(),db=database();
  const results=await db.batch([

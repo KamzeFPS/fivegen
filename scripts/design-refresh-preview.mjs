@@ -73,11 +73,14 @@ assert.equal(db.prepare("SELECT COUNT(*) AS count FROM commerce_orders WHERE sta
 assert.equal(db.prepare('SELECT COUNT(*) AS count FROM commerce_slots').get().count,6,'Both services need available session times.');
 assert.equal(db.prepare("SELECT COUNT(*) AS count FROM product_builder_order_snapshots WHERE json_extract(snapshot,'$.coverUploadId') IS NOT NULL").get().count,3,'Book and both courses need genuine image cover fixtures.');
 storage.close();
-const info={synthetic:true,root,entryURL:`http://localhost:${entryPort}/design-preview`,appURL:`http://localhost:${port}/`,productIds:ids,orderIds,customerURLs:Object.fromEntries(Object.entries(orderIds).map(([type,order])=>[type,`http://localhost:${port}/customer?order=${order}`])),bookURL:`http://localhost:${port}/build/${ids.book}`,libraryURL:`http://localhost:${port}/?view=library`,customerURL:`http://localhost:${port}/customer`,note:'All data synthetic. Payment/AI/email credentials absent and external network blocked. The two-second silent lesson recording is a local video playback fixture.'};
+export const info={synthetic:true,root,entryURL:`http://localhost:${entryPort}/design-preview`,appURL:`http://localhost:${port}/`,productIds:ids,orderIds,customerURLs:Object.fromEntries(Object.entries(orderIds).map(([type,order])=>[type,`http://localhost:${port}/customer?order=${order}`])),bookURL:`http://localhost:${port}/build/${ids.book}`,libraryURL:`http://localhost:${port}/?view=library`,customerURL:`http://localhost:${port}/customer`,note:'All data synthetic. Payment/AI/email credentials absent and external network blocked. The two-second silent lesson recording is a local video playback fixture.'};
 writeFileSync(resolve(root,'preview-info.json'),JSON.stringify(info,null,2));
-if(!process.argv.includes('--seed-only')){
+let previewStarted=false;
+export async function startDesignPreview(){
+ if(previewStarted)return;previewStarted=true;
  const {start}=await import(pathToFileURL(resolve(appRoot,'runtime/render/server.mjs')));await start();
  const entry=createServer((req,res)=>{if(req.headers.host!==`localhost:${entryPort}`||req.url!=='/design-preview'){res.writeHead(404);res.end('Synthetic preview entry only.');return;}res.writeHead(303,{'Set-Cookie':`fivegen-local-session=${token}; Path=/; HttpOnly; SameSite=Lax`,'Location':`http://localhost:${port}/`,'Cache-Control':'no-store'});res.end();});
  await new Promise(done=>entry.listen(entryPort,'127.0.0.1',done));
 }
-console.log(JSON.stringify(info));
+if(!process.argv.includes('--seed-only'))await startDesignPreview();
+if(!process.argv.includes('--quiet'))console.log(JSON.stringify(info));

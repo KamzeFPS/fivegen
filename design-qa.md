@@ -1,3 +1,59 @@
+# Product format workspaces - 2026-11-01
+
+Final result: passed. Deployment status is reported separately after the Render rollout and health verification.
+
+## Selected references
+
+Book uses the approved manuscript editor/reader and the follow-up selection-to-image controls. Guide uses Outcome Roadmap with editable steps. Playbook uses Decision Map. Mini Course uses Focus Classroom. Full Course uses Curriculum Classroom. Template Kit uses Guided Workspace. Challenge uses Momentum Track. Consulting uses Client Workspace. The user explicitly chose the same Client Workspace for Coaching, with coaching wording and a default single appointment. Community uses Member Home, confirmed with the matching attached image.
+
+References and prompt records are retained locally under `outputs/<format>-interface-concepts/2026-11-01/`. The Guide comparison uses the refined `guide-outcome-roadmap-editable.png`; Community uses `community-member-home.png`.
+
+## Behavior and access
+
+All selected formats use the existing saved product schema, resources and parent save/navigation flow. The dedicated reader receives the frozen purchased content. Generic product delivery and embedded learning/service/community panels remain available where appropriate.
+
+Book image creation uses exact selected text, an explicit quality/cost review and approval, then a private candidate that must be inserted. Gen chooses the theme or the creator supplies extra direction. Captions, alt text, image ordering and original manuscript text persist. Image and export access remains owner/order scoped. Existing attachment limits are checked before generation and insertion.
+
+Guide step CRUD preserves stable identities and complete content. Playbook runs the actual validated decision graph and restores only the visited branch. Mini/Full/Challenge reuse the authoritative learning engine, with real quiz/review/release requirements and unsaved-response guards. Optional Challenge check-ins remain optional; submission, completion and navigation are separate actions. Protected recordings respect lesson locks even in historical original-download grants.
+
+Template Kit edits actual authored files, distinguishes uploaded originals from editable copies, supports blank/example variants and retains exact frozen download grants. Examples are optional. Unsupported binary previews offer the real original download.
+
+Consulting/Coaching reuse real availability, booking, cancellation, intake, session credits, calendar links, notes and action items. Preview has no bookable slots or customer activity. Historical bookings remain available, while refreshed authoritative cancellation state wins over stale content. Duration/timezone are validated and frozen from canonical authoring fields; purchased history never reads a newer draft.
+
+Community reuses real rules/profile requirements, welcome progress, introductions, conversations, polls, moderation, resources, events and purchased membership permissions. The selected introduction destination is resolved within the member's allowed channels. Shared event validation preserves accepted long text; unfinished dates cannot be newly published and older zero-date records do not break a purchased space.
+
+## Completed checks before Community's final capture
+
+Book desktop/mobile visual gates passed, including heading/list/logo corrections, accessible Preview/Download names and Preview return. The previous image flow and actual PDF/EPUB downloads were exercised with local synthetic assets. Native dragging has callback/helper coverage; this report does not claim a fresh native mouse drag in the final capture pass.
+
+Guide/Playbook/Template/Challenge comparisons preserve the selected structures with actual content and truthful initial progress. Final reader heading contrast, checklist rows and the contained mobile CSV scroller were verified. All four readers measured document1425 at viewport1440 and document375 at viewport390. The four corresponding editor captures are earlier accepted captures of unchanged components; capture provenance is recorded.
+
+Mini/Full final source-matched captures passed. Numbered lists render real markers. Full Course's heading is visible at scroll top; lesson navigation resets the lesson tab. Real wrong/correct quiz feedback, review requirements, unsaved work and recording playback were exercised. The fixture's recording is explicitly a two-second QA clip, not the mock's illustrative teaching video.
+
+Consulting/Coaching desktop/mobile flows passed: real synthetic booking reduces3 credits to2, cancellation restores3, custom intake prompts render in the booking form, owner preview has no bookable times, unfinished preparation survives Keep editing, and both mobile surfaces fit viewport390/document375. A minor availability-label contrast refinement is included for the final Community bundle.
+
+Local evidence is under `outputs/product-interface-qa/`, including `book-qa-notes.md`, `course-qa-notes.md`, `final-qa-notes.md`, source/implementation montages and capture provenance. Structural/data differences from generated concepts are documented; pixel identity is not claimed.
+
+## Final Community result
+
+The selected Member Home editor and member view passed desktop/mobile browser QA. Actual welcome-step CRUD, save/reload, plan-grant restoration, event-date persistence/cleanup, People navigation and Preview return were exercised. Native datetime controls required real keyboard input in the browser test; an automation-only DOM fill did not commit a change.
+
+Member rules gate, onboarding save, introduction draft exit guard, preserved draft, one actual introduction in the permitted channel and persisted2-of3 progress were verified against the isolated server. Purchased Resources exposed only the two Starter files; paid-plan resources stayed excluded. Mobile tabs reached Members and returned Home without document overflow (390 viewport/375 document). Final primary button text uses dark ink on orange; the active tab uses a darker orange for legibility. The final rebuilt view and its source comparison were inspected at scroll top.
+
+Evidence: `community-editor-qa-notes.md`, `community-editor-final10-comparison.jpg`, `community-reader-release-comparison.jpg`, `community-reader-release-desktop.png` and `community-reader-release-mobile.png` under the local QA folder. The source leaf icon is replaced with an honest Users fallback unless a real granted cover is supplied. Actual welcome instructions are longer than the illustrative concept; control density and copy differ while the selected information hierarchy remains.
+
+All format suites, Community tier/access/publication checks, buyer-preview/portal boundaries, source-message propagation/concurrency and assistant runtime consent/refund/ledger checks pass. TypeScript, reproducible appearance generation, production Render build and whitespace checks pass. The runtime test fixture was corrected to account explicitly for monthly credits before asserting purchased-credit spending; pricing and business rules were not changed.
+
+## Verification limits
+
+All interactive QA uses isolated synthetic owners, purchases, files, wallets and progress. No live AI/provider generation, financial transaction, real customer message or calendar invitation is used. Selected concepts are authoring references; mock progress, members and bookings are not seeded as real outcomes. Deployment status is reported separately after the Render rollout and health verification.
+
+---
+
+## Prior QA history
+
+The notes below describe earlier versions and their verification at the time.
+
 # FiveGen Conversation First workspace — design QA
 
 Date: 2026-10-30

@@ -1,0 +1,31 @@
+/* Dedicated Guide surfaces retain their own paper canvas and app chrome. */
+.pb-app.is-guide-workspace .workspace-shell.has-product{display:block;min-height:100dvh}
+.pb-app.is-guide-workspace .workspace-stage{display:block;width:100%;min-width:0;flex:none;padding:0;margin:0}
+.pb-app.is-guide-workspace .pb-layout{display:block;max-width:none;width:100%;padding:0;margin:0;gap:0}
+.pb-app.is-guide-workspace .pb-main{width:100%;max-width:none;min-width:0;padding:0;margin:0;outline:none;container-type:normal}
+.pb-app.is-guide-workspace .guide-editor :is(h1,h2,h3,label){color:var(--ge-ink)}
+.pb-app.is-guide-workspace .guide-editor .ge-header{color:#f5f4f1}
+.pb-member-preview-dialog.is-guide-preview[data-slot=dialog-content]{display:flex;flex-direction:column;gap:0;width:calc(100vw - 32px);max-width:1600px;height:calc(100dvh - 32px);max-height:calc(100dvh - 32px);padding:0;overflow:hidden;border-radius:10px}
+.pb-member-preview-dialog.is-guide-preview>[data-slot=dialog-header]{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.pb-member-preview-dialog.is-guide-preview>.pb-preview-content{flex:1;min-height:0;max-height:none;overflow:auto;padding:0;margin:0}
+.pb-member-preview-dialog.is-guide-preview>[data-slot=dialog-footer],.pb-member-preview-dialog.is-guide-preview>button[data-slot=dialog-close]{display:none}
+.is-guide-preview .member-delivery-preview{height:100%;padding:0;margin:0;border:0;border-radius:0;overflow:auto}
+.is-guide-preview .member-delivery-preview>.guide-reader{height:100%;min-height:0}
+.is-guide-preview .ops-preview-checks{display:none}
+.customer-portal.buyer-library.is-guide-reading{width:100%;max-width:none;padding:0;margin:0;min-height:100dvh}
+.customer-portal.buyer-library.is-guide-reading>header,.customer-portal.buyer-library.is-guide-reading>.buyer-page-heading,.customer-portal.buyer-library.is-guide-reading .buyer-library-rail{display:none}
+.customer-portal.buyer-library.is-guide-reading .buyer-layout{display:block;max-width:none;width:100%;gap:0;padding:0;margin:0}
+.customer-portal.buyer-library.is-guide-reading .buyer-product{min-width:0;padding:0;margin:0;border:0;background:transparent;border-radius:0}
+.customer-portal.buyer-library.is-guide-reading .buyer-product>.guide-reader{min-height:100dvh}
+.customer-portal.buyer-library.is-guide-reading .buyer-product>.purchase-help{max-width:900px;margin-inline:auto}
+@media(max-width:640px){.pb-member-preview-dialog.is-guide-preview[data-slot=dialog-content]{width:100vw;max-width:none;height:100dvh;max-height:100dvh;border-radius:0;border:0}}
+.pb-app.is-guide-workspace .ge-roadmap li{isolation:isolate}
+
+.guide-reader .gr-instructions>header{display:block;min-height:0;padding:0;border:0;background:none}
+.guide-reader .gr-prose ol{list-style:decimal;padding-left:24px}
+.guide-reader .gr-prose ul{list-style:disc;padding-left:24px}
+.guide-reader .gr-checklist label{flex-direction:row}
+
+.customer-portal.buyer-library.is-guide-reading .buyer-product-extras{max-width:1100px;margin-inline:auto;padding-inline:24px}
+
+.guide-reader .gr-instructions>header{color:var(--gr-ink)}

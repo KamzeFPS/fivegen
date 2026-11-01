@@ -32,6 +32,28 @@ export const builderDeliverySnapshotSchema=z.object({
 export type BuilderPublicSnapshot=z.infer<typeof builderPublicSnapshotSchema>;
 export type BuilderDeliverySnapshot=z.infer<typeof builderDeliverySnapshotSchema>;
 
+/** Copy only explicit, valid appointment facts into a buyer snapshot. Authoring
+ * fields stay canonical; missing values never acquire a default duration/zone. */
+export function builderServicePresentation(fields:Record<string,unknown>){
+ const result:{durationMinutes?:number;timezone?:string}={},raw=fields.durationMinutes;
+ const duration=typeof raw==='number'?raw:typeof raw==='string'&&/^\d{1,3}$/.test(raw.trim())?Number(raw.trim()):NaN;
+ if(Number.isInteger(duration)&&duration>=15&&duration<=240)result.durationMinutes=duration;
+ const zone=typeof fields.timezone==='string'?fields.timezone.trim():'';
+ if(zone.length<=100&&(zone==='UTC'||/^[A-Za-z][A-Za-z0-9_+.-]*(?:\/[A-Za-z0-9_+.-]+)+$/.test(zone))){
+  try{new Intl.DateTimeFormat('en',{timeZone:zone}).format(0);result.timezone=zone;}catch{}
+ }
+ return result;
+}
+export function builderDeliveredStudio(studio:ProductStudioConfig|undefined,fields:Record<string,unknown>,recover=false):ProductStudioConfig|undefined{
+ const original=studio?.service,service=original&&typeof original==='object'&&!Array.isArray(original)?original:{},source={...fields};
+ // Frozen values win during historical presentation recovery. Only an exact
+ // purchased publication may supply missing facts; never a newer live draft.
+ if(recover)for(const key of ['durationMinutes','timezone'])if(Object.hasOwn(service,key))source[key]=service[key];
+ const presentation=builderServicePresentation(source);if(!original&&!Object.keys(presentation).length)return studio;
+ const clean={...service};delete clean.durationMinutes;delete clean.timezone;
+ return {...studio,service:{...clean,...presentation}};
+}
+
 // Older publications include the reviewed draft alongside their delivery
 // snapshot. Read only this allowlist; never return the whole stored draft.
 export function builderPublishedPresentation(content:Record<string,unknown>,publicSnapshot:Record<string,unknown>={}){
@@ -41,7 +63,7 @@ export function builderPublishedPresentation(content:Record<string,unknown>,publ
   builderType:content.builderType??draft.type,
   description:content.description??publicSnapshot.description??draft.description??'',
   coverUploadId:content.coverUploadId??draft.coverUploadId,
-  studio:content.studio??draft.studio,
+  studio:builderDeliveredStudio((content.studio??draft.studio) as ProductStudioConfig|undefined,fields,true),
   ...Object.fromEntries(['welcome','rules','usageInstructions','compatibleTools','dailyTime','completionCriteria'].map(key=>[key,content[key]??fields[key]??''])),
  };
 }

@@ -11,7 +11,7 @@ import {AICreditConsent} from './ai-credit-consent';
 import './builder-agent.css';
 
 type AgentRequest = { requestId: string; message: string; expectedUpdatedAt: number; maxCredits: number; target: BuilderAgentTarget; detailsGroup?:BuilderAgentDetailsGroup;fieldKeys?:BuilderAgentFieldKey[];refinement?:BuilderAgentRefinement;context: BuilderAgentContext };
-export type BuilderAgentFocus={id:string;message:string;detailsGroup:BuilderAgentDetailsGroup;fieldKeys?:BuilderAgentFieldKey[]};
+export type BuilderAgentFocus={id:string;message:string;detailsGroup?:BuilderAgentDetailsGroup;fieldKeys?:BuilderAgentFieldKey[];target?:BuilderAgentTarget;refinement?:BuilderAgentRefinement};
 type Props = {
   productId: string;
   context: BuilderAgentContext;
@@ -20,16 +20,20 @@ type Props = {
   onMinimizedChange?: (minimized: boolean) => void;
   focus?:BuilderAgentFocus|null;
   activity?:string;
+  disabled?:boolean;
+  onBusyChange?:(busy:boolean)=>void;
 };
 
 function excerpt(context: BuilderAgentContext): BuilderAgentContext {
   return { type: context.type.slice(0, 80),builderType:context.builderType,deliveryFamily:context.deliveryFamily, title: context.title.slice(0, 160), description: context.description.slice(0, 2000), audience: context.audience.slice(0, 1000), language: context.language.slice(0, 80), fields: Object.fromEntries(Object.entries(context.fields || {}).slice(0, 24).map(([key, value]) => [key.slice(0, 80), value.slice(0, 400)])), sections: (context.sections || []).slice(0, 24).map(section => ({ title: section.title.slice(0, 160) || 'Untitled section', body: section.body.slice(0, 280) })) };
 }
 
-export function BuilderAgent({ productId, context, onApply,onBeforeSend, onMinimizedChange,focus,activity='' }: Props) {
+export function BuilderAgent({ productId, context, onApply,onBeforeSend, onMinimizedChange,focus,activity='',disabled=false,onBusyChange }: Props) {
   const [state, setState] = useState<BuilderAgentState | null>(null);
   const [minimized, setMinimized] = useState(true), [loading, setLoading] = useState(true), [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(''), [answers, setAnswers] = useState<Record<string, string>>({}), [error, setError] = useState('');
+  const reportBusy=useRef(onBusyChange);reportBusy.current=onBusyChange;
+  useEffect(()=>{reportBusy.current?.(busy);return()=>reportBusy.current?.(false);},[busy]);
   const [target, setTarget] = useState<BuilderAgentTarget>('details'),[detailsGroup,setDetailsGroup]=useState<BuilderAgentDetailsGroup|undefined>(),[fieldKeys,setFieldKeys]=useState<BuilderAgentFieldKey[]|undefined>(), [applying, setApplying] = useState(''), [applied, setApplied] = useState<string[]>([]);
   const [pending, setPending] = useState<AgentRequest | null>(null), [loadedStorageKey, setLoadedStorageKey] = useState('');
   const [creditConsent,setCreditConsent]=useState<{request?:AgentRequest;signature:string;cost:number}|null>(null);
@@ -86,11 +90,12 @@ export function BuilderAgent({ productId, context, onApply,onBeforeSend, onMinim
   useEffect(()=>{if(minimized)return;const frame=requestAnimationFrame(()=>inputRef.current?.focus({preventScroll:true}));const close=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!event.isComposing&&!document.querySelector('[data-slot="dialog-content"]')){event.preventDefault();changeMinimized(true);}};document.addEventListener('keydown',close);return()=>{cancelAnimationFrame(frame);document.removeEventListener('keydown',close);};},[minimized]);
 
   useEffect(() => { if (loadedStorageKey !== storageKey) return; try { localStorage.setItem(storageKey, JSON.stringify({ minimized, message, answers, target,detailsGroup,fieldKeys,scopeVersion:2, applied, pending })); } catch {} }, [storageKey, loadedStorageKey, minimized, message, answers, target,detailsGroup,fieldKeys, applied, pending]);
-  useEffect(()=>{if(!focus)return;if(sendingRef.current||pending){setError('Finish the current request before switching to another field.');return;}changeMinimized(false);setTarget('details');setDetailsGroup(focus.detailsGroup);setFieldKeys(focus.fieldKeys);setMessage(current=>current.trim()?`${focus.message}\n\nAdditional notes:\n${current}`:focus.message);setError('');inputRef.current?.focus({preventScroll:true});},[focus?.id]);
+  useEffect(()=>{if(!focus)return;if(sendingRef.current||pending){setError('Finish the current request before switching to another field.');return;}changeMinimized(false);setTarget(focus.target||'details');setDetailsGroup(focus.detailsGroup);setFieldKeys(focus.fieldKeys);if(focus.refinement){setRefineSectionId(focus.refinement.sectionId);setRefineText(focus.refinement.originalText);}setMessage(current=>current.trim()?`${focus.message}\n\nAdditional notes:\n${current}`:focus.message);setError('');inputRef.current?.focus({preventScroll:true});},[focus?.id]);
   useEffect(()=>{const allowed=builderAgentFieldKeysForContext(context);if(fieldKeys?.some(key=>!allowed.includes(key)))setFieldKeys(undefined);if(detailsGroup==='type-details'&&!builderAgentFieldKeysForContext(context,'type-details').length)setDetailsGroup(undefined);},[context.builderType,context.deliveryFamily,fieldKeys,detailsGroup]);
   useEffect(() => { if (followsRef.current && listRef.current) listRef.current.scrollTo({ top: messages.length || busy ? listRef.current.scrollHeight : 0, behavior: 'instant' }); }, [latest?.id, messages.length, busy, minimized]);
 
   async function send(existing?: AgentRequest) {
+    if(disabled){setError('Wait for the current book image to finish before asking Gen.');return;}
     if (sendingRef.current || (!existing && !canSend) || !state) return;
     sendingRef.current = true; setBusy(true); setError('');
     try{if(!existing)await onBeforeSend?.();}catch(cause){sendingRef.current=false;setBusy(false);setError(cause instanceof Error?cause.message:'Save your draft before asking AI.');return;}

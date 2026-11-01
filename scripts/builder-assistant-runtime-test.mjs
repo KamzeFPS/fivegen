@@ -108,14 +108,20 @@ try {
 
   const period = new Date().toISOString().slice(0, 7);
   for (let index = 0; index < 19; index++) sql.prepare("INSERT INTO studio_plan_turns (id,owner,conversation_id,prompt,period,mode,state,created_at) VALUES (?,?,?,?,?,'included','completed',?)").run(randomUUID(), owner, 'other-fixture-conversation', 'Synthetic quota fixture', period, Date.now());
-  sql.prepare('UPDATE wallets SET purchased=100 WHERE owner=?').run(owner);
+  // Planning turns and monthly wallet credits are separate allowances. This
+  // case deliberately exercises purchased-credit debits/refunds after both
+  // included allowances are exhausted; do not change the real grant policy.
+  sql.prepare('UPDATE wallets SET starter=0,purchased=100 WHERE owner=?').run(owner);
+  assert.deepEqual({...sql.prepare('SELECT starter,purchased FROM wallets WHERE owner=?').get(owner)},{starter:0,purchased:100});
   const cost = state.cost;
   assert.ok(cost > 0);
   const paid = {...initial, requestId: randomUUID(), expectedUpdatedAt: state.conversation.updatedAt};
   await json(path, 'POST', paid, headers, 402);
   assert.equal(providerCalls, 1, 'Exhausted included quota requires explicit paid consent before transport');
+  assert.deepEqual({...sql.prepare('SELECT starter,purchased FROM wallets WHERE owner=?').get(owner)},{starter:0,purchased:100},'Missing paid consent cannot reserve either wallet bucket');
   state = await json(path, 'POST', {...paid, requestId: randomUUID(), maxCredits: cost});
   assert.equal(state.spent, cost); assert.equal(state.credits, 100 - cost); assert.equal(providerCalls, 2);
+  const paidUsage=sql.prepare("SELECT starter_used,purchased_used,state FROM credit_usage WHERE owner=? AND cost=? AND state='completed'").all(owner,cost);assert.equal(paidUsage.length,1);assert.equal(paidUsage[0].starter_used,0);assert.equal(paidUsage[0].purchased_used,cost,'The paid fixture reserves actual purchased credits at the server-quoted price');
   const lastValidConversation = state.conversation;
   for (const mode of ['malformed', 'unavailable']) {
     providerMode = mode;

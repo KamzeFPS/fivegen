@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {randomUUID} from 'node:crypto';
+import ts from 'typescript';
+
+const source=readFileSync('lib/guide-content.ts','utf8'),module={};
+new Function('exports',ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(module);
+const {guideStep,guideStepResources}=module;
+const upload=randomUUID(),another=randomUUID(),sectionId=randomUUID(),long='Useful original instructions. '.repeat(5000);
+const section={id:sectionId,title:'Write your first message',body:long,objective:'One specific result.',studio:{guideExample:'An original worked example.',guideChecklist:[{id:'first',text:'Name one real observation.'},{id:'second',text:'Connect it to one useful outcome.'}],guideUploadIds:[upload,upload,'not-an-upload',42],guideFileNames:['worksheet.md','worksheet.md',false],minutes:10,actionStep:'STALE_ACTION'}};
+const step=guideStep(section,2);
+assert.equal(step.id,sectionId);assert.equal(step.title,section.title);assert.equal(step.body,long,'Long usable instructions are never truncated');assert.equal(step.objective,section.objective);assert.equal(step.example,section.studio.guideExample);assert.deepEqual(step.actions,section.studio.guideChecklist);assert.deepEqual(step.uploadIds,[upload]);assert.deepEqual(step.fileNames,['worksheet.md']);assert.equal(step.minutes,10);
+assert.equal(section.studio.guideChecklist.length,2,'Reading presentation never mutates the saved section');
+const legacy=guideStep({title:'Existing step',body:'Keep all original writing.',studio:{actionStep:'- [ ] First action\n2. Second action\n* Third action\n\nA final standalone task.'}},4);
+assert.equal(legacy.id,'guide-step-4');assert.deepEqual(legacy.actions.map(action=>action.text),['First action','Second action','Third action','A final standalone task.']);assert.equal(new Set(legacy.actions.map(action=>action.id)).size,4);
+assert.deepEqual(guideStep({...section,studio:{guideChecklist:[],actionStep:'Do not restore a deliberately cleared checklist.'}}).actions,[]);
+const malformed=guideStep({...section,studio:{guideChecklist:[null,'fake',[],{text:'  '},{id:'same',text:'One'},{id:'same',text:'Two'},{id:'action-5',text:'Three'}],guideUploadIds:'fake',guideFileNames:[null,''],minutes:Infinity}});
+assert.deepEqual(malformed.actions.map(action=>action.text),['One','Two','Three']);assert.equal(new Set(malformed.actions.map(action=>action.id)).size,3);assert.deepEqual(malformed.uploadIds,[]);assert.deepEqual(malformed.fileNames,[]);assert.equal(malformed.minutes,undefined);
+const content={id:'purchased-order',title:'A purchased guide',downloads:[{id:upload,name:'source.pdf',mime:'application/pdf',size:100},{id:another,name:'other.pdf',mime:'application/pdf',size:100}],files:[{name:'worksheet.md',content:'Original worksheet.'},{name:'other.md',content:'Other included resource.'}]};
+const selected=guideStepResources(content,{uploadIds:[upload,randomUUID()],fileNames:['worksheet.md','PRIVATE_UNKNOWN_FILE.md']});assert.equal(selected.id,content.id);assert.deepEqual(selected.downloads,[content.downloads[0]]);assert.deepEqual(selected.files,[content.files[0]]);assert.equal(content.downloads.length,2,'Step assignment does not remove other globally included resources');assert.equal(content.files.length,2);assert.deepEqual(guideStepResources({files:[]},{uploadIds:[upload],fileNames:['fake.md']}),{files:[],downloads:undefined});
+console.log('Guide content passed: original text preservation, structured/legacy actions, deterministic identities, malformed metadata handling, and resource selection from granted files only.');

@@ -111,6 +111,21 @@ try{
  assert.equal((await deps.customerProduct(request(customCourse.cookie),customCourse.id)).builderType,'custom');
  assert.equal((await deps.customerProduct(request(customCourse.cookie),customCourse.id)).deliveryFamily,'course');
 
+ // Service appointment facts come only from the purchased snapshot or its
+ // exact reviewed publication, never a changed workspace/new public version.
+ for(const type of ['consulting','coaching']){
+  const serviceProduct=product(deps.builderTypeDetails[type].format),service=snapshot(type,{studio:{service:{sessionCount:type==='consulting'?3:1,durationMinutes:45,timezone:'Asia/Ulaanbaatar',asyncMessaging:true}}}),purchase=await order(serviceProduct,service),legacyService=snapshot(type,{studio:{service:{sessionCount:type==='consulting'?3:1,asyncMessaging:true}}}),legacyPurchase=await order(serviceProduct,legacyService);
+  publication(serviceProduct,{...legacyService,draft:{type,studio:legacyService.studio,fields:{durationMinutes:'60',timezone:'Europe/London',instructions:'PRIVATE_SERVICE_AUTHORING_PROMPT'}}});
+  sql.prepare('INSERT INTO product_builder_workspaces(product_id,owner,version,data,updated_at) VALUES(?,?,2,?,?)').run(serviceProduct,owner,JSON.stringify({type,fields:{durationMinutes:'90',timezone:'Pacific/Auckland',instructions:'PRIVATE_CHANGED_SERVICE_DRAFT'}}),Date.now());
+  const raw=sql.prepare('SELECT snapshot FROM product_builder_order_snapshots WHERE order_id=?').get(purchase.id).snapshot;
+  let data=await deps.customerProduct(request(purchase.cookie),purchase.id);assert.equal(data.studio.service.durationMinutes,45);assert.equal(data.studio.service.timezone,'Asia/Ulaanbaatar','Frozen explicit service facts win over other content');
+  data=await deps.customerProduct(request(legacyPurchase.cookie),legacyPurchase.id);assert.equal(data.studio.service.durationMinutes,60);assert.equal(data.studio.service.timezone,'Europe/London','Missing old metadata can recover only from its exact purchased publication');assert.ok(!JSON.stringify(data).includes('PRIVATE_SERVICE_AUTHORING_PROMPT')&&!JSON.stringify(data).includes('PRIVATE_CHANGED_SERVICE_DRAFT'));
+  publication(serviceProduct,{...legacyService,draft:{type,studio:legacyService.studio,fields:{durationMinutes:'120',timezone:'America/New_York'}}},{version:2});
+  data=await deps.customerProduct(request(legacyPurchase.cookie),legacyPurchase.id);assert.equal(data.studio.service.durationMinutes,undefined);assert.equal(data.studio.service.timezone,undefined,'Unavailable original metadata never borrows a newer public version or current draft');
+  data=await deps.customerProduct(request(purchase.cookie),purchase.id);assert.equal(data.studio.service.durationMinutes,45);assert.equal(data.studio.service.timezone,'Asia/Ulaanbaatar');assert.equal(sql.prepare('SELECT snapshot FROM product_builder_order_snapshots WHERE order_id=?').get(purchase.id).snapshot,raw,'Read-time presentation recovery never changes the frozen purchase bytes');
+  const invalid=await order(serviceProduct,snapshot(type,{studio:{service:{sessionCount:1,durationMinutes:241,timezone:'Mars/Olympus'}}}));data=await deps.customerProduct(request(invalid.cookie),invalid.id);assert.equal(data.studio.service.durationMinutes,undefined);assert.equal(data.studio.service.timezone,undefined,'Malformed frozen appointment facts receive no fabricated replacement');
+ }
+
  // Old checkout serialization stripped these presentation fields. Recover only
  // the exact reviewed version while preserving original files and lessons.
  const historicalProduct=product(),historicalCover=await upload(historicalProduct),historical=snapshot();

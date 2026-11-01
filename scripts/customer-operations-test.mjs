@@ -6,6 +6,7 @@ import ts from 'typescript';
 import {z} from 'zod';
 import {unzipSync,strFromU8,strToU8,zipSync} from 'fflate';
 import {createStorage} from '../runtime/render/storage.mjs';
+import {loadServicePresentation} from './service-presentation-fixture.mjs';
 
 // Actual source + additive production migrations; all data is synthetic.
 // This harness has no credentials and any provider call fails immediately.
@@ -15,6 +16,7 @@ class ApiError extends Error{constructor(message,status=400){super(message);this
 const experimentHooks=[];
 const deps={recordExperimentJourney:async(...args)=>experimentHooks.push(['event',...args]),recordExperimentCheckout:async(...args)=>experimentHooks.push(['checkout',...args]),z,ApiError,database:()=>storage.DB,identity:async()=>({userId:actor,email:actor+'@example.test'}),ownedProduct:async(id,owner)=>{const row=await storage.DB.prepare('SELECT * FROM products WHERE id=? AND owner=?').bind(id,owner).first();if(!row)throw new ApiError('Product not found.',404);return row;},failure:error=>Response.json({error:error.message},{status:error.status||400}),sameOrigin:()=>{},strToU8,zipSync,binding:name=>name==='STRIPE_MODE'?'test':'',commerceMode:()=> 'test',purchaseEmailReadiness:async()=>({ready:false,providerReady:false,originReady:false,workerReady:false}),commerceStripe:()=>{providerCalls++;throw new Error('No provider calls allowed.');}};
 async function load(path){const key='operations'+randomUUID().replaceAll('-','');globalThis[key]=deps;const source=readFileSync(path,'utf8').replace(/^import[\s\S]*?;\r?\n/gm,''),code=`const {${Object.keys(deps).join(',')}}=globalThis.${key};\n`+ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React}}).outputText;const result=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));delete globalThis[key];return result;}
+Object.assign(deps,loadServicePresentation());
 for(const path of ['lib/customer-destination.ts','lib/audience.ts','lib/audience-server.ts','lib/buyer-help.ts','lib/checkout-recovery-eligibility.ts'])Object.assign(deps,await load(path));
 const now=Date.now(),p1=randomUUID(),p2=randomUUID(),foreign=randomUUID(),email='person@example.test';
 function product(id,owner,title,format='Book'){sql.prepare('INSERT INTO products(id,owner,slug,title,description,audience,format,color,content,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(id,owner,'product-'+id,title,'Owned material','Creators',format,'orange','{"sections":[],"files":[]}',now,now);}

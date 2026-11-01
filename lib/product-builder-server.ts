@@ -13,6 +13,7 @@ import {productStudioSchema,productStudioPublicationSchema,publishedSectionStudi
 import {assertCreatorContextRefs,creatorContextGuard} from './creator-context-server';
 import {designImageIds} from './design-document';
 import {recoverBuilderDesignRuns} from './builder-design-server';
+import {builderServicePresentation} from './builder-publication-contract';
 
 export const builderHeaders={'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer'};
 const fileTypes=['application/pdf','image/png','image/jpeg','image/webp','text/plain','text/csv','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/epub+zip','application/zip','application/octet-stream','application/json','text/html','text/css','text/javascript','application/javascript','text/x-python','audio/mpeg','audio/mp4','audio/wav','audio/x-wav','audio/webm','audio/ogg','audio/flac'];
@@ -63,7 +64,7 @@ export async function builderReadiness(productId:string,owner:string,draft:Build
  }
  if(family==='service'){
   check('scope',!!draft.fields.serviceScope?.trim()&&!!draft.fields.outcome?.trim(),'Describe your service scope and the outcome of the session.');
-  check('session',Number(draft.fields.durationMinutes)>=15&&Number(draft.fields.durationMinutes)<=180&&!!draft.fields.preparation?.trim(),'Set a session duration from 15 to 180 minutes and customer preparation instructions.');
+  check('session',!!builderServicePresentation(draft.fields).durationMinutes&&!!draft.fields.preparation?.trim(),'Set a session duration from 15 to 240 minutes and customer preparation instructions.');
  }
  if(family==='community'||draft.type==='custom'&&(draft.studio?.custom?.deliveryKinds as string[]|undefined)?.includes('community'))check('membership',!!draft.fields.memberPromise?.trim()&&!!draft.fields.welcome?.trim()&&!!draft.fields.rules?.trim(),'Add the member promise, welcome and community rules. Your external member-space link stays private.');
  if(draft.coverUploadId)check('cover',await verifiedAsset(owner,productId,draft.coverUploadId,'cover',integrity),'Choose an available image or remove the cover.');

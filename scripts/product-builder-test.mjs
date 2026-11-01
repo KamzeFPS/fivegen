@@ -143,6 +143,12 @@ try{
  ai=await builder.syncGeneratedBuilderContent(ai.product.id,owner,ai.version);assert.deepEqual(ai.draft.sections,generatedSections);assert.deepEqual(ai.draft.files,generatedFiles);assert.deepEqual(ai.draft.uploadIds,[existingOriginal]);assert.equal(ai.draft.title,'The creator’s revised book title','Applying generated content keeps the creator’s metadata');
  for(let index=0;index<workspaces.length;index++){
   let workspace=workspaces[index],type=workspace.draft.type;
+  if(type==='community'){
+   const unfinished={...workspace.draft,studio:{...workspace.draft.studio,community:{enabled:true,channels:['General'],events:[{id:randomUUID(),title:'A real member gathering',startsAt:0,durationMinutes:45,url:'',description:'Bring one current question.'}]}}};workspace=await save(workspace,unfinished);assert.equal(workspace.draft.studio.community.events[0].startsAt,0,'An unfinished event date can remain an editable draft');assert.equal(workspace.readiness.publishReady,false);await assert.rejects(()=>publication.publishBuilderProduct(workspace.product.id,owner,{expectedVersion:workspace.version}),error=>error.status===409&&/Choose a date and time for this event/.test(error.message),'Actual publication identifies an unset event date instead of publishing a broken member home');workspace=await save(workspace,{...workspace.draft,studio:{...workspace.draft.studio,community:{...workspace.draft.studio.community,events:workspace.draft.studio.community.events.map(event=>({...event,startsAt:Date.now()+86400000}))}}});publishedReady(workspace,'Community actual event date');
+  }
+  if(['consulting','coaching'].includes(type)){
+   const duration=type==='consulting'?'240':'45',configured={...workspace.draft,fields:{...workspace.draft.fields,durationMinutes:duration,timezone:'Asia/Ulaanbaatar'},studio:{...workspace.draft.studio,service:{sessionCount:type==='consulting'?3:1,asyncMessaging:true,durationMinutes:30,timezone:'UTC'}}};workspace=await save(workspace,configured);publishedReady(workspace,type+' valid240duration');const invalid=await builder.builderReadiness(workspace.product.id,owner,{...workspace.draft,fields:{...workspace.draft.fields,durationMinutes:'241'}});assert.equal(invalid.checks.find(check=>check.key==='session').ready,false,'A241-minute duration cannot pass service publication readiness');
+  }
   workspace=await reviewedPublish(workspace.product.id,owner,{expectedVersion:workspace.version});
   assert.equal(workspace.product.status,'published',`${type}: the page publishes without connected payments`);
   assert.equal(workspace.selling,false,`${type}: publishing never enables selling`);
@@ -151,6 +157,9 @@ try{
   assert.equal(publicPage.selling,false);assert.equal(publicPage.snapshot.title,workspace.draft.title);
   assert.equal(json.includes('PRIVATE CONTENT'),false,`${type}: public pages never contain lesson/chapter bodies`);
   assert.equal(Object.hasOwn(publicPage.snapshot,'sections'),false);assert.equal(Object.hasOwn(publicPage.snapshot,'uploadIds'),false);assert.equal(Object.hasOwn(publicPage.snapshot,'meetingUrl'),false);
+  if(['consulting','coaching'].includes(type)){
+   const delivered=(await deps.builderPublishedDelivery(workspace.product.id)).snapshot;assert.equal(delivered.studio.service.durationMinutes,Number(workspace.draft.fields.durationMinutes),'Reviewed service duration comes from canonical fields');assert.equal(delivered.studio.service.timezone,'Asia/Ulaanbaatar');assert.equal(delivered.studio.service.asyncMessaging,true);assert.equal(delivered.studio.service.sessionCount,type==='consulting'?3:1);assert.equal(workspace.draft.fields.durationMinutes,type==='consulting'?'240':'45','Publication never rewrites creator fields');
+  }
   sql.prepare('UPDATE product_editorial_reviews SET approved_at=NULL WHERE product_id=?').run(workspace.product.id);
   const again=await publication.publishBuilderProduct(workspace.product.id,owner,{expectedVersion:workspace.version});assert.equal(again.publication.version,workspace.version,`${type}: retrying publication is idempotent`);
   await assert.rejects(()=>publication.publishBuilderProduct(workspace.product.id,outsider,{expectedVersion:workspace.version}),e=>e.status===404,`${type}: another user cannot publish the page`);
