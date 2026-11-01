@@ -23,7 +23,11 @@
 .workspace-assistant.wa-home { max-width:none; padding:0 42px; overflow-y:auto; }
 .wa-home .wa-thread { width:100%; max-width:1010px; margin:0 auto; padding-top:clamp(44px,13.2vh,123px); }
 .wa-home-intro { flex:none; text-align:center; margin-bottom:44px; }
-.wa-home-intro > img { display:block; width:48px; height:48px; object-fit:contain; margin:0 auto 25px; }
+.wa-home-intro > img { display:block; width:112px; height:112px; object-fit:contain; margin:0 auto 14px; animation:wa-home-sparkle 4.6s cubic-bezier(0.77,0,0.175,1) infinite; }
+@keyframes wa-home-sparkle {
+  0%,100% { transform:translateY(0) scale(1); opacity:.9; }
+  50% { transform:translateY(-5px) scale(1.035); opacity:1; }
+}
 .wa-generation-brief{padding:20px;border:1px solid var(--wa-border);border-radius:12px;margin:18px 0;background:var(--wa-panel)}.wa-generation-brief h3{font-size:17px;line-height:1.5}.wa-generation-brief>p{font-size:13px;line-height:1.8;margin:10px 0;color:var(--wa-muted)}.wa-generation-brief dl{display:grid;gap:15px;margin:18px 0}.wa-generation-brief dt{font-size:11px;color:var(--wa-muted);margin-bottom:5px}.wa-generation-brief dd{margin:0;font-size:13px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}.wa-generation-brief details{font-size:12px;line-height:1.8}.wa-generation-brief summary{cursor:pointer;min-height:36px;display:flex;align-items:center}.wa-generation-brief details p{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:10px;color:var(--wa-muted)}
 .workspace-assistant .wa-home-intro > h1 { font-size:clamp(31px,3.3vw,48px); font-weight:650; letter-spacing:-1.85px; line-height:1.18; }
 .wa-home .wa-transcript { display:none; }
@@ -43,7 +47,7 @@
 @media(max-height:780px) and (min-width:901px) {
   .wa-home .wa-thread { padding-top:45px; }
   .wa-home-intro { margin-bottom:26px; }
-  .wa-home-intro > img { margin-bottom:18px; width:40px; height:40px; }
+  .wa-home-intro > img { margin-bottom:12px; width:96px; height:96px; }
   .wa-home-suggestions { margin-top:24px; }
   .wa-home-browse { margin-bottom:12px; }
 }
@@ -60,7 +64,7 @@
 @media(max-width:600px) {
   .workspace-assistant.wa-home { padding:0 18px; }
   .wa-home .wa-thread { padding-top:36px; }
-  .wa-home-intro > img { width:36px; height:36px; margin-bottom:22px; }
+  .wa-home-intro > img { width:88px; height:88px; margin-bottom:12px; }
   .workspace-assistant .wa-home-intro > h1 { font-size:31px; letter-spacing:-1.1px; }
   .wa-home .wa-composer { padding:18px 17px 15px; border-radius:15px; }
   .workspace-assistant.wa-home .wa-composer > textarea { min-height:88px; font-size:16px; }

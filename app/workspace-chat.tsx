@@ -332,7 +332,7 @@ export function WorkspaceChat({conversation,message,sent,busy,name,remaining,cos
     </header>}
     <div className="wa-layout">
       <section className="wa-thread" aria-label="Workspace assistant conversation" aria-busy={isBusy}>
-        {isHome&&<header className="wa-home-intro"><img src="/brand/fivegen-sparkle-mark.png" width="48" height="48" alt="" aria-hidden="true"/><h1>Build a product people can use.</h1></header>}
+        {isHome&&<header className="wa-home-intro"><img src="/brand/fivegen-sparkle-mark.png" width="112" height="112" alt="" aria-hidden="true"/><h1>Build a product people can use.</h1></header>}
         <div className="wa-transcript" ref={scrollRef} tabIndex={0} aria-label="Conversation history">
           {messages.map((item,index)=>{const designLink=item.role==='assistant'?designStudioReply(item.content):null;return <article key={item.id} className={`wa-message wa-${item.role}`}>
             <span className="wa-avatar" aria-hidden="true">{item.role==='assistant'?<Sparkles size={17}/>:name.slice(0,1).toUpperCase()||'Y'}</span>
