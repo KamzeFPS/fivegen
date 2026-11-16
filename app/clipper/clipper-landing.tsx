@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowRight, Check, ChevronDown, CirclePlay, Clapperboard, Clock3, Globe2, Scissors, ShieldCheck, Sparkles, TrendingUp } from 'lucide-react';
+import { ArrowDown, ArrowRight, Check, ChevronDown, CirclePlay, Clapperboard, Clock3, Globe2, Scissors, ShieldCheck, TrendingUp } from 'lucide-react';
 
 type Language = 'mn' | 'en';
 const copy = {
@@ -8,7 +8,7 @@ const copy = {
     eyebrow: 'САЙН КОНТЕНТ. ИЛҮҮ ОЛОН ХҮНД.',
     title: 'Клип бүтээ.\nНөлөөгөө тэл.', subtitle: 'Кампанит ажлаа сонгоод бэлэн видеогоо илгээгээрэй. Админ хянаж зөвшөөрөхөд клип брэндийн сошиал сувгуудад нийтлэгдэнэ.',
     browse: 'Кампанит ажил үзэх', seeHow: 'Хэрхэн ажиллах вэ', free: 'Үнэгүй бүртгэл · Монгол + English',
-    stageTitle: 'ТОМ САНАА.\nБОГИНО КЛИП.', stageCaption: 'Нэг мөчөөс. Олон хүнд.', source: 'Эх бичлэг', cut: 'Өөрийн өнцгөөр', publish: 'Зөвшөөр. Нийтэл.',
+    heroArtAlt: 'Камер барьсан бүтээгч, бүжигчин болон хөрөг зургийг хослуулсан улбар шар өнгийн уран эвлүүлэг.',
     strip: 'Таны бүтээл. Брэндийн сувгуудаар.',
     stepsEyebrow: 'САНААНААС НИЙТЛЭЛ ХҮРТЭЛ', stepsTitle: 'Сайн клипээс\nбүх зүйл эхэлнэ.',
     steps: [
@@ -41,7 +41,7 @@ const copy = {
     eyebrow: 'GREAT CONTENT. GREATER REACH.',
     title: 'Make clips.\nMake an impact.', subtitle: 'Choose a campaign and upload your finished video. After admin approval, your clip is published on the brand’s social channels.',
     browse: 'Explore campaigns', seeHow: 'See how it works', free: 'Free to join · Монгол + English',
-    stageTitle: 'BIG IDEAS.\nSHORT CLIPS.', stageCaption: 'From a moment. To a movement.', source: 'The source', cut: 'Your perspective', publish: 'Approve. Publish.',
+    heroArtAlt: 'Orange editorial collage of a camera-holding creator, a dancer and an expressive portrait.',
     strip: 'Your creativity. The brand’s channels.',
     stepsEyebrow: 'FROM THE FIRST CUT TO THE FEED', stepsTitle: 'It starts with\na great clip.',
     steps: [
@@ -91,15 +91,11 @@ export function ClipperLanding({ lang, appOrigin }: { lang: Language; appOrigin:
     <main id="clipper-main">
       <section className="clipper-lp-hero">
         <div className="clipper-lp-hero-copy"><span className="clipper-lp-eyebrow"><span />{t.eyebrow}</span><h1>{t.title.split('\n').map((line, i) => <span key={line} className={i === 1 ? 'clipper-lp-title-second' : ''}>{line}</span>)}</h1><p>{t.subtitle}</p><div className="clipper-lp-hero-actions"><a className="clipper-lp-button" href={workspace}>{t.browse}<ArrowRight size={18} /></a><a className="clipper-lp-text-link" href="#how-it-works"><CirclePlay size={20} />{t.seeHow}</a></div><span className="clipper-lp-free">{t.free}</span></div>
-        <div className="clipper-lp-stage" role="img" aria-label={lang === 'mn' ? 'Эх бичлэгээс өөрийн клип бүтээж, сошиалд нийтлэх бүтээлч явцын дүрслэл' : 'An illustration of turning source footage into an original clip and sharing it on social channels'}>
-          <div className="clipper-lp-stage-grid" /><div className="clipper-lp-stage-top"><span><span className="clipper-lp-live-dot" />FIVEGEN CLIPPER STUDIO</span><span>01 / 03</span></div>
-          <div className="clipper-lp-stage-type" aria-hidden="true">{t.stageTitle.split('\n').map(line => <span key={line}>{line}</span>)}</div>
-          <div className="clipper-lp-source"><div className="clipper-lp-mini-window"><i /><i /><i /><span>source.mov</span></div><div className="clipper-lp-wave"><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /></div><div className="clipper-lp-source-bottom"><span><CirclePlay size={15} />{t.source}</span><span>00:42</span></div></div>
-          <div className="clipper-lp-clip"><div className="clipper-lp-clip-top"><Scissors size={16} /><span>9:16</span></div><div className="clipper-lp-clip-orbit" /><Sparkles className="clipper-lp-clip-star" size={54} strokeWidth={1.3} /><div className="clipper-lp-clip-title">MAKE<br />THE<br /><em>CUT.</em></div><div className="clipper-lp-clip-bottom"><span>{t.cut}</span><ArrowRight size={19} /></div></div>
-          <div className="clipper-lp-share"><div><span className="clipper-lp-share-icon"><Check size={19} /></span><strong>{t.publish}</strong></div><span className="clipper-lp-share-line" /><div className="clipper-lp-social-row"><span>♪</span><Instagram size={22} /><Youtube size={25} /><ArrowUpIllustration /></div></div>
-          <div className="clipper-lp-timeline"><span>00:00</span><div className="clipper-lp-timeline-tracks"><i /><i /><i /><i /><i /><i /><i /></div><span>00:30</span><span className="clipper-lp-timeline-playhead" /></div>
-          <div className="clipper-lp-stage-bottom"><span>{t.stageCaption}</span><span><Scissors size={14} /> CUT. CREATE. CONNECT.</span></div>
-        </div>
+        <figure className="clipper-lp-hero-art">
+          {/* This generated artwork is pre-optimized and served directly as a local asset. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/clipper-hero-art.webp" srcSet="/brand/clipper-hero-art-888.webp 888w, /brand/clipper-hero-art.webp 1774w" sizes="(max-width: 760px) calc(100vw - 36px), (min-width: 1600px) 1160px, (min-width: 1176px) 1120px, calc(100vw - 56px)" width={1774} height={887} alt={t.heroArtAlt} fetchPriority="high" decoding="async" />
+        </figure>
       </section>
       <div className="clipper-lp-platforms"><span>{t.strip}</span><strong><span className="clipper-lp-tiktok">♪</span>TikTok</strong><strong><Instagram size={22} />Instagram</strong><strong><Youtube size={25} />YouTube</strong></div>
       <section className="clipper-lp-section clipper-lp-how" id="how-it-works">
@@ -117,8 +113,6 @@ export function ClipperLanding({ lang, appOrigin }: { lang: Language; appOrigin:
     <footer className="clipper-lp-footer"><div className="clipper-lp-footer-top"><a href={lang === 'en' ? '?lang=en' : '?lang=mn'} aria-label="FiveGen Clipper"><Brand /></a><p>{t.footer}</p><a href={workspace}>{t.discover}<ArrowRight size={15} /></a></div><div className="clipper-lp-footer-bottom"><span>© {new Date().getUTCFullYear()} FiveGen. {t.rights}</span><nav aria-label={lang === 'mn' ? 'Нэмэлт холбоос' : 'Footer navigation'}><a href={`${appOrigin}/clipper/admin?lang=${lang}`}>{t.admin}</a><a href={`${appOrigin}/privacy`}>{t.privacy}</a><a href={`${appOrigin}/terms`}>{t.terms}</a></nav></div></footer>
   </div>;
 }
-
-function ArrowUpIllustration() { return <span className="clipper-lp-share-up"><TrendingUp size={22} /></span>; }
 
 function Instagram({ size = 22 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.8" r=".8" fill="currentColor" stroke="none" /></svg>; }
 function Youtube({ size = 25 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 26 22" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><rect x="2" y="4" width="22" height="14" rx="4" /><path d="m11 8 6 3-6 3V8Z" fill="currentColor" stroke="none" /></svg>; }
