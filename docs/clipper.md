@@ -1,46 +1,42 @@
 # FiveGen Clipper
 
-FiveGen Clipper adds a bilingual campaign marketplace to the existing FiveGen application and persistent database. Mongolian is the default; append `?lang=en` for English or `?lang=mn` for Mongolian.
+Mongolian is the default; use `?lang=en` for English. The landing is at `https://clipper.fivegen.ai/`. Member and admin pages use the existing host-only FiveGen sign-in at `/clipper/app` and `/clipper/admin` on canonical `APP_ORIGIN`.
 
-| Destination | Route |
-| --- | --- |
-| Public landing | `https://clipper.fivegen.ai/` |
-| Landing on the main domain | `https://www.fivegen.ai/clipper` |
-| Creator workspace | `https://www.fivegen.ai/clipper/app` |
-| Administration | `https://www.fivegen.ai/clipper/admin` |
+## Upload and approval
 
-The public subdomain does not receive application credentials or accept mutations. Member/admin destinations redirect to the canonical `APP_ORIGIN` and retain the language query through the existing Google/email sign-in and terms flow. Sessions remain host-only. Admin access uses the existing `ADMIN_USER_IDS` and `ADMIN_EMAILS` allowlists.
+1. Admins create bilingual campaigns with creative instructions, reward terms, budgets and eligible publishing platforms.
+2. A signed-in clipper chooses a campaign and uploads an original **MP4 video, up to 100 MB**. No personal social account, public post URL, profile setup or separate join step is required. The server creates the clipper profile and campaign membership as needed.
+3. Uploads remain private. Only the submitter and FiveGen admins can play a completed upload. The original bytes, filename, size and SHA-256 are saved in private storage. MP4 structure, declared/received size and stored integrity are checked. This is structural validation, not a malware scan or codec transcoding service. Accounts have a 2 GB storage allowance and 50 upload attempts per rolling day.
+4. An admin reviews playback, writes the public caption and selects the exact configured platform accounts. **Approve & publish** atomically saves approval and one durable publishing job. Rejecting records a reason and never creates a publishing job.
+5. The worker submits the approved video automatically, then records per-platform status and public links. Approval, queued publication and confirmed publication are separate states. Partially completed jobs continue polling remaining platforms. An ambiguous provider reply is reconciled against saved post identity/history; it is never blindly uploaded again.
 
-## Campaign operation
+Legacy post-link submissions remain readable for history, but the old link-submission endpoint rejects new entries. Migration `0064` preserves existing submissions and rewards while introducing private videos. Do not change the already deployed `0063` migration.
 
-1. An admin creates a campaign with Mongolian and English title, description, brief and requirements. Set brand/category, eligible platforms, currency, CPM or per-post reward, minimum/maximum reward, total budget, optional dates, and HTTPS cover/reference links.
-2. Save as a private draft or publish with **Open** status. **Paused** and **Closed** stop new joins/submissions. Published campaigns cannot return to draft. Scheduled campaigns accept work only within their configured dates; the admin date editor uses Asia/Ulaanbaatar (UTC+8).
-3. A creator signs in, saves a display name and at least one public social profile, then joins an open campaign. Joining is idempotent. Reward terms and eligible platforms become fixed after the first creator joins; admins can increase the budget and edit campaign copy/status.
-4. Creators submit public TikTok videos, Instagram reels/posts or YouTube videos. Membership, eligible platform, dates, remaining budget and a 50-submission rolling daily limit are checked in the write. Platform media IDs prevent duplicate submissions across handles, URL forms, campaigns and accounts.
-5. An admin opens the post, manually verifies the requirements/views, and approves or rejects the pending submission. Rejection requires a reason. Decisions are final in this release. CPM rewards are rounded down to minor units and capped per clip; an approval below the minimum reward is rejected. Database guards prevent approved rewards from exceeding the campaign budget, including concurrent reviews.
+## Admin publishing credentials
 
-**Approved rewards are accounting records, not completed transfers.** There is no automated social-account verification, view polling, fraud service or payout integration. Admins arrange payment separately. The interface distinguishes pending, approved and rejected submissions and explains the manual payment boundary. Campaign creation currently accepts cover/reference URLs rather than binary file uploads.
+Open **Admin → Social publishing**. This release uses the separately configured [Ayrshare publishing API](https://www.ayrshare.com/docs/apis/post/overview) for Instagram, TikTok and YouTube. The admin needs an appropriate Ayrshare account/plan and links the owned destination accounts in the [Ayrshare dashboard](https://app.ayrshare.com/). No subscription or account is created by FiveGen.
 
-No campaigns or people are seeded in production. Public responses exclude private profiles/submissions; creators see only their own records. Writes require an authenticated user, accepted terms and same-origin requests; admin writes also require the allowlist. Success and error responses use `private, no-store`.
+Enter the Ayrshare API key and, if applicable, its Business profile key in FiveGen's admin form. Select enabled platforms and save. FiveGen verifies linked account identities before storing settings. Credentials are encrypted with the existing `CREDENTIAL_ENCRYPTION_KEY`, are never returned by APIs, and do not enter browser storage. A failed replacement leaves the previous verified configuration intact.
 
-## API and storage
+Approval is blocked until the selected destinations are configured and verified. Each job snapshots the chosen account IDs, caption and credentials. Changed destination accounts/settings hold an unsent job for review instead of publishing somewhere else. Posts use public visibility. Platform-specific eligibility and media requirements still apply; uploads are not transcoded. Failed/ambiguous jobs direct the admin to provider history to avoid duplicate public posts.
 
-`GET /api/clipper` returns public campaigns plus the signed-in creator's profile, memberships and submissions. Profile updates use `PUT /api/clipper/profile`; campaign join/submission actions use `/api/clipper/campaigns/:id/join` and `/submissions`. Admin reads, campaign creation/updates and reviews live below `/api/clipper/admin`.
+An approved file gets a seven-day, token-protected media URL on the canonical FiveGen host so the provider can fetch it. Tokens are hashed/encrypted in storage, excluded from API projections, and scoped to an approved completed upload. Private upload playback requires account authorization and supports range requests.
 
-All API money values are integer **minor units** for both USD and MNT: `1250` means USD 12.50 or MNT 12.50, depending on `currency`. UI forms accept currency amounts and convert by 100. API dates are epoch milliseconds or `null`; campaign updates require `expectedVersion`. JSON bodies are limited to 96,000 bytes. Campaign assets require HTTPS links without embedded credentials.
+## Rewards
 
-Migration `0063_clipper.sql` adds campaigns, creator profiles, memberships and submissions without altering existing FiveGen product or billing data. Reward totals are maintained by a database trigger, with a separate trigger enforcing the total budget. Keep the persistent database and migration history. Current list bounds are 500 campaigns/member records and 1,000 admin submissions, with pending submissions listed before reviewed history; add pagination before operating at higher volume.
+Per-post approval allocates the campaign's fixed reward, subject to the existing database budget guard. CPM views are unknown at approval time, so video publication does not fabricate a view count or CPM reward. Legacy verified-view accounting remains intact. No automatic view polling or money transfer is included; admins arrange payments separately.
 
-## Deployment and verification
+## Operations and validation
 
-Use the existing Render service, disk, `APP_ORIGIN` and OAuth callback. `CLIPPER_ORIGIN=https://clipper.fivegen.ai` identifies the public host; FiveGen production also recognizes this hostname by default. Configure its custom-domain/wildcard DNS and TLS on that service before announcing the subdomain live. See [Render clipping-host setup](render.md#clipping-subdomain).
+The existing Render process runs a publishing worker once per minute. `CLIPPER_PUBLISHING_WORKER_ENABLED=false` pauses automatic dispatch. A process-only `CLIPPER_PUBLISHING_DISPATCH_SECRET` protects its loopback endpoint. Jobs, provider identities, leases and credentials persist in SQLite across restarts. Migration `0065` adds publishing settings/jobs without altering product or billing data.
+
+All writes require accepted terms and same-origin requests; admin operations also require the existing allowlist. Success/error/private media responses are not shared-cacheable. The public clipper subdomain strips application credentials and forwards member/admin work to the canonical host.
 
 ```powershell
 npm run build:render
-node scripts/clipper-test.mjs
-node scripts/clipper-host-test.mjs
-node scripts/clipper-runtime-test.mjs
+npm run test:clipper
+npm run test:clipper:integration
 npx tsc --noEmit
 ```
 
-For a local synthetic visual preview after building, run `node scripts/clipper-preview.mjs`. It creates a fresh isolated database, disables external network effects, and prints the local landing/member/admin URLs. Fixture campaigns, people, views and money are demonstrations only. The runtime test exercises the built HTTP/auth boundary and database without sending email, posting clips or making payments.
+The integration tests upload a locally generated synthetic MP4 and simulate provider requests. They never post to real social accounts, send email, or make payments. Production publishing must be verified after an admin supplies real credentials and linked accounts. Current list bounds remain 500 campaigns/member records and 1,000 admin submissions, with pending reviews first.

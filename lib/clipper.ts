@@ -11,10 +11,11 @@ export type ClipperCampaign={
  joinedCount:number;submissionCount:number;createdAt:number;updatedAt:number;
 };
 export type ClipperProfile={owner:string;displayName:string;socialLinks:Record<ClipperPlatform,string>;createdAt:number;updatedAt:number};
-export type ClipperSubmission={id:string;campaignId:string;owner:string;displayName:string;platform:ClipperPlatform;url:string;status:'pending'|'approved'|'rejected';verifiedViews:number;reward:number;reviewNote:string;createdAt:number;reviewedAt:number|null};
+export type ClipperSubmission={id:string;campaignId:string;owner:string;displayName:string;platform:ClipperPlatform|'upload';url:string;source:'upload'|'link';videoId:string|null;videoName:string;videoSize:number;status:'pending'|'approved'|'rejected';verifiedViews:number;reward:number;reviewNote:string;createdAt:number;reviewedAt:number|null};
 export type ClipperMembership={campaignId:string;joinedAt:number};
-export type ClipperState={campaigns:ClipperCampaign[];profile:ClipperProfile|null;memberships:ClipperMembership[];submissions:ClipperSubmission[];isAdmin:boolean;user:{userId:string;displayName:string;email:string}|null};
-export type ClipperAdminState={campaigns:ClipperCampaign[];submissions:ClipperSubmission[]};
+export type ClipperPublishingSummary={submissionId:string;status:string;platforms:ClipperPlatform[];results:{platform:string;status:string;url?:string}[];error:string;updatedAt:number};
+export type ClipperState={campaigns:ClipperCampaign[];profile:ClipperProfile|null;memberships:ClipperMembership[];submissions:ClipperSubmission[];isAdmin:boolean;user:{userId:string;displayName:string;email:string}|null;publishing?:ClipperPublishingSummary[]};
+export type ClipperAdminState={campaigns:ClipperCampaign[];submissions:ClipperSubmission[];publishing?:ClipperPublishingSummary[]};
 const text=(limit:number,required=false)=>z.object({mn:z.string().trim().max(limit).min(required?1:0),en:z.string().trim().max(limit).min(required?1:0)}).strict();
 const httpsUrl=z.string().trim().max(2048).refine(value=>{if(!value)return true;try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password&&!u.port;}catch{return false;}},'Use a public HTTPS link.');
 const amount=z.number().int().min(0).max(1_000_000_000_000);
@@ -49,7 +50,7 @@ export function clipperPostIdentity(platform:ClipperPlatform,value:string):strin
  const id=platform==='tiktok'?u.pathname.match(/\/video\/(\d+)$/)?.[1]:platform==='instagram'?u.pathname.match(/^\/(?:p|reel)\/([A-Za-z0-9_-]+)\/$/)?.[1]:u.searchParams.get('v');
  return id?platform+':'+id:null;
 }
-export const clipperProfileSchema=z.object({displayName:z.string().trim().min(1).max(80),socialLinks:z.object({tiktok:z.string().trim().max(2048),instagram:z.string().trim().max(2048),youtube:z.string().trim().max(2048)}).strict()}).strict().superRefine((value,ctx)=>{if(!Object.values(value.socialLinks).some(Boolean))ctx.addIssue({code:'custom',path:['socialLinks'],message:'Add at least one public social profile.'});for(const platform of ['tiktok','instagram','youtube'] as const)if(value.socialLinks[platform]&&!clipperSocialUrl(platform,value.socialLinks[platform]))ctx.addIssue({code:'custom',path:['socialLinks',platform],message:'Use your public social profile URL.'});});
+export const clipperProfileSchema=z.object({displayName:z.string().trim().min(1).max(80),socialLinks:z.object({tiktok:z.string().trim().max(2048),instagram:z.string().trim().max(2048),youtube:z.string().trim().max(2048)}).strict()}).strict().superRefine((value,ctx)=>{for(const platform of ['tiktok','instagram','youtube'] as const)if(value.socialLinks[platform]&&!clipperSocialUrl(platform,value.socialLinks[platform]))ctx.addIssue({code:'custom',path:['socialLinks',platform],message:'Use your public social profile URL.'});});
 export const clipperSubmissionSchema=z.object({platform:z.enum(['tiktok','instagram','youtube']),url:z.string().trim().max(2048)}).strict().superRefine((value,ctx)=>{if(!clipperSocialUrl(value.platform,value.url,true))ctx.addIssue({code:'custom',path:['url'],message:'Use a public TikTok video, Instagram reel/post or YouTube video link for the selected platform.'});});
 export const clipperReviewSchema=z.object({status:z.enum(['approved','rejected']),verifiedViews:z.number().int().min(0).max(100_000_000_000),reviewNote:z.string().trim().max(2000)}).strict().superRefine((value,ctx)=>{if(value.status==='rejected'&&!value.reviewNote)ctx.addIssue({code:'custom',path:['reviewNote'],message:'Explain why this clip was rejected.'});});
 export function clipperReward(campaign:Pick<ClipperCampaign,'rewardModel'|'rate'|'minPayout'|'maxPayout'>,verifiedViews:number){

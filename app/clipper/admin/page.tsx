@@ -4,10 +4,11 @@ import {redirect} from 'next/navigation';
 import ClipperWorkspace from '../workspace';
 
 export const metadata={title:'Campaign management · FiveGen Clipper',robots:{index:false,follow:false}};
-export default async function ClipperAdmin({searchParams}:{searchParams:Promise<{lang?:string}>}){
+export default async function ClipperAdmin({searchParams}:{searchParams:Promise<{lang?:string;tab?:string}>}){
   const params=await searchParams;
   const lang=params.lang==='en'?'en':'mn';
-  const user=await requireChatGPTUser('/clipper/admin?lang='+lang);
+  const publishing=params.tab==='publishing';
+  const user=await requireChatGPTUser('/clipper/admin?lang='+lang+(publishing?'&tab=publishing':''));
   if(!isAdmin(user))redirect('/clipper/app?lang='+lang);
-  return <ClipperWorkspace lang={lang} user={user} admin/>;
+  return <ClipperWorkspace lang={lang} user={user} admin initialPublishing={publishing}/>;
 }

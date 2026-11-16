@@ -13,6 +13,7 @@ import {readClipperOrigin,clipperHostRequest} from './clipper-host.mjs';
 import {catalogHostRequest} from './catalog-host.mjs';
 import {initializeAutomationDispatchSecret,startAutomationWorker} from './automation-worker.mjs';
 import {privateSearchResponse} from './search-indexing.mjs';
+import {initializeClipperPublishingDispatchSecret,startClipperPublishingWorker} from './clipper-publishing-worker.mjs';
 
 export function readConfig(source = process.env) {
   const origin = new URL(source.APP_ORIGIN || source.RENDER_EXTERNAL_URL || '');
@@ -50,6 +51,7 @@ export async function start() {
   process.env.VINEXT_TRUST_PROXY = '1';
   initializePurchaseEmailDispatchSecret();
   initializeAutomationDispatchSecret();
+  initializeClipperPublishingDispatchSecret();
   if(!process.env.PRODUCT_REMINDER_DISPATCH_SECRET?.trim())process.env.PRODUCT_REMINDER_DISPATCH_SECRET=randomBytes(32).toString('base64url');
   if(!process.env.AUTH_EMAIL_DISPATCH_SECRET?.trim())process.env.AUTH_EMAIL_DISPATCH_SECRET=randomBytes(32).toString('base64url');
   const storage = getStorage();
@@ -168,15 +170,17 @@ export async function start() {
   // Approved sequence jobs are durable. Provider readiness, consent, purchase
   // exits and per-sequence activation are rechecked by the dispatch route.
   const automationWorker=startAutomationWorker(config);
+  const clipperPublishingWorker=startClipperPublishingWorker(config);
   // Transactional confirmations are independent of optional marketing queues.
   const purchaseEmailWorker=startPurchaseEmailWorker(config);
   const productReminderWorker=startPurchaseEmailWorker(config,{source:{...process.env,PURCHASE_EMAILS_WORKER_ENABLED:process.env.PRODUCT_REMINDERS_WORKER_ENABLED,PURCHASE_EMAIL_DISPATCH_SECRET:process.env.PRODUCT_REMINDER_DISPATCH_SECRET},fetcher:(url,options)=>loopbackRequest(String(url).replace('/api/purchase-emails/dispatch','/api/product-reminders/dispatch'),options)});
   const serviceIntegrationWorker=startPurchaseEmailWorker(config,{source:{...process.env,PURCHASE_EMAILS_WORKER_ENABLED:process.env.SERVICE_INTEGRATIONS_WORKER_ENABLED??process.env.PRODUCT_REMINDERS_WORKER_ENABLED,PURCHASE_EMAIL_DISPATCH_SECRET:process.env.PRODUCT_REMINDER_DISPATCH_SECRET},fetcher:(url,options)=>loopbackRequest(String(url).replace('/api/purchase-emails/dispatch','/api/service-integrations/dispatch'),options)});
-  server.once('close',()=>{automationWorker.stop();purchaseEmailWorker.stop();productReminderWorker.stop();serviceIntegrationWorker.stop();});
+  server.once('close',()=>{automationWorker.stop();clipperPublishingWorker.stop();purchaseEmailWorker.stop();productReminderWorker.stop();serviceIntegrationWorker.stop();});
   const shutdown = () => {
     if (stopping) return;
     stopping = true;
     automationWorker.stop();
+    clipperPublishingWorker.stop();
     purchaseEmailWorker.stop();
     productReminderWorker.stop();
     serviceIntegrationWorker.stop();

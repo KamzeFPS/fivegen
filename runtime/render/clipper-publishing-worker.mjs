@@ -1,0 +1,6 @@
+import {randomBytes} from 'node:crypto';
+import {loopbackRequest} from './loopback-http.mjs';
+export function initializeClipperPublishingDispatchSecret(source=process.env){if(!source.CLIPPER_PUBLISHING_DISPATCH_SECRET?.trim())source.CLIPPER_PUBLISHING_DISPATCH_SECRET=randomBytes(32).toString('base64url');}
+export function startClipperPublishingWorker(config,{source=process.env,fetcher=loopbackRequest,interval=setInterval,clear=clearInterval,log=console.error}={}){
+ let stopped=false,running=false;const tick=async()=>{if(stopped||running||source.CLIPPER_PUBLISHING_WORKER_ENABLED==='false'||(source.CLIPPER_PUBLISHING_DISPATCH_SECRET||'').length<32)return;running=true;try{const response=await fetcher(`http://127.0.0.1:${config.port}/api/clipper/publishing/dispatch`,{method:'POST',headers:{Host:new URL(config.origin).host,Authorization:`Bearer ${source.CLIPPER_PUBLISHING_DISPATCH_SECRET}`},signal:AbortSignal.timeout(240000)});if(!response.ok)log('Clipper publishing dispatch did not complete:',response.status);}catch{if(!stopped)log('Clipper publishing status will be checked again.');}finally{running=false;}};const timer=interval(()=>{void tick();},60000);timer.unref?.();return {tick,stop(){if(stopped)return;stopped=true;clear(timer);}};
+}
