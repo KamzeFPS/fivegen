@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowRight, Check, ChevronDown, CirclePlay, Clapperboard, Clock3, Globe2, Scissors, ShieldCheck, TrendingUp } from 'lucide-react';
+import { ArrowDown, ArrowRight, ChevronDown, CirclePlay, Clapperboard, Globe2, Scissors, ShieldCheck, TrendingUp } from 'lucide-react';
 
 type Language = 'mn' | 'en';
 const copy = {
@@ -16,7 +16,6 @@ const copy = {
       ['Өөрийнхөөрөө бүтээ', 'Зөвшөөрөгдсөн эх бичлэгээс сонирхолтой мөчийг сонгож, өөрийн өнгө аястай клип бүтээгээрэй.'],
       ['Видеогоо илгээ', 'Бэлэн клипээ MP4 файлаар илгээнэ. Админ хянаад зөвшөөрөхөд брэндийн сонгосон сувгуудад нийтлэгдэнэ.'],
     ],
-    campaign: 'Кампанит ажил', brief: 'Тодорхой заавар', platforms: 'Сонгосон платформууд', joined: 'Видео илгээх', reviewing: 'Хянаж байна', approved: 'Зөвшөөрсөн',
     featureEyebrow: 'БҮТЭЭГЧДЭД ЗОРИУЛАВ', featureTitle: 'Бүтээлдээ төвлөр.\nЯвцаа нэг дор хар.',
     features: [
       ['Нээлттэй нөхцөл', 'Нэгдэхээсээ өмнө урамшууллын хэмжээ, төсөв, шаардлагаа харна.'],
@@ -49,7 +48,6 @@ const copy = {
       ['Make it your own', 'Find the moment in the approved source content and turn it into a clip with your own creative perspective.'],
       ['Upload your video', 'Send your finished clip as an MP4 file. The admin reviews it and approves publication to the selected brand channels.'],
     ],
-    campaign: 'Campaign', brief: 'A clear creative brief', platforms: 'Your chosen platforms', joined: 'Upload video', reviewing: 'In review', approved: 'Approved',
     featureEyebrow: 'BUILT AROUND THE CREATOR', featureTitle: 'Keep creating.\nKeep track of it all.',
     features: [
       ['Clear from the start', 'See the rate, budget, and creative requirements before you join.'],
@@ -73,6 +71,8 @@ const copy = {
 function Brand() {
   return <span className="clipper-lp-brand"><span className="clipper-lp-brand-symbol" aria-hidden="true"><Scissors size={24} strokeWidth={2.1} /></span><span>FiveGen<span className="clipper-lp-brand-small">Clipper</span></span></span>;
 }
+
+const stepArtwork = ['discover', 'create', 'publish'];
 
 export function ClipperLanding({ lang, appOrigin }: { lang: Language; appOrigin: string }) {
   const t = copy[lang];
@@ -101,14 +101,22 @@ export function ClipperLanding({ lang, appOrigin }: { lang: Language; appOrigin:
       <section className="clipper-lp-section clipper-lp-how" id="how-it-works">
         <div className="clipper-lp-section-heading"><span className="clipper-lp-eyebrow">{t.stepsEyebrow}</span><h2>{t.stepsTitle}</h2><ArrowDown className="clipper-lp-section-arrow" size={27} strokeWidth={1.5} /></div>
         <div className="clipper-lp-steps">{t.steps.map(([title, description], i) => <article className="clipper-lp-step" key={title}>
-          <div className={`clipper-lp-step-visual clipper-lp-step-visual-${i + 1}`} aria-hidden="true">
-            {i === 0 ? <div className="clipper-lp-brief-card"><span className="clipper-lp-brief-label"><span />{t.campaign}</span><div className="clipper-lp-brief-brand"><Scissors size={22} /><strong>{t.brief}</strong></div><div className="clipper-lp-brief-lines"><i /><i /></div><div className="clipper-lp-brief-platforms"><span>♪ TikTok</span><span><Instagram size={11} /> Instagram</span></div><div className="clipper-lp-brief-join">{t.joined}<ArrowRight size={12} /></div></div> : i === 1 ? <div className="clipper-lp-cuts"><div>THE<br />MOMENT<span>00:08</span></div><div><Scissors size={22} />YOUR<br /><em>CUT.</em><span>00:15</span></div><div>THE<br />FEED<span>00:30</span></div></div> : <div className="clipper-lp-review-card"><div><span className="clipper-lp-review-thumb"><Clapperboard size={22} /></span><div><strong>my-first-clip.mp4</strong><small>00:30 · 9:16</small></div></div><div className="clipper-lp-review-status"><Clock3 size={15} />{t.reviewing}<span /></div><div className="clipper-lp-approved"><Check size={15} />{t.approved}</div></div>}
+          <div className="clipper-lp-step-art">
+            {/* This generated artwork is pre-optimized and served directly as a local asset. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={`/brand/clipper-step-${stepArtwork[i]}.webp`} width={960} height={720} alt="" aria-hidden="true" loading="lazy" decoding="async" />
           </div><div className="clipper-lp-step-copy"><span className="clipper-lp-step-number">0{i + 1}</span><h3>{title}</h3><p>{description}</p></div>
         </article>)}</div>
       </section>
       <section className="clipper-lp-section clipper-lp-features"><div className="clipper-lp-feature-heading"><span className="clipper-lp-eyebrow">{t.featureEyebrow}</span><h2>{t.featureTitle}</h2><a className="clipper-lp-text-link" href={workspace}>{t.browse}<ArrowRight size={18} /></a></div><div className="clipper-lp-feature-grid">{t.features.map(([title, description], i) => { const Icon = icons[i]; return <article key={title}><span className="clipper-lp-feature-icon"><Icon size={23} strokeWidth={1.6} /></span><h3>{title}</h3><p>{description}</p></article>; })}</div></section>
       <section className="clipper-lp-section clipper-lp-faq" id="clipper-faq"><div><span className="clipper-lp-eyebrow">FAQ</span><h2>{t.faqTitle}</h2></div><div>{t.questions.map(([question, answer]) => <details key={question}><summary>{question}<ChevronDown size={19} /></summary><p>{answer}</p></details>)}</div></section>
-      <section className="clipper-lp-final"><div className="clipper-lp-final-inner"><span className="clipper-lp-eyebrow">{t.ctaEyebrow}</span><h2>{t.ctaTitle}</h2><p>{t.ctaText}</p><a className="clipper-lp-button" href={workspace}>{t.start}<ArrowRight size={18} /></a></div><span className="clipper-lp-final-scissors" aria-hidden="true"><Scissors /></span></section>
+      <section className="clipper-lp-final">
+        <div className="clipper-lp-final-inner"><span className="clipper-lp-eyebrow">{t.ctaEyebrow}</span><h2>{t.ctaTitle}</h2><p>{t.ctaText}</p><a className="clipper-lp-button" href={workspace}>{t.start}<ArrowRight size={18} /></a></div>
+        <div className="clipper-lp-final-art">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/clipper-cta-art.webp" width={1200} height={900} alt="" aria-hidden="true" loading="lazy" decoding="async" />
+        </div>
+      </section>
     </main>
     <footer className="clipper-lp-footer"><div className="clipper-lp-footer-top"><a href={lang === 'en' ? '?lang=en' : '?lang=mn'} aria-label="FiveGen Clipper"><Brand /></a><p>{t.footer}</p><a href={workspace}>{t.discover}<ArrowRight size={15} /></a></div><div className="clipper-lp-footer-bottom"><span>© {new Date().getUTCFullYear()} FiveGen. {t.rights}</span><nav aria-label={lang === 'mn' ? 'Нэмэлт холбоос' : 'Footer navigation'}><a href={`${appOrigin}/clipper/admin?lang=${lang}`}>{t.admin}</a><a href={`${appOrigin}/privacy`}>{t.privacy}</a><a href={`${appOrigin}/terms`}>{t.terms}</a></nav></div></footer>
   </div>;

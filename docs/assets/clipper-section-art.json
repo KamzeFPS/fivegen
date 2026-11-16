@@ -1,0 +1,38 @@
+{
+  "generator": "built-in image_gen",
+  "styleReference": "public/brand/clipper-hero-art.webp",
+  "assets": [
+    {
+      "key": "discover",
+      "asset": "public/brand/clipper-step-discover.webp",
+      "source": "outputs/clipper-art/discover-source.png",
+      "width": 960,
+      "height": 720,
+      "prompt": "Use case: ads-marketing. Create a single premium editorial mixed-media collage artwork for FiveGen Clipper, a short-video creator website. Use the supplied image ONLY as a STYLE REFERENCE: match its realistic photographic cutouts, hand-torn ivory paper, vermilion orange brushwork, charcoal halftone print texture, small butter-yellow accents and tactile analog art direction. This is a NEW scene, not an edit to the reference composition. Contemporary Mongolian / East Asian adult creative culture, sharp believable photography, beautiful confident composition, warm cream paper background. Landscape 4:3 framing. Strong central subject legible when shown at 360px wide. Artwork only, no letters, words, numbers, captions, logos, watermarks, software interface, mockup UI, browser cards, buttons or social platform marks. No 3D plastic, neon, gradients, generic corporate stock photos. Subject: FIND YOUR CAMPAIGN. A stylish young adult Mongolian male creative in charcoal knitwear, cropped waist-up, thoughtfully choosing from a fan of photographic contact-sheet prints with tiny music, street dance and camera imagery. Looking down with a curious natural expression. A bold orange torn-paper circle and subtle city architecture texture behind him, black halftone accents. The prints contain photography only, absolutely no writing. A sense of discovery and choosing the right creative project. Leave breathing room around the head and hands, no cut-off fingers."
+    },
+    {
+      "key": "create",
+      "asset": "public/brand/clipper-step-create.webp",
+      "source": "outputs/clipper-art/create-source.png",
+      "width": 960,
+      "height": 720,
+      "prompt": "Use case: ads-marketing. Create a single premium editorial mixed-media collage artwork for FiveGen Clipper, a short-video creator website. Use the supplied image ONLY as a STYLE REFERENCE: match its realistic photographic cutouts, hand-torn ivory paper, vermilion orange brushwork, charcoal halftone print texture, small butter-yellow accents and tactile analog art direction. This is a NEW scene, not an edit to the reference composition. Contemporary Mongolian / East Asian adult creative culture, sharp believable photography, beautiful confident composition, warm cream paper background. Landscape 4:3 framing. Strong central subject legible when shown at 360px wide. Artwork only, no letters, words, numbers, captions, logos, watermarks, software interface, mockup UI, browser cards, buttons or social platform marks. No 3D plastic, neon, gradients, generic corporate stock photos. Subject: MAKE IT YOUR OWN. Close overhead editorial view of two anatomically correct hands with silver rings physically arranging three cut-paper photo frames showing successive expressive dance poses on a creative desk. A burnt-orange sleeve enters from the lower left. One larger dynamic dancer photo is the focal point and breaks past the paper-frame edge into a dramatic mixed-media collage. Thin vermilion painted swoosh ties the movement frames together. Suggest the energy of editing and finding a moment through actual photographic fragments, no computer, no keyboard, no timeline UI. Elegant intentional analog collage, bold and uncluttered."
+    },
+    {
+      "key": "publish",
+      "asset": "public/brand/clipper-step-publish.webp",
+      "source": "outputs/clipper-art/publish-source.png",
+      "width": 960,
+      "height": 720,
+      "prompt": "Use case: ads-marketing. Create a single premium editorial mixed-media collage artwork for FiveGen Clipper, a short-video creator website. Use the supplied image ONLY as a STYLE REFERENCE: match its realistic photographic cutouts, hand-torn ivory paper, vermilion orange brushwork, charcoal halftone print texture, small butter-yellow accents and tactile analog art direction. This is a NEW scene, not an edit to the reference composition. Contemporary Mongolian / East Asian adult creative culture, sharp believable photography, beautiful confident composition, warm cream paper background. Landscape 4:3 framing. Strong central subject legible when shown at 360px wide. Artwork only, no letters, words, numbers, captions, logos, watermarks, software interface, mockup UI, browser cards, buttons or social platform marks. No 3D plastic, neon, gradients, generic corporate stock photos. Subject: SEND YOUR FINISHED CREATION OUT INTO THE WORLD. An elegant realistic adult hand with burnt-orange sleeve releases a large beautifully folded ivory paper airplane with an orange underside, soaring diagonally upward right. Layer one small photographic cutout of a joyful young Mongolian adult creator in black streetwear behind the lower hand, and a few tiny photographic urban textures. Large sweeping vermilion brush arc carries the eye upward, with a butter-yellow sun-shaped paper circle behind the plane and subtle black halftone dot shadow. A clear optimistic metaphor for uploading and sharing a video, premium editorial art, not an app interface or infographic. Spacious composition, convincing hand anatomy."
+    },
+    {
+      "key": "cta",
+      "asset": "public/brand/clipper-cta-art.webp",
+      "source": "outputs/clipper-art/cta-source.png",
+      "width": 1200,
+      "height": 900,
+      "prompt": "Use case: ads-marketing. Create a single premium editorial mixed-media collage artwork for FiveGen Clipper, a short-video creator website. Use the supplied image ONLY as a STYLE REFERENCE: match its realistic photographic cutouts, hand-torn ivory paper, vermilion orange brushwork, charcoal halftone print texture, small butter-yellow accents and tactile analog art direction. This is a NEW scene, not an edit to the reference composition. Contemporary Mongolian / East Asian adult creative culture, sharp believable photography, beautiful confident composition, warm cream paper background. Landscape 4:3 framing. Strong central subject legible when shown at 360px wide. Artwork only, no letters, words, numbers, captions, logos, watermarks, software interface, mockup UI, browser cards, buttons or social platform marks. No 3D plastic, neon, gradients, generic corporate stock photos. Subject: A NEW CREATIVE POSSIBILITY. A joyful confident young adult Mongolian woman filmmaker in a vermilion orange oversized jacket, short dark tousled hair, photographed waist-up at a fresh three-quarter angle holding a compact mirrorless camera at chest level, looking toward the left with a spontaneous warm smile. Heroic close crop but keep head, camera and hands within canvas. Behind her, a large torn charcoal paper disc, ivory ripped-paper layers, a single butter-yellow shape and vermilion painted arc create a bold editorial finish. Tiny monochrome Ulaanbaatar architecture fragments low in the composition. One person only. Make this a distinctive new photograph in the same campaign family as the reference, not a duplicate of the hero. Full bleed cream paper background with expressive orange and charcoal shapes to the edges. Art will sit to the RIGHT of HTML text, no words inside the image."
+    }
+  ]
+}
