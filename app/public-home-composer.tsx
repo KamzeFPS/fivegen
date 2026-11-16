@@ -32,7 +32,7 @@ export function PublicHomeHeader(){
   useEffect(()=>{const update=()=>setScrolled(window.scrollY>24);update();window.addEventListener('scroll',update,{passive:true});return()=>window.removeEventListener('scroll',update);},[]);
   return <header className={`public-home-header${scrolled?' is-scrolled':''}`}>
     <Link href="/" aria-label="FiveGen home"><Brand/></Link>
-    <nav aria-label="Main navigation"><a href="#product">Product</a><a href="#examples">Examples</a><a href="/pricing">Pricing</a><a href="https://docs.fivegen.ai">Docs</a></nav>
+    <nav aria-label="Main navigation"><a href="#product">Product</a><a href="#examples">Examples</a><a href="/pricing">Pricing</a><a href="https://docs.fivegen.ai">Docs</a><a href="https://clipper.fivegen.ai">Clipper</a></nav>
     <div className="public-home-header-actions"><AppearanceControl className="appearance-route-control"/><a className="public-home-signin" href={startHref}>Sign in</a><a className="public-home-primary public-home-header-start" href="#create">Start free <ArrowRight size={17}/></a></div>
   </header>;
 }

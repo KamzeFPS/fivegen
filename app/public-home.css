@@ -178,3 +178,7 @@ html[data-appearance=dark] .public-home-formats h2>span,html[data-appearance=dar
 
 /* Icon-only appearance control must not extend its invisible hit area over Sign in. */
 .public-home-header .appearance-compact select{box-sizing:border-box;min-width:0;min-height:0;padding:0;width:100%;height:100%}
+
+/* Keep the five public destinations visible on compact headers. */
+@media(min-width:701px) and (max-width:900px){.public-home-header{gap:12px}.public-home-header nav{gap:12px}}
+@media(max-width:700px){.public-home-header nav{gap:clamp(10px,3.6vw,24px)}}

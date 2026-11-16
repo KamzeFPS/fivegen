@@ -106,6 +106,14 @@ The target above was read from the owning service's public URLs. Render's owning
 
 Do not create another service, replace the disk, change `APP_ORIGIN`, expose a secret, or redirect the entire docs host to the authenticated application. This is an additional public hostname on the current service.
 
+## Clipping subdomain
+
+`clipper.fivegen.ai` serves the public clipping landing page and campaign discovery from this same service. `CLIPPER_ORIGIN=https://clipper.fivegen.ai` is the trusted hostname configuration; production FiveGen also recognizes that hostname by default. Add the hostname to the existing Render service and point its `clipper` CNAME to `fivegen.onrender.com` when it is not already covered by verified wildcard DNS and TLS. Verify both DNS and an HTTPS response before announcing the subdomain as live. The main-domain `/clipper` route remains usable independently of DNS.
+
+Member and administrator links continue at `https://www.fivegen.ai/clipper/app` and `/clipper/admin`. Requests for those paths on the clipping host redirect to the canonical origin with their language and campaign query intact. Existing Google/email sign-in, verified email, terms consent, and administrator allowlists remain authoritative. The public host receives no application cookies or authorization headers and does not accept API mutations; campaign joins, submissions and administrator changes execute only on the canonical origin. Do not widen the host-only session cookie or add another Google callback to support this routing.
+
+Keep `APP_ORIGIN`, the existing disk, OAuth credentials and other subdomains unchanged. `clipper` is reserved from creator workspace address claims. Run `node scripts/clipper-host-test.mjs` alongside the Render runtime checks after changes to this boundary.
+
 ## Email delivery operations
 
 The Node runtime derives a purpose-separated automation signing credential from the persistent encryption key when no explicit dispatch secret is supplied. It must stay stable across restarts because unsubscribe links also depend on it; never log, copy or expose it. Existing explicit secrets are preserved. Durable enrollments, provider idempotency and job leases remain in SQLite. `AUTOMATIONS_WORKER_ENABLED=false` remains an explicit operational pause and readiness reports that pause honestly. A configured sender does not override it.

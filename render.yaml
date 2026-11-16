@@ -12,6 +12,7 @@ services:
     domains:
       - www.fivegen.ai
       - docs.fivegen.ai
+      - clipper.fivegen.ai
       - "*.fivegen.ai"
     # Disk-backed services do not support a custom shutdown delay.
     autoDeployTrigger: off
@@ -30,6 +31,8 @@ services:
         value: https://www.fivegen.ai
       - key: DOCS_ORIGIN
         value: https://docs.fivegen.ai
+      - key: CLIPPER_ORIGIN
+        value: https://clipper.fivegen.ai
       - key: FIVEGEN_WORKSPACE_DOMAIN
         value: fivegen.ai
       - key: FIVEGEN_WORKSPACE_SUBDOMAINS_READY

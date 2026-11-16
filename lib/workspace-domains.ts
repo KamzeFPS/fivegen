@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import type {CatalogDomain} from './creator-catalog';
 
-export const reservedWorkspaceNames=new Set(['www','app','api','admin','administrator','auth','assets','billing','blog','cdn','checkout','connect','customer','dashboard','demo','dev','docs','downloads','email','help','home','legal','login','mail','mcp','media','oauth','privacy','root','security','settings','signin','signup','static','status','support','system','terms','test','uploads','web','webhooks','workspace','fivegen']);
+export const reservedWorkspaceNames=new Set(['www','app','api','admin','administrator','auth','assets','billing','blog','cdn','checkout','clipper','connect','customer','dashboard','demo','dev','docs','downloads','email','help','home','legal','login','mail','mcp','media','oauth','privacy','root','security','settings','signin','signup','static','status','support','system','terms','test','uploads','web','webhooks','workspace','fivegen']);
 export const reservedProductPaths=new Set([...reservedWorkspaceNames,'access','account','b','build','callback','creator','f','favicon','fonts','g','healthz','invite','learn','o','p','partners','pricing','product','r','reset-password','robots','signout','unsubscribe','verify-email','welcome','_next']);
 const label=z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9-]{1,48}[a-z0-9]$/,'Use 3–50 letters, numbers or hyphens, starting with a letter.');
 export const workspaceSubdomainSchema=label.refine(value=>!reservedWorkspaceNames.has(value),'This address is reserved. Choose another name.');

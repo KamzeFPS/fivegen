@@ -1,4 +1,5 @@
 export * from './creator-catalog-schema';
+export * from './clipper-schema';
 export * from './workspace-domains-schema';
 export * from './funnel-builder-schema';
 export * from './calendar-schema';

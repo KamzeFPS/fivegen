@@ -49,6 +49,6 @@ export function PublicHome() {
 
       <section className="public-home-final" aria-labelledby="public-home-final-title"><p className="public-home-eyebrow">Your next chapter starts here</p><h2 id="public-home-final-title">Your idea deserves<br/><span>a beginning.</span></h2><p>Start with one idea. See what you can make.</p><a className="public-home-primary" href="#create">Create your first product <ArrowRight size={19}/></a><span>No need to have it all figured out.</span></section>
     </main>
-    <footer className="public-home-footer"><div><Link href="/" aria-label="FiveGen home"><Brand/></Link><p>Your expertise. Your next chapter.</p></div><nav aria-label="Resources"><a href="/pricing">Pricing</a><a href={guides}>Documentation</a><a href="mailto:kamzewac@gmail.com">Contact support</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refund">Refund policy</a></nav></footer>
+    <footer className="public-home-footer"><div><Link href="/" aria-label="FiveGen home"><Brand/></Link><p>Your expertise. Your next chapter.</p></div><nav aria-label="Resources"><a href="/pricing">Pricing</a><a href={guides}>Documentation</a><a href="https://clipper.fivegen.ai">For clippers</a><a href="mailto:kamzewac@gmail.com">Contact support</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refund">Refund policy</a></nav></footer>
   </div>;
 }

@@ -9,6 +9,7 @@ import { createPaddleWebhookIpGuard } from './paddle-webhook-ips.mjs';
 import {initializePurchaseEmailDispatchSecret,startPurchaseEmailWorker} from './purchase-email-worker.mjs';
 import {loopbackRequest} from './loopback-http.mjs';
 import {readDocsOrigin,docsHostRequest} from './docs-host.mjs';
+import {readClipperOrigin,clipperHostRequest} from './clipper-host.mjs';
 import {catalogHostRequest} from './catalog-host.mjs';
 import {initializeAutomationDispatchSecret,startAutomationWorker} from './automation-worker.mjs';
 import {privateSearchResponse} from './search-indexing.mjs';
@@ -36,7 +37,7 @@ export function readConfig(source = process.env) {
   }
   if (origin.hostname.startsWith('www.')) redirectHosts.add(origin.host.slice(4));
   redirectHosts.delete(origin.host);
-  return { origin: origin.origin, docsOrigin:readDocsOrigin(source,origin.origin), redirectHosts, port, googleClientId: source.GOOGLE_CLIENT_ID, googleClientSecret: source.GOOGLE_CLIENT_SECRET };
+  return { origin: origin.origin, docsOrigin:readDocsOrigin(source,origin.origin), clipperOrigin:readClipperOrigin(source,origin.origin), redirectHosts, port, googleClientId: source.GOOGLE_CLIENT_ID, googleClientSecret: source.GOOGLE_CLIENT_SECRET };
 }
 
 export async function start() {
@@ -68,7 +69,7 @@ export async function start() {
   server.on('request', async (req, res) => {
     try {
       const webhookSource = { socket: { remoteAddress: req.socket.remoteAddress }, headers: { 'x-forwarded-for': req.headers['x-forwarded-for'], 'cf-ray': req.headers['cf-ray'] } };
-      stripHeaders(req, name => name.startsWith('oai-authenticated-user-') || name.startsWith('x-forwarded-') || name === 'forwarded' || name === 'x-fivegen-public-host' || name === 'x-fivegen-app-origin');
+      stripHeaders(req, name => name.startsWith('oai-authenticated-user-') || name.startsWith('x-forwarded-') || name === 'forwarded' || name === 'x-fivegen-public-host' || name === 'x-fivegen-app-origin' || name === 'x-fivegen-clipper-host');
       const authority = new URL(config.origin);
       const host = String(req.headers.host || '').toLowerCase();
       const domain = process.env.PRODUCT_DOMAIN?.trim().toLowerCase();
@@ -100,6 +101,21 @@ export async function start() {
         // Docs are public and receive neither application sessions nor credentials.
         stripHeaders(req,name=>name==='cookie'||name==='authorization');
         req.url=docs.path+url.search;
+        for(const handler of handlers)handler.call(server,req,res);
+        return;
+      }
+      const clipper=clipperHostRequest({clipperOrigin:config.clipperOrigin,host,method:req.method,path:url.pathname});
+      if(clipper){
+        res.setHeader('X-FiveGen-Surface','clipper');
+        res.setHeader('Cache-Control','no-store');
+        if(clipper.canonical){res.writeHead(303,{Location:config.origin+clipper.path+url.search});res.end();return;}
+        if(clipper.status!==200){res.writeHead(clipper.status,{'Content-Type':'text/plain; charset=utf-8',...(clipper.status===405?{Allow:'GET, HEAD'}:{})});res.end('Clipping route not found');return;}
+        if(clipper.text){res.writeHead(200,{'Content-Type':'text/plain; charset=utf-8'});res.end(req.method==='HEAD'?'':clipper.text);return;}
+        // Never attach canonical account sessions on the public subdomain.
+        stripHeaders(req,name=>name==='cookie'||name==='authorization');
+        req.headers['x-fivegen-clipper-host']='1';req.headers['x-fivegen-app-origin']=config.origin;
+        req.rawHeaders.push('x-fivegen-clipper-host','1','x-fivegen-app-origin',config.origin);
+        req.url=clipper.path+url.search;
         for(const handler of handlers)handler.call(server,req,res);
         return;
       }
