@@ -27,3 +27,14 @@
 @media(max-width:380px){.clipper-lp-final{padding:28px 24px}.clipper-lp-final h2{font-size:38px}}
 
 .clipper-lp-platform-logo{display:block;width:28px;height:28px;object-fit:contain;flex:none}.clipper-lp-platform-logo-youtube{width:44px;height:38px;margin-right:-6px}
+
+/* A stationary material keeps navigation legible as content scrolls beneath it. */
+.clipper-lp{--clipper-lp-header-offset:116px}
+.clipper-lp-header-glass{position:sticky;top:0;z-index:25;width:100%;background:#fffefa;border-bottom:1px solid #d4d1c966;box-shadow:0 4px 20px #24251f06}
+.clipper-lp-header-glass .clipper-lp-nav{color:#565a50;font-weight:500}
+.clipper-lp :is(#clipper-main,#how-it-works,#clipper-faq),.clipper-lp :where(a,summary){scroll-margin-top:var(--clipper-lp-header-offset)}
+@supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.clipper-lp-header-glass{background:rgba(255,254,250,.78);-webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%)}}
+@media(min-width:1600px){.clipper-lp{--clipper-lp-header-offset:124px}}
+@media(max-width:760px){.clipper-lp{--clipper-lp-header-offset:144px}}
+@media(prefers-reduced-transparency:reduce){.clipper-lp-header-glass{background:#fffefa;-webkit-backdrop-filter:none;backdrop-filter:none}}
+@media(prefers-contrast:more){.clipper-lp-header-glass{background:#fffefa;border-bottom-color:#24251f80;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}.clipper-lp-header-glass .clipper-lp-nav{color:var(--clp-ink)}}

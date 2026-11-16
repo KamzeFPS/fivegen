@@ -4,7 +4,7 @@ type Language = 'mn' | 'en';
 const copy = {
   mn: {
     announcement: 'Сайн мөчийг хүн бүрт хүргэ.', announcementLink: 'Клип хийж эхлэх',
-    discover: 'Кампанит ажлууд', how: 'Хэрхэн ажилладаг вэ', faq: 'Асуулт, хариулт', signin: 'Нэвтрэх', start: 'Эхлэх',
+    discover: 'Боломжит ажлууд', how: 'Хэрхэн ажилладаг вэ', faq: 'Асуулт, хариулт', signin: 'Нэвтрэх', start: 'Эхлэх',
     eyebrow: 'САЙН КОНТЕНТ. ИЛҮҮ ОЛОН ХҮНД.',
     title: 'Клип бүтээ.\nНөлөөгөө тэл.', subtitle: 'Кампанит ажлаа сонгоод бэлэн видеогоо илгээгээрэй. Админ хянаж зөвшөөрөхөд клип брэндийн сошиал сувгуудад нийтлэгдэнэ.',
     browse: 'Кампанит ажил үзэх', seeHow: 'Хэрхэн ажиллах вэ',
@@ -81,13 +81,13 @@ export function ClipperLanding({ lang, appOrigin }: { lang: Language; appOrigin:
   return <div className="clipper-lp" lang={lang}>
     <a className="clipper-lp-skip" href="#clipper-main">{lang === 'mn' ? 'Үндсэн агуулга руу' : 'Skip to content'}</a>
     <div className="clipper-lp-announcement"><span>{t.announcement}</span><a href={workspace}>{t.announcementLink}<ArrowRight size={14} /></a></div>
-    <header className="clipper-lp-header">
+    <div className="clipper-lp-header-glass"><header className="clipper-lp-header">
       <a href={lang === 'en' ? '?lang=en' : '?lang=mn'} aria-label="FiveGen Clipper"><Brand /></a>
       <nav className="clipper-lp-nav" aria-label={lang === 'mn' ? 'Үндсэн цэс' : 'Main navigation'}>
         <a href={workspace}>{t.discover}</a><a href="#how-it-works">{t.how}</a><a href="#clipper-faq">{t.faq}</a>
       </nav>
       <div className="clipper-lp-header-actions"><div className="clipper-lp-languages" aria-label="Language / Хэл"><a href="?lang=mn" lang="mn" aria-current={lang === 'mn' ? 'true' : undefined}>MN</a><a href="?lang=en" lang="en" aria-current={lang === 'en' ? 'true' : undefined}>EN</a></div><a className="clipper-lp-signin" href={workspace}>{t.signin}</a><a className="clipper-lp-button clipper-lp-button-small" href={workspace}>{t.start}<ArrowRight size={16} /></a></div>
-    </header>
+    </header></div>
     <main id="clipper-main">
       <section className="clipper-lp-hero">
         <div className="clipper-lp-hero-copy"><span className="clipper-lp-eyebrow"><span />{t.eyebrow}</span><h1>{t.title.split('\n').map((line, i) => <span key={line} className={i === 1 ? 'clipper-lp-title-second' : ''}>{line}</span>)}</h1><p>{t.subtitle}</p><div className="clipper-lp-hero-actions"><a className="clipper-lp-button" href={workspace}>{t.browse}<ArrowRight size={18} /></a><a className="clipper-lp-text-link" href="#how-it-works"><CirclePlay size={20} />{t.seeHow}</a></div></div>
