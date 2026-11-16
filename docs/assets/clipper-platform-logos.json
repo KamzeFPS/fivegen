@@ -1,0 +1,63 @@
+{
+  "retrieved_at": "2026-11-16T09:14:46.778Z",
+  "purpose": "Official platform logos for the Clipper landing page platform strip.",
+  "assets": [
+    {
+      "name": "TikTok",
+      "file": "public/brand/platforms/tiktok.png",
+      "public_url": "/brand/platforms/tiktok.png",
+      "source_page": "https://developers.tiktok.com/docs/en/getting-started-design-guidelines",
+      "source_download": "https://sf16-va.tiktokcdn.com/obj/eden-va2/uvzhqeh7nuhd/tt4d/logo-pack.zip",
+      "archive_entry": "Dev Portal Logo Pack/TikTok Logo Pack/TikTok – Icons/TikTok_Icon_Black_Circle.png",
+      "source_dimensions": {
+        "width": 1200,
+        "height": 1200
+      },
+      "dimensions": {
+        "width": 256,
+        "height": 256
+      },
+      "description": "Official full-color TikTok note inside a black circle, with transparency outside the circle.",
+      "processing": "Resized directly from the official PNG to 256 by 256 pixels and re-encoded as PNG. No redrawing, recoloring, cropping, or added background.",
+      "original_sha256": "a21b43e31bb9def6d01c8c433a577353ae3efc8003a6257e8f3db3fd2dc94e61",
+      "sha256": "fa9348a8c663f8648157af59c7e50c57f3fc0403ff7e83a45ea5bad678ba7be2",
+      "rights": "TikTok trademark; official brand guidelines apply."
+    },
+    {
+      "name": "Instagram",
+      "file": "public/brand/platforms/instagram.png",
+      "public_url": "/brand/platforms/instagram.png",
+      "source_page": "https://www.meta.com/brand/resources/instagram/instagram-brand/",
+      "source_download": "https://scontent.fuln13-1.fna.fbcdn.net/v/t39.8562-6/10000000_295565596234104_6752419821643487968_n.zip/IG_brand_asset_pack_2023.zip?sdl=1&_nc_cat=104&_nc_map=urlgen_bucketless&ccb=1-7&_nc_sid=fcf380&_nc_ohc=2fmPfPa0uxgQ7kNvwGhdNZt&_nc_oc=AdqKEnEBmjE37sR-VL0lAOnAa3XS5NUqsD4FTyuxnIKLqAW18Vt1DJSuaJlK8x1aihA&_nc_zt=14&_nc_ht=scontent.fuln13-1.fna&_nc_gid=sTSdi9I9OvkETEDCVmNlgQ&_nc_ss=7c20f&oh=00_AQSSbWxDViz3-JpFogDKOvGxNPZECqWH-5neDdiYAnJahw&oe=6B00A507",
+      "archive_entry": "01 Static Glyph/01 Gradient Glyph/Instagram_Glyph_Gradient.png",
+      "source_dimensions": {
+        "width": 5000,
+        "height": 5000
+      },
+      "dimensions": {
+        "width": 256,
+        "height": 256
+      },
+      "description": "Official Instagram gradient glyph with a transparent background.",
+      "processing": "Resized directly from the official PNG to 256 by 256 pixels and re-encoded as PNG. No redrawing, recoloring, cropping, or added background.",
+      "original_sha256": "21f86b55f986848665ce54ab354ff6b43b7705e6c421d90c04369882b5956766",
+      "sha256": "65ea3b48fd5529e948ff2f73f6dc1ba36b8a823db2f0468a242917f6387ec436",
+      "rights": "Instagram trademark, Meta Platforms, Inc.; official brand guidelines apply."
+    },
+    {
+      "name": "YouTube",
+      "file": "public/brand/platforms/youtube.png",
+      "public_url": "/brand/platforms/youtube.png",
+      "source_page": "https://brand.youtube/youtube-icon/",
+      "source_download": "https://www.gstatic.com/marketing-cms/78/29/3e68a1414bb28d0b7e47b44c3c91/youtube-icon.zip",
+      "dimensions": {
+        "width": 1255,
+        "height": 1075
+      },
+      "description": "Official red YouTube play icon with its supplied transparent clear space.",
+      "processing": "Official asset supplied by the parent task.",
+      "sha256": "1027b1b0517727adb9697155a270744381c3ce9b047b1c8bd8a9389dc7d07a83",
+      "rights": "YouTube trademark, Google LLC; official brand guidelines apply."
+    }
+  ]
+}

@@ -7,7 +7,7 @@ const copy = {
     discover: 'Кампанит ажлууд', how: 'Хэрхэн ажилладаг вэ', faq: 'Асуулт, хариулт', signin: 'Нэвтрэх', start: 'Эхлэх',
     eyebrow: 'САЙН КОНТЕНТ. ИЛҮҮ ОЛОН ХҮНД.',
     title: 'Клип бүтээ.\nНөлөөгөө тэл.', subtitle: 'Кампанит ажлаа сонгоод бэлэн видеогоо илгээгээрэй. Админ хянаж зөвшөөрөхөд клип брэндийн сошиал сувгуудад нийтлэгдэнэ.',
-    browse: 'Кампанит ажил үзэх', seeHow: 'Хэрхэн ажиллах вэ', free: 'Үнэгүй бүртгэл · Монгол + English',
+    browse: 'Кампанит ажил үзэх', seeHow: 'Хэрхэн ажиллах вэ',
     heroArtAlt: 'Камер барьсан бүтээгч, бүжигчин болон хөрөг зургийг хослуулсан улбар шар өнгийн уран эвлүүлэг.',
     strip: 'Таны бүтээл. Брэндийн сувгуудаар.',
     stepsEyebrow: 'САНААНААС НИЙТЛЭЛ ХҮРТЭЛ', stepsTitle: 'Сайн клипээс\nбүх зүйл эхэлнэ.',
@@ -39,7 +39,7 @@ const copy = {
     discover: 'Campaigns', how: 'How it works', faq: 'FAQs', signin: 'Sign in', start: 'Get started',
     eyebrow: 'GREAT CONTENT. GREATER REACH.',
     title: 'Make clips.\nMake an impact.', subtitle: 'Choose a campaign and upload your finished video. After admin approval, your clip is published on the brand’s social channels.',
-    browse: 'Explore campaigns', seeHow: 'See how it works', free: 'Free to join · Монгол + English',
+    browse: 'Explore campaigns', seeHow: 'See how it works',
     heroArtAlt: 'Orange editorial collage of a camera-holding creator, a dancer and an expressive portrait.',
     strip: 'Your creativity. The brand’s channels.',
     stepsEyebrow: 'FROM THE FIRST CUT TO THE FEED', stepsTitle: 'It starts with\na great clip.',
@@ -90,14 +90,18 @@ export function ClipperLanding({ lang, appOrigin }: { lang: Language; appOrigin:
     </header>
     <main id="clipper-main">
       <section className="clipper-lp-hero">
-        <div className="clipper-lp-hero-copy"><span className="clipper-lp-eyebrow"><span />{t.eyebrow}</span><h1>{t.title.split('\n').map((line, i) => <span key={line} className={i === 1 ? 'clipper-lp-title-second' : ''}>{line}</span>)}</h1><p>{t.subtitle}</p><div className="clipper-lp-hero-actions"><a className="clipper-lp-button" href={workspace}>{t.browse}<ArrowRight size={18} /></a><a className="clipper-lp-text-link" href="#how-it-works"><CirclePlay size={20} />{t.seeHow}</a></div><span className="clipper-lp-free">{t.free}</span></div>
+        <div className="clipper-lp-hero-copy"><span className="clipper-lp-eyebrow"><span />{t.eyebrow}</span><h1>{t.title.split('\n').map((line, i) => <span key={line} className={i === 1 ? 'clipper-lp-title-second' : ''}>{line}</span>)}</h1><p>{t.subtitle}</p><div className="clipper-lp-hero-actions"><a className="clipper-lp-button" href={workspace}>{t.browse}<ArrowRight size={18} /></a><a className="clipper-lp-text-link" href="#how-it-works"><CirclePlay size={20} />{t.seeHow}</a></div></div>
         <figure className="clipper-lp-hero-art">
           {/* This generated artwork is pre-optimized and served directly as a local asset. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/clipper-hero-art.webp" srcSet="/brand/clipper-hero-art-888.webp 888w, /brand/clipper-hero-art.webp 1774w" sizes="(max-width: 760px) calc(100vw - 36px), (min-width: 1600px) 1160px, (min-width: 1176px) 1120px, calc(100vw - 56px)" width={1774} height={887} alt={t.heroArtAlt} fetchPriority="high" decoding="async" />
         </figure>
       </section>
-      <div className="clipper-lp-platforms"><span>{t.strip}</span><strong><span className="clipper-lp-tiktok">♪</span>TikTok</strong><strong><Instagram size={22} />Instagram</strong><strong><Youtube size={25} />YouTube</strong></div>
+      <div className="clipper-lp-platforms"><span>{t.strip}</span>{['TikTok', 'Instagram', 'YouTube'].map(platform => <strong key={platform}>
+        {/* Official brand assets are kept local so the strip does not depend on third-party image requests. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className={`clipper-lp-platform-logo clipper-lp-platform-logo-${platform.toLowerCase()}`} src={`/brand/platforms/${platform.toLowerCase()}.png`} width={platform === 'YouTube' ? 44 : 28} height={platform === 'YouTube' ? 38 : 28} alt="" aria-hidden="true" loading="lazy" decoding="async" />{platform}
+      </strong>)}</div>
       <section className="clipper-lp-section clipper-lp-how" id="how-it-works">
         <div className="clipper-lp-section-heading"><span className="clipper-lp-eyebrow">{t.stepsEyebrow}</span><h2>{t.stepsTitle}</h2><ArrowDown className="clipper-lp-section-arrow" size={27} strokeWidth={1.5} /></div>
         <div className="clipper-lp-steps">{t.steps.map(([title, description], i) => <article className="clipper-lp-step" key={title}>
@@ -121,6 +125,3 @@ export function ClipperLanding({ lang, appOrigin }: { lang: Language; appOrigin:
     <footer className="clipper-lp-footer"><div className="clipper-lp-footer-top"><a href={lang === 'en' ? '?lang=en' : '?lang=mn'} aria-label="FiveGen Clipper"><Brand /></a><p>{t.footer}</p><a href={workspace}>{t.discover}<ArrowRight size={15} /></a></div><div className="clipper-lp-footer-bottom"><span>© {new Date().getUTCFullYear()} FiveGen. {t.rights}</span><nav aria-label={lang === 'mn' ? 'Нэмэлт холбоос' : 'Footer navigation'}><a href={`${appOrigin}/clipper/admin?lang=${lang}`}>{t.admin}</a><a href={`${appOrigin}/privacy`}>{t.privacy}</a><a href={`${appOrigin}/terms`}>{t.terms}</a></nav></div></footer>
   </div>;
 }
-
-function Instagram({ size = 22 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.8" r=".8" fill="currentColor" stroke="none" /></svg>; }
-function Youtube({ size = 25 }: { size?: number }) { return <svg width={size} height={size} viewBox="0 0 26 22" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><rect x="2" y="4" width="22" height="14" rx="4" /><path d="m11 8 6 3-6 3V8Z" fill="currentColor" stroke="none" /></svg>; }
